@@ -1,0 +1,109 @@
+"""
+Core configuration settings for the Visual-ML application.
+Handles environment variables, database settings, and ML-specific configurations.
+"""
+
+from functools import lru_cache
+from typing import Optional
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables."""
+
+    # Application
+    APP_NAME: str = "Visual-ML"
+    APP_VERSION: str = "1.0.0"
+    DEBUG: bool = False
+    ENVIRONMENT: str = "development"  # development, staging, production
+
+    # API
+    API_V1_PREFIX: str = "/api/v1"
+    ALLOWED_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+
+    # Database
+    DATABASE_URL: str = "sqlite:///./visual_ml.db"  # Default SQLite
+    DB_ECHO: bool = False
+
+    # Security
+    SECRET_KEY: str = "your-secret-key-change-in-production-min-32-chars"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutes for production
+    REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+
+    # Google OAuth
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_REDIRECT_URI: Optional[str] = "http://localhost:8000/api/v1/auth/student/google/callback"
+
+    # Rate Limiting (for 50k traffic)
+    RATE_LIMIT_PER_MINUTE: int = 100
+    RATE_LIMIT_PER_HOUR: int = 1000
+
+    # File Upload
+    MAX_UPLOAD_SIZE_MB: int = 100
+    ALLOWED_EXTENSIONS: set[str] = {".csv", ".txt", ".json"}
+    UPLOAD_DIR: str = "./uploads"
+
+    # ML Models
+    MODEL_ARTIFACTS_DIR: str = "./models"
+    MAX_MODEL_VERSIONS: int = 10
+    DEFAULT_TRAIN_TEST_SPLIT: float = 0.2
+    DEFAULT_RANDOM_SEED: int = 42
+
+    # Redis Cache (for production scalability)
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: Optional[str] = None
+    CACHE_TTL: int = 3600  # 1 hour
+    ENABLE_CACHE: bool = False  # Enable in production
+
+    # S3/Storage (for production)
+    USE_S3: bool = False
+    S3_BUCKET: Optional[str] = None
+    S3_REGION: Optional[str] = None
+    AWS_ACCESS_KEY_ID: Optional[str] = None
+    AWS_SECRET_ACCESS_KEY: Optional[str] = None
+
+    # Background Workers (Celery)
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+    ENABLE_BACKGROUND_TASKS: bool = False
+
+    # Logging
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "json"  # json or text
+
+    # ML Performance
+    MODEL_CACHE_SIZE: int = 10  # Number of models to keep in memory
+    LAZY_LOAD_MODELS: bool = True
+    ENABLE_MODEL_WARMUP: bool = False
+
+    # Admin
+    ADMIN_EMAIL: str = "admin@visualml.com"
+    ADMIN_PASSWORD: str = "change-this-password"
+
+    # Auth Settings
+    PASSWORD_MIN_LENGTH: int = 8
+    RESET_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # Frontend URL (for OAuth redirects)
+    FRONTEND_URL: str = "http://localhost:5173"
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=True
+    )
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    """
+    Get cached settings instance.
+    Uses lru_cache to ensure settings are loaded once.
+    """
+    return Settings()
+
+
+# Global settings instance
+settings = get_settings()

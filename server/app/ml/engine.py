@@ -1,0 +1,174 @@
+"""
+ML Pipeline Engine - Orchestrates node execution and manages pipelines.
+"""
+
+from typing import Dict, Any, List, Optional
+from datetime import datetime
+from app.ml.nodes.upload import UploadFileNode
+from app.ml.nodes.clean import PreprocessNode
+from app.ml.nodes.split import SplitNode
+from app.ml.nodes.train import TrainNode
+from app.ml.nodes.evaluate import EvaluateNode
+from app.core.logging import logger, log_ml_operation
+from app.core.exceptions import NodeExecutionError
+
+
+class MLPipelineEngine:
+    """
+    ML Pipeline orchestration engine.
+
+    Manages:
+    - Node registration and discovery
+    - Pipeline execution
+    - Result aggregation
+    - Error handling
+    """
+
+    def __init__(self):
+        """Initialize pipeline engine."""
+        self.nodes = {
+            "upload_file": UploadFileNode,
+            "preprocess": PreprocessNode,
+            "split": SplitNode,
+            "train": TrainNode,
+            "evaluate": EvaluateNode,
+        }
+        self.execution_history: List[Dict[str, Any]] = []
+
+    async def execute_node(
+        self,
+        node_type: str,
+        input_data: Dict[str, Any],
+        node_id: Optional[str] = None,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Execute a single node.
+
+        Args:
+            node_type: Type of node to execute
+            input_data: Input data for the node
+            node_id: Optional custom node ID
+            dry_run: If True, validate but don't execute
+
+        Returns:
+            Node output as dictionary
+
+        Raises:
+            NodeExecutionError: If node execution fails
+        """
+        if node_type not in self.nodes:
+            raise NodeExecutionError(
+                node_type=node_type,
+                reason=f"Unknown node type: {node_type}. Available: {list(self.nodes.keys())}",
+                input_data=input_data,
+            )
+
+        try:
+            logger.info(f"Executing node: {node_type} (dry_run={dry_run})")
+
+            # Create node instance
+            node_class = self.nodes[node_type]
+            node = node_class(node_id=node_id)
+
+            # Execute node
+            start_time = datetime.utcnow()
+            result = await node.execute(input_data, dry_run=dry_run)
+            execution_time = (datetime.utcnow() - start_time).total_seconds()
+
+            # Convert to dictionary
+            result_dict = result.model_dump()
+
+            # Log execution
+            log_ml_operation(
+                operation=f"node_execution_{node_type}",
+                details={
+                    "node_type": node_type,
+                    "node_id": node.node_id,
+                    "execution_time_seconds": execution_time,
+                    "dry_run": dry_run,
+                    "success": True,
+                },
+                level="info",
+            )
+
+            # Store in history
+            self.execution_history.append(
+                {
+                    "node_type": node_type,
+                    "node_id": node.node_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "execution_time_seconds": execution_time,
+                    "success": True,
+                }
+            )
+
+            return result_dict
+
+        except NodeExecutionError:
+            raise
+        except Exception as e:
+            logger.error(f"Node execution failed: {str(e)}", exc_info=True)
+            raise NodeExecutionError(node_type=node_type, reason=str(e), input_data=input_data)
+
+    async def execute_pipeline(
+        self, pipeline: List[Dict[str, Any]], dry_run: bool = False
+    ) -> List[Dict[str, Any]]:
+        """
+        Execute a complete pipeline of nodes.
+
+        Args:
+            pipeline: List of node configurations
+            dry_run: If True, validate but don't execute
+
+        Returns:
+            List of node outputs
+
+        Example pipeline:
+            [
+                {"node_type": "upload_file", "input": {...}},
+                {"node_type": "preprocess", "input": {...}},
+                {"node_type": "split", "input": {...}},
+                {"node_type": "train", "input": {...}},
+                {"node_type": "evaluate", "input": {...}},
+            ]
+        """
+        logger.info(f"Executing pipeline with {len(pipeline)} nodes (dry_run={dry_run})")
+
+        results = []
+
+        for i, node_config in enumerate(pipeline):
+            node_type = node_config.get("node_type")
+            input_data = node_config.get("input", {})
+            node_id = node_config.get("node_id")
+
+            logger.info(f"Pipeline step {i+1}/{len(pipeline)}: {node_type}")
+
+            try:
+                result = await self.execute_node(
+                    node_type=node_type, input_data=input_data, node_id=node_id, dry_run=dry_run
+                )
+                results.append(result)
+
+            except NodeExecutionError as e:
+                logger.error(f"Pipeline failed at step {i+1}: {node_type}")
+                # Add error to results
+                results.append({"node_type": node_type, "success": False, "error": e.to_dict()})
+                # Stop pipeline execution
+                break
+
+        logger.info(f"Pipeline execution complete - {len(results)} nodes executed")
+
+        return results
+
+    def get_available_nodes(self) -> List[str]:
+        """Get list of available node types."""
+        return list(self.nodes.keys())
+
+    def get_execution_history(self) -> List[Dict[str, Any]]:
+        """Get pipeline execution history."""
+        return self.execution_history
+
+
+# Global pipeline engine instance
+pipeline_engine = MLPipelineEngine()

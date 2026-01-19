@@ -1,5 +1,8 @@
-function App() {
-  return <div className="text-3xl">Visual-ML Client</div>;
-}
+import LandingPage from "../landingpage/LandingPage";
+import React from "react";
+
+const App: React.FC = () => {
+  return <LandingPage />;
+};
 
 export default App;
