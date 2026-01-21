@@ -31,6 +31,7 @@ class StudentRegister(BaseModel):
 
     emailId: EmailStr = Field(..., description="Student email (unique identifier)")
     password: str = Field(..., min_length=8, description="Password (min 8 characters)")
+    fullName: str = Field(..., max_length=255, description="Full name of the student")
     collegeOrSchool: Optional[str] = Field(None, description="College or school name")
     contactNo: Optional[str] = Field(None, max_length=20, description="Contact number")
 
@@ -72,6 +73,28 @@ class StudentGoogleAuth(BaseModel):
 
 
 # ========== Admin Login ==========
+
+
+class AdminRegister(BaseModel):
+    """Admin registration request."""
+
+    email: EmailStr = Field(..., description="Admin email (unique identifier)")
+    password: str = Field(..., min_length=8, description="Password (min 8 characters)")
+    name: Optional[str] = Field(None, max_length=255, description="Admin name")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        """Validate password strength."""
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
 
 
 class AdminLogin(BaseModel):

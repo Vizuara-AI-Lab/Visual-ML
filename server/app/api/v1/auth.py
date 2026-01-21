@@ -14,6 +14,7 @@ from app.schemas.auth import (
     StudentLogin,
     StudentGoogleAuth,
     AdminLogin,
+    AdminRegister,
     TokenResponse,
     RefreshTokenRequest,
     StudentResponse,
@@ -43,7 +44,10 @@ async def register_student(data: StudentRegister, request: Request, db: Session 
     Register a new student with email and password.
 
     - **emailId**: Unique email address
+    
     - **password**: Min 8 chars with uppercase, lowercase, digit
+        - **Name**: compulsory full name
+
     - **collegeOrSchool**: Optional college/school name
     - **contactNo**: Optional contact number
 
@@ -101,6 +105,26 @@ async def google_auth_student(
 
 
 # ========== Admin Login ==========
+
+
+@router.post("/admin/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+async def register_admin(data: AdminRegister, request: Request, db: Session = Depends(get_db)):
+    """
+    Register a new admin account.
+
+    - **email**: Unique admin email
+    - **password**: Min 8 chars with uppercase, lowercase, digit
+    - **name**: Optional admin name
+
+    Returns access token and refresh token.
+    """
+    admin, tokens = auth_service.register_admin(db, data)
+
+    return AuthResponse(
+        user=AdminResponse.model_validate(admin),
+        tokens=tokens,
+        message="Admin registered successfully",
+    )
 
 
 @router.post("/admin/login", response_model=AuthResponse)

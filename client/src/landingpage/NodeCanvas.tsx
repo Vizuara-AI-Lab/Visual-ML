@@ -7,7 +7,6 @@ import {
   BarChart3,
   Rocket,
   Zap,
-  FileText,
 } from "lucide-react";
 
 interface Node {

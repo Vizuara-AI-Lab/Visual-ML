@@ -17,6 +17,7 @@ from app.schemas.auth import (
     StudentLogin,
     StudentGoogleAuth,
     AdminLogin,
+    AdminRegister,
     TokenResponse,
     StudentResponse,
     AdminResponse,
@@ -216,6 +217,48 @@ def google_auth_student(
 
 
 # ========== Admin Authentication ==========
+
+
+def register_admin(db: Session, data: AdminRegister) -> Tuple[Admin, TokenResponse]:
+    """
+    Register a new admin account.
+
+    Args:
+        db: Database session
+        data: Admin registration data
+
+    Returns:
+        Tuple of (Admin model, TokenResponse)
+
+    Raises:
+        HTTPException: If email already exists
+    """
+    # Check if email already exists
+    existing = db.query(Admin).filter(Admin.email == data.email).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+        )
+
+    # Create admin
+    admin = Admin(
+        email=data.email,
+        password=hash_password(data.password),
+        name=data.name,
+        role=UserRole.ADMIN,
+        isActive=True,
+    )
+
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+
+    logger.info(f"New admin registered: {admin.email}")
+
+    # Generate tokens
+    tokens = _create_tokens_for_admin(db, admin)
+
+    return admin, tokens
 
 
 def login_admin(

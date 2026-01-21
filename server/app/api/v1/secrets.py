@@ -1,6 +1,6 @@
 """
 API Secrets management routes.
-Encrypted storage for OpenAI, Anthropic, etc. API keys.
+Encrypted storage for OpenAI, Anthropic, etc. API keys
 """
 
 from typing import List

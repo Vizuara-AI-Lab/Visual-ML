@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from "react";
+import {useNavigate} from "react-router";
+
+
 
 const Navbar: React.FC = () => {
+  const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -75,10 +79,11 @@ const Navbar: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-4">
-            <button className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors px-4 py-2">
+            <button onClick={() => navigate("/signin")} className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors px-4 py-2">
+            
               Sign in
             </button>
-            <button className="text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 transition-colors px-5 py-2 rounded-lg">
+            <button onClick={() => navigate("/signup")} className="text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 transition-colors px-5 py-2 rounded-lg">
               Get started
             </button>
           </div>

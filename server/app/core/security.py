@@ -1,7 +1,7 @@
 """
 Security utilities for authentication and authorization.
 Handles JWT tokens, password hashing, refresh tokens, RBAC, and API key encryption.
-Production-ready with refresh token rotation and Fernet encryption.
+Production-ready with refresh token rotation and Fernet encryption
 """
 
 from datetime import datetime, timedelta

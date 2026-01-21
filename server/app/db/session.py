@@ -12,6 +12,8 @@ engine = create_engine(
     settings.DATABASE_URL,
     echo=settings.DB_ECHO,
     connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {},
+    pool_pre_ping=True,
+    pool_recycle=300,
 )
 
 # Create SessionLocal class

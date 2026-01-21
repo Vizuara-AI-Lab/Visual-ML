@@ -22,7 +22,11 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
     # Database
-    DATABASE_URL: str = "sqlite:///./visual_ml.db"  # Default SQLite
+    DATABASE_URL: str = (
+        "postgresql://neondb_owner:npg_DeO2kXBCWqL6@ep-raspy-art-ahj7menw-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+    )
+
+    # Default SQLite
     DB_ECHO: bool = False
 
     # Security
@@ -30,6 +34,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutes for production
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7  # 7 days for refresh tokens
 
     # Google OAuth
     GOOGLE_CLIENT_ID: Optional[str] = None
