@@ -36,16 +36,17 @@ from app.core.logging import logger
 # ========== Student Authentication ==========
 
 
-def register_student(db: Session, data: StudentRegister) -> Tuple[Student, TokenResponse]:
+def register_student(db: Session, data: StudentRegister) -> Student:
     """
     Register a new student with email/password.
+    Creates unverified account and sends OTP for email verification.
 
     Args:
         db: Database session
         data: Student registration data
 
     Returns:
-        Tuple of (Student model, TokenResponse)
+        Student model (unverified)
 
     Raises:
         HTTPException: If email already exists
@@ -57,28 +58,43 @@ def register_student(db: Session, data: StudentRegister) -> Tuple[Student, Token
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
-    # Create student
+    # Generate 6-digit OTP
+    import random
+    otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+    otp_expiry = datetime.utcnow() + timedelta(minutes=10)
+
+    # Create student (unverified)
     student = Student(
         emailId=data.emailId,
         password=hash_password(data.password),
+        fullName=data.fullName,
         role=UserRole.STUDENT,
         authProvider=AuthProvider.LOCAL,
         collegeOrSchool=data.collegeOrSchool,
         contactNo=data.contactNo,
         isPremium=False,
         isActive=True,
+        isEmailVerified=False,
+        verificationOTP=otp,
+        otpExpiresAt=otp_expiry,
     )
 
     db.add(student)
     db.commit()
     db.refresh(student)
 
-    logger.info(f"New student registered: {student.emailId}")
+    logger.info(f"New student registered (unverified): {student.emailId}")
 
-    # Generate tokens
-    tokens = _create_tokens_for_student(db, student)
-
-    return student, tokens
+    # Send OTP email
+    from app.services.email_service import email_service
+    try:
+        email_service.send_verification_otp(student.emailId, student.fullName, otp)
+        logger.info(f"OTP sent to {student.emailId}")
+    except Exception as e:
+        logger.error(f"Failed to send OTP email: {str(e)}")
+        # Don't fail registration if email fails
+    
+    return student
 
 
 def login_student(
@@ -114,6 +130,13 @@ def login_student(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive. Please contact administrator.",
+        )
+
+    # Check email verification (only for LOCAL auth)
+    if student.authProvider == AuthProvider.LOCAL and not student.isEmailVerified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email before logging in. Check your inbox for the OTP.",
         )
 
     # Verify password (only for LOCAL auth)

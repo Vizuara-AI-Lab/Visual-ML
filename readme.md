@@ -12,3 +12,13 @@
 
 
 Because training inside API request = your server dies.
+
+
+# Terminal 1: Redis
+redis-server
+# Terminal 2: Celery Worker
+celery -A app.core.celery_app worker --loglevel=info
+# Terminal 3: Celery Beat (for scheduled tasks)
+celery -A app.core.celery_app beat --loglevel=info
+# Terminal 4: FastAPI
+uvicorn main:app --reload

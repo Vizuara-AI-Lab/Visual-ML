@@ -13,6 +13,8 @@ from app.schemas.auth import (
     StudentRegister,
     StudentLogin,
     StudentGoogleAuth,
+    VerifyEmailRequest,
+    ResendOTPRequest,
     AdminLogin,
     AdminRegister,
     TokenResponse,
@@ -38,28 +40,26 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 # ========== Student Registration & Login ==========
 
 
-@router.post("/student/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/student/register", status_code=status.HTTP_201_CREATED)
 async def register_student(data: StudentRegister, request: Request, db: Session = Depends(get_db)):
     """
     Register a new student with email and password.
+    Sends OTP to email for verification.
 
     - **emailId**: Unique email address
-    
     - **password**: Min 8 chars with uppercase, lowercase, digit
-        - **Name**: compulsory full name
-
+    - **fullName**: compulsory full name
     - **collegeOrSchool**: Optional college/school name
     - **contactNo**: Optional contact number
 
-    Returns access token and refresh token.
+    Returns message to check email for OTP.
     """
-    student, tokens = auth_service.register_student(db, data)
+    student = auth_service.register_student(db, data)
 
-    return AuthResponse(
-        user=StudentResponse.model_validate(student),
-        tokens=tokens,
-        message="Student registered successfully",
-    )
+    return {
+        "message": "Registration successful! Please check your email for the OTP to verify your account.",
+        "emailId": student.emailId
+    }
 
 
 @router.post("/student/login", response_model=AuthResponse)
@@ -102,6 +102,45 @@ async def google_auth_student(
         tokens=tokens,
         message="Google authentication successful",
     )
+
+
+@router.post("/verify-email", response_model=AuthResponse)
+async def verify_email(data: VerifyEmailRequest, db: Session = Depends(get_db)):
+    """
+    Verify student email with OTP code.
+    
+    - **emailId**: Student email
+    - **otp**: 6-digit OTP code from email
+    
+    Returns access token and refresh token after successful verification.
+    """
+    from app.services.otp_service import verify_email_otp
+    
+    student, tokens = verify_email_otp(db, data.emailId, data.otp)
+    
+    return AuthResponse(
+        user=StudentResponse.model_validate(student),
+        tokens=tokens,
+        message="Email verified successfully! Welcome to Visual ML."
+    )
+
+
+@router.post("/resend-otp")
+async def resend_otp(data: ResendOTPRequest, db: Session = Depends(get_db)):
+    """
+    Resend OTP verification email.
+    
+    - **emailId**: Student email
+    
+    Returns success message.
+    """
+    from app.services.otp_service import resend_verification_otp
+    
+    resend_verification_otp(db, data.emailId)
+    
+    return {
+        "message": "New OTP sent to your email. Please check your inbox."
+    }
 
 
 # ========== Admin Login ==========

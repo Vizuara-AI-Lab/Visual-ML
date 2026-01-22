@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.logging import logger
 from app.core.rate_limit import RateLimitMiddleware
 from app.core.exceptions import BaseMLException
-from app.api.v1 import pipelines, auth, genai_pipelines, knowledge_base, secrets
+from app.api.v1 import pipelines, auth, genai_pipelines, knowledge_base, secrets, projects
 from pathlib import Path
 
 
@@ -43,8 +43,7 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description="Production-ready ML platform for Linear & Logistic Regression",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    
 )
 
 origins = [
@@ -108,7 +107,7 @@ async def general_exception_handler(request: Request, exc: Exception):
             "error": "InternalServerError",
             "message": "An unexpected error occurred",
             "details": {"error": str(exc)} if settings.DEBUG else {},
-            "suggestion": "Please contact support if the issue persists.",
+            "suggestion": "Please email us at support@visualml.com.",
         },
     )
 
@@ -128,16 +127,6 @@ async def root():
     }
 
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint for load balancers."""
-    return {
-        "status": "healthy",
-        "timestamp": "2026-01-19T00:00:00Z",
-        "version": settings.APP_VERSION,
-    }
-
-
 # Include routers
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
@@ -150,6 +139,7 @@ app.include_router(
     knowledge_base.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["Knowledge Base"]
 )
 app.include_router(secrets.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["API Secrets"])
+app.include_router(projects.router, prefix=settings.API_V1_PREFIX)
 
 
 if __name__ == "__main__":

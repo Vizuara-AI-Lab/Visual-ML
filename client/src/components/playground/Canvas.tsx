@@ -7,15 +7,17 @@ import {
   type OnConnect,
   type OnNodesChange,
   type OnEdgesChange,
-  type NodeTypes,
+  applyNodeChanges,
+  applyEdgeChanges,
+  type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 import MLNode from "./MLNode";
 import { getNodeByType } from "../../config/nodeDefinitions";
-import type { NodeType } from "../../types/pipeline";
+import type { NodeType, BaseNodeData } from "../../types/pipeline";
 
-const nodeTypes = {
+const nodeTypes: Record<string, React.ComponentType<any>> = {
   upload_file: MLNode,
   load_url: MLNode,
   sample_dataset: MLNode,
@@ -31,7 +33,7 @@ const nodeTypes = {
   image_generation: MLNode,
   model_export: MLNode,
   api_endpoint: MLNode,
-} as const;
+};
 
 interface CanvasProps {
   onNodeClick: (nodeId: string) => void;
@@ -44,16 +46,16 @@ export const Canvas = ({ onNodeClick }: CanvasProps) => {
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
-      setNodes(changes);
+      setNodes(applyNodeChanges(changes, nodes) as Node<BaseNodeData>[]);
     },
-    [setNodes],
+    [setNodes, nodes],
   );
 
   const onEdgesChange: OnEdgesChange = useCallback(
     (changes) => {
-      setEdges(changes);
+      setEdges(applyEdgeChanges(changes, edges));
     },
-    [setEdges],
+    [setEdges, edges],
   );
 
   const onConnect: OnConnect = useCallback(

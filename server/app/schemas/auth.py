@@ -58,6 +58,7 @@ class StudentRegister(BaseModel):
         return v
 
 
+
 class StudentLogin(BaseModel):
     """Student login request."""
 
@@ -65,11 +66,33 @@ class StudentLogin(BaseModel):
     password: str = Field(..., description="Password")
 
 
+class VerifyEmailRequest(BaseModel):
+    """Email verification with OTP request."""
+
+    emailId: EmailStr = Field(..., description="Student email")
+    otp: str = Field(..., min_length=6, max_length=6, description="6-digit OTP code")
+
+    @field_validator("otp")
+    @classmethod
+    def validate_otp(cls, v: str) -> str:
+        """Validate OTP format."""
+        if not v.isdigit():
+            raise ValueError("OTP must contain only digits")
+        return v
+
+
+class ResendOTPRequest(BaseModel):
+    """Resend OTP request."""
+
+    emailId: EmailStr = Field(..., description="Student email")
+
+
 class StudentGoogleAuth(BaseModel):
     """Student Google authentication request."""
 
     idToken: str = Field(..., description="Google ID token from frontend")
     profilePic: Optional[str] = Field(None, description="Google profile picture URL")
+
 
 
 # ========== Admin Login ==========
