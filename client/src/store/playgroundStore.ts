@@ -3,14 +3,7 @@
  */
 
 import { create } from "zustand";
-import {
-  type Node,
-  type Edge,
-  applyNodeChanges,
-  applyEdgeChanges,
-  type OnNodesChange,
-  type OnEdgesChange,
-} from "@xyflow/react";
+import { type Node, type Edge } from "@xyflow/react";
 import type { BaseNodeData } from "../types/pipeline";
 
 export interface DatasetMetadata {
@@ -46,8 +39,8 @@ interface PlaygroundStore {
   // React Flow state
   nodes: Node<BaseNodeData>[];
   edges: Edge[];
-  setNodes: (changes: OnNodesChange) => void;
-  setEdges: (changes: OnEdgesChange) => void;
+  setNodes: (nodes: Node<BaseNodeData>[]) => void;
+  setEdges: (edges: Edge[]) => void;
   addNode: (node: Node<BaseNodeData>) => void;
   updateNode: (nodeId: string, data: Partial<BaseNodeData>) => void;
   deleteNode: (nodeId: string) => void;
@@ -69,6 +62,22 @@ interface PlaygroundStore {
   executionResults: PipelineExecutionResult | null;
   setExecutionResults: (results: PipelineExecutionResult | null) => void;
 
+  // Project state
+  currentProjectId: string | null;
+  setCurrentProjectId: (id: string | null) => void;
+  loadProjectState: (state: {
+    nodes: any[];
+    edges: any[];
+    datasetMetadata?: any;
+    executionResult?: any;
+  }) => void;
+  getProjectState: () => {
+    nodes: any[];
+    edges: any[];
+    datasetMetadata: any;
+    executionResult: any;
+  };
+
   // Utility methods
   getNodeById: (nodeId: string) => Node<BaseNodeData> | undefined;
   updateNodeConfig: (nodeId: string, config: Record<string, unknown>) => void;
@@ -76,7 +85,7 @@ interface PlaygroundStore {
   clearCanvas: () => void;
 }
 
-export const usePlaygroundStore = create<PlaygroundStore>((set) => ({
+export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
   // Initial state
   nodes: [],
   edges: [],
@@ -85,22 +94,17 @@ export const usePlaygroundStore = create<PlaygroundStore>((set) => ({
   isExecuting: false,
   executionResult: null,
   executionResults: null,
+  currentProjectId: null,
 
   // Node actions
-  setNodes: (changes: OnNodesChange) =>
-    set((state) => ({
-      nodes: applyNodeChanges(
-        changes as Parameters<typeof applyNodeChanges<Node<BaseNodeData>>>[0],
-        state.nodes,
-      ),
+  setNodes: (nodes) =>
+    set(() => ({
+      nodes,
     })),
 
-  setEdges: (changes: OnEdgesChange) =>
-    set((state) => ({
-      edges: applyEdgeChanges(
-        changes as Parameters<typeof applyEdgeChanges>[0],
-        state.edges,
-      ),
+  setEdges: (edges) =>
+    set(() => ({
+      edges,
     })),
 
   addNode: (node) =>
@@ -142,6 +146,27 @@ export const usePlaygroundStore = create<PlaygroundStore>((set) => ({
   setIsExecuting: (executing) => set({ isExecuting: executing }),
   setExecutionResult: (result) => set({ executionResult: result }),
   setExecutionResults: (results) => set({ executionResults: results }),
+
+  // Project state
+  setCurrentProjectId: (id) => set({ currentProjectId: id }),
+
+  loadProjectState: (state) =>
+    set({
+      nodes: state.nodes || [],
+      edges: state.edges || [],
+      datasetMetadata: state.datasetMetadata || null,
+      executionResult: state.executionResult || null,
+    }),
+
+  getProjectState: () => {
+    const state = get();
+    return {
+      nodes: state.nodes,
+      edges: state.edges,
+      datasetMetadata: state.datasetMetadata,
+      executionResult: state.executionResult,
+    };
+  },
 
   // Utility methods
   getNodeById: (nodeId): Node<BaseNodeData> | undefined => {

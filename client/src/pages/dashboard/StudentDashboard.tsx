@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router";
 import {
   LogOut,
@@ -11,22 +11,17 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  Trash2,
 } from "lucide-react";
-import axiosInstance from "../../lib/axios";
+import { useProjects } from "../../hooks/queries/useProjects";
+import { useDeleteProject } from "../../hooks/mutations/useDeleteProject";
+import { CreateProjectModal } from "../../components/projects/CreateProjectModal";
 
 interface User {
   emailId: string;
   collegeOrSchool?: string;
   profilePic?: string;
   isPremium: boolean;
-}
-
-interface Project {
-  id: string;
-  name: string;
-  description?: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
 interface Run {
@@ -39,15 +34,16 @@ interface Run {
 const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [recentRuns, setRecentRuns] = useState<Run[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [recentRuns] = useState<Run[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  useEffect(() => {
+  // Use TanStack Query hooks
+  const { data: projects = [], isLoading } = useProjects();
+  const deleteProject = useDeleteProject();
+
+  React.useEffect(() => {
     loadUserData();
-    loadProjects();
-    loadRecentRuns();
   }, []);
 
   const loadUserData = () => {
@@ -57,33 +53,27 @@ const StudentDashboard: React.FC = () => {
     }
   };
 
-  const loadProjects = async () => {
-    try {
-      const response = await axiosInstance.get("/projects");
-      setProjects(response.data || []);
-    } catch (error) {
-      console.error("Failed to load projects:", error);
-      setProjects([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadRecentRuns = async () => {
-    try {
-      const response = await axiosInstance.get("/runs/recent");
-      setRecentRuns(response.data || []);
-    } catch (error) {
-      console.error("Failed to load recent runs:", error);
-      setRecentRuns([]);
-    }
-  };
-
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
     localStorage.removeItem("user");
     navigate("/signin");
+  };
+
+  const handleCreateProject = (projectId: number) => {
+    setIsCreateModalOpen(false);
+    navigate(`/playground/${projectId}`);
+  };
+
+  const handleProjectClick = (projectId: number) => {
+    navigate(`/playground/${projectId}`);
+  };
+
+  const handleDeleteProject = async (e: React.MouseEvent, projectId: number) => {
+    e.stopPropagation();
+    if (window.confirm("Are you sure you want to delete this project?")) {
+      await deleteProject.mutateAsync(projectId);
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -103,7 +93,7 @@ const StudentDashboard: React.FC = () => {
     project.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -154,8 +144,9 @@ const StudentDashboard: React.FC = () => {
               </div>
 
               <button
-                onClick={() => navigate("/settings")}
+                onClick={() => navigate("/profile")}
                 className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Profile Settings"
               >
                 <Settings className="h-5 w-5" />
               </button>
@@ -223,7 +214,7 @@ const StudentDashboard: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">My Projects</h2>
               <button
-                onClick={() => navigate("/projects/new")}
+                onClick={() => setIsCreateModalOpen(true)}
                 className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Plus className="h-4 w-4" />
@@ -255,7 +246,7 @@ const StudentDashboard: React.FC = () => {
                   Get started by creating your first ML project
                 </p>
                 <button
-                  onClick={() => navigate("/projects/new")}
+                  onClick={() => setIsCreateModalOpen(true)}
                   className="mt-6 inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
@@ -267,12 +258,21 @@ const StudentDashboard: React.FC = () => {
                 {filteredProjects.map((project) => (
                   <div
                     key={project.id}
-                    onClick={() => navigate(`/projects/${project.id}`)}
-                    className="p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-md transition-all cursor-pointer"
+                    onClick={() => handleProjectClick(project.id)}
+                    className="p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-md transition-all cursor-pointer group relative"
                   >
-                    <h3 className="font-semibold text-gray-900 mb-2">
-                      {project.name}
-                    </h3>
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-semibold text-gray-900 flex-1 pr-2">
+                        {project.name}
+                      </h3>
+                      <button
+                        onClick={(e) => handleDeleteProject(e, project.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-red-600 hover:bg-red-50 rounded transition-opacity"
+                        title="Delete project"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                     <p className="text-sm text-gray-600 mb-4 line-clamp-2">
                       {project.description || "No description"}
                     </p>
@@ -288,6 +288,13 @@ const StudentDashboard: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Create Project Modal */}
+        <CreateProjectModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onSuccess={handleCreateProject}
+        />
 
         {/* Recent Runs */}
         {recentRuns.length > 0 && (

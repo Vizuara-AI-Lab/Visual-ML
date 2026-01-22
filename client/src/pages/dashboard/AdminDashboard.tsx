@@ -1,91 +1,107 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router";
-import axiosInstance from "../../lib/axios";
-
-interface Student {
-  id: number;
-  emailId: string;
-  collegeOrSchool?: string;
-  isPremium: boolean;
-  isActive: boolean;
-  createdAt: string;
-}
+import { useAdminProfile } from "../../hooks/queries/useAdminProfile";
+import { useStudentsList } from "../../hooks/queries/useStudentsList";
+import { useUpdateStudent } from "../../hooks/mutations/useUpdateStudent";
 
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState({ isPremium: "", isActive: "" });
 
-  useEffect(() => {
-    loadStudents();
-  }, []);
-
-  const loadStudents = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (search) params.append("search", search);
-      if (filter.isPremium) params.append("isPremium", filter.isPremium);
-      if (filter.isActive) params.append("isActive", filter.isActive);
-
-      const response = await axiosInstance.get(
-        `/auth/admin/students?${params}`,
-      );
-      setStudents(response.data);
-    } catch (err) {
-      console.error("Failed to load students:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Use TanStack Query hooks
+  const { data: adminProfile } = useAdminProfile();
+  const { data: students = [], isLoading, error } = useStudentsList({
+    search: search || undefined,
+    isPremium: filter.isPremium ? filter.isPremium === "true" : undefined,
+    isActive: filter.isActive ? filter.isActive === "true" : undefined,
+  });
+  const updateStudentMutation = useUpdateStudent();
 
   const handleSearch = () => {
-    loadStudents();
+    // Query will automatically refetch when filter state changes
   };
 
   const handleLogout = () => {
     localStorage.clear();
-    navigate("/auth/signin");
+    navigate("/admin/login");
   };
 
   const togglePremium = async (studentId: number, currentStatus: boolean) => {
-    try {
-      await axiosInstance.patch(`/auth/admin/students/${studentId}`, {
-        isPremium: !currentStatus,
-      });
-      loadStudents();
-    } catch (err) {
-      console.error("Failed to update premium status:", err);
-    }
+    updateStudentMutation.mutate({
+      id: studentId,
+      updates: { isPremium: !currentStatus },
+    });
   };
 
   const toggleActive = async (studentId: number, currentStatus: boolean) => {
-    try {
-      await axiosInstance.patch(`/auth/admin/students/${studentId}`, {
-        isActive: !currentStatus,
-      });
-      loadStudents();
-    } catch (err) {
-      console.error("Failed to update active status:", err);
-    }
+    updateStudentMutation.mutate({
+      id: studentId,
+      updates: { isActive: !currentStatus },
+    });
   };
 
-  if (loading) {
-    return <div className="p-4">Loading...</div>;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
+          <div className="text-center">
+            <div className="text-red-500 text-5xl mb-4">⚠️</div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Error</h2>
+            <p className="text-gray-600 mb-6">
+              {error instanceof Error ? error.message : "Failed to load data"}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b p-4">
+      <div className="bg-white border-b p-4 shadow-sm">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-          >
-            Logout
-          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
+            {adminProfile && (
+              <p className="text-sm text-gray-600 mt-1">
+                Welcome back, {adminProfile.name || adminProfile.email}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-4">
+            {adminProfile && (
+              <div className="text-right">
+                <p className="text-sm font-medium text-gray-800">
+                  {adminProfile.name || "Admin"}
+                </p>
+                <p className="text-xs text-gray-500">{adminProfile.email}</p>
+              </div>
+            )}
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </div>
 

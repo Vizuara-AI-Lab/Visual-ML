@@ -38,6 +38,7 @@ class Student(Base):
 
     # Authentication Fields
     emailId = Column(String(255), unique=True, index=True, nullable=False)
+    fullName = Column(String(255), nullable=False)
     password = Column(String(255), nullable=True)  # Nullable for Google OAuth users
     role = Column(SQLEnum(UserRole), default=UserRole.STUDENT, nullable=False)
     authProvider = Column(SQLEnum(AuthProvider), default=AuthProvider.LOCAL, nullable=False)
@@ -52,6 +53,12 @@ class Student(Base):
     # Premium and Status
     isPremium = Column(Boolean, default=False, nullable=False)
     isActive = Column(Boolean, default=True, nullable=False)
+
+    # Email Verification
+    isEmailVerified = Column(Boolean, default=False, nullable=False)
+    verificationOTP = Column(String(6), nullable=True)
+    otpExpiresAt = Column(DateTime, nullable=True)
+    verificationToken = Column(String(255), nullable=True)
 
     # Password Reset
     resetToken = Column(String(255), nullable=True)

@@ -96,6 +96,14 @@ class Settings(BaseSettings):
     # Frontend URL (for OAuth redirects)
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # Brevo Email Service
+    BREVO_API_KEY: Optional[str] = None
+    BREVO_SENDER_EMAIL: str = "noreply@visualml.com"
+    BREVO_SENDER_NAME: str = "Visual ML"
+
+    # Redis URL for Celery
+    REDIS_URL: str = "redis://localhost:6379/0"
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=True
     )

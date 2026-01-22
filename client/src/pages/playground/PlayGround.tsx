@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
+import { useParams } from "react-router";
 import "@xyflow/react/dist/style.css";
 import { Sidebar } from "../../components/playground/Sidebar";
 import { Canvas } from "../../components/playground/Canvas";
@@ -9,12 +10,54 @@ import { ResultsPanel } from "../../components/playground/ResultsPanel";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 import { executePipeline } from "../../features/playground/api";
 import type { NodeType, BaseNodeData } from "../../types/pipeline";
+import { useProjectState } from "../../hooks/queries/useProjectState";
+import { useSaveProject } from "../../hooks/mutations/useSaveProject";
 
 export default function PlayGround() {
+  const { projectId } = useParams<{ projectId: string }>();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
-  const { nodes, edges, setExecutionResult, setIsExecuting, clearAll } =
-    usePlaygroundStore();
+  
+  const {
+    nodes,
+    edges,
+    setExecutionResult,
+    setIsExecuting,
+    clearAll,
+    setCurrentProjectId,
+    loadProjectState,
+    getProjectState,
+  } = usePlaygroundStore();
+
+  // Load project state if projectId exists
+  const { data: projectStateData } = useProjectState(projectId);
+  const saveProject = useSaveProject();
+
+  // Set current project ID and load state
+  useEffect(() => {
+    if (projectId) {
+      setCurrentProjectId(projectId);
+    }
+  }, [projectId, setCurrentProjectId]);
+
+  // Load project state when data is available
+  useEffect(() => {
+    if (projectStateData?.state) {
+      loadProjectState(projectStateData.state);
+    }
+  }, [projectStateData, loadProjectState]);
+
+  // Auto-save every 5 seconds when there are changes
+  useEffect(() => {
+    if (!projectId || nodes.length === 0) return;
+
+    const saveTimer = setTimeout(() => {
+      const state = getProjectState();
+      saveProject.mutate({ id: projectId, state });
+    }, 5000); // 5 seconds debounce
+
+    return () => clearTimeout(saveTimer);
+  }, [nodes, edges, projectId, saveProject, getProjectState]);
 
   const onNodeDragStart = (event: React.DragEvent, nodeType: string) => {
     event.dataTransfer.setData("application/reactflow", nodeType);
@@ -67,16 +110,13 @@ export default function PlayGround() {
   };
 
   const handleSave = () => {
-    const pipeline = { nodes, edges };
-    const blob = new Blob([JSON.stringify(pipeline, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `pipeline-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (!projectId) {
+      alert("No project selected. Please create a project first.");
+      return;
+    }
+    
+    const state = getProjectState();
+    saveProject.mutate({ id: projectId, state });
   };
 
   const handleLoad = () => {

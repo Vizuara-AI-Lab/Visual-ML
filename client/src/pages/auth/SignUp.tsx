@@ -73,18 +73,10 @@ const SignUp: React.FC = () => {
     setError("");
 
     try {
-      const response = await axiosInstance.post(
-        "/auth/student/register",
-        formData,
-      );
+      await axiosInstance.post("/auth/student/register", formData);
 
-      // Store tokens
-      localStorage.setItem("accessToken", response.data.tokens.accessToken);
-      localStorage.setItem("refreshToken", response.data.tokens.refreshToken);
-      localStorage.setItem("user", JSON.stringify(response.data.user));
-
-      // Navigate to dashboard
-      Navigate("/dashboard");
+      // Navigate to OTP verification
+      Navigate("/verify-email", { state: { email: formData.emailId } });
     } catch (err: unknown) {
       const error = err as {
         response?: { data?: { detail?: string | Array<{ msg: string }> } };
@@ -97,7 +89,6 @@ const SignUp: React.FC = () => {
         }
       } else {
         setError("Registration failed. Please try again.");
-        setLoading(false);
       }
     } finally {
       setLoading(false);
