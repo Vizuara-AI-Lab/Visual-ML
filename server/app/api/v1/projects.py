@@ -75,7 +75,7 @@ async def list_projects(
         .order_by(GenAIPipeline.updatedAt.desc())
         .all()
     )
-    
+    logger.info("print all user projects", projects)
     return [ProjectListItem.model_validate(p) for p in projects]
 
 
@@ -216,9 +216,9 @@ async def save_project_state(
         )
     
     try:
-        # Delete existing nodes and edges
+        # Delete existing nodes (edges deleted via CASCADE)
         db.query(GenAINode).filter(GenAINode.pipelineId == project_id).delete()
-        db.query(GenAIEdge).filter(GenAIEdge.pipelineId == project_id).delete()
+
         
         # Create node ID mapping (React Flow ID -> DB ID)
         node_id_map = {}

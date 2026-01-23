@@ -22,3 +22,11 @@ celery -A app.core.celery_app worker --loglevel=info
 celery -A app.core.celery_app beat --loglevel=info
 # Terminal 4: FastAPI
 uvicorn main:app --reload
+
+
+
+{
+  "email": "user@example.com",
+  "password": "606280Sk$",
+  "name": "string"
+}

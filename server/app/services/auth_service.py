@@ -1,15 +1,16 @@
 """
 Authentication service with complete business logic.
 Handles student/admin registration, login, Google OAuth, and token management.
+Production-grade with Redis session management and HTTP-only cookies.
 """
 
 from datetime import datetime, timedelta
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
-import secrets
+from app.services.email_service import email_service
 
 from app.models.user import Student, Admin, RefreshToken, UserRole, AuthProvider
 from app.schemas.auth import (
@@ -18,9 +19,6 @@ from app.schemas.auth import (
     StudentGoogleAuth,
     AdminLogin,
     AdminRegister,
-    TokenResponse,
-    StudentResponse,
-    AdminResponse,
 )
 from app.core.security import (
     hash_password,
@@ -31,6 +29,7 @@ from app.core.security import (
 )
 from app.core.config import settings
 from app.core.logging import logger
+from app.core.redis_cache import redis_cache
 
 
 # ========== Student Authentication ==========
@@ -60,7 +59,8 @@ def register_student(db: Session, data: StudentRegister) -> Student:
 
     # Generate 6-digit OTP
     import random
-    otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+
+    otp = "".join([str(random.randint(0, 9)) for _ in range(6)])
     otp_expiry = datetime.utcnow() + timedelta(minutes=10)
 
     # Create student (unverified)
@@ -70,8 +70,6 @@ def register_student(db: Session, data: StudentRegister) -> Student:
         fullName=data.fullName,
         role=UserRole.STUDENT,
         authProvider=AuthProvider.LOCAL,
-        collegeOrSchool=data.collegeOrSchool,
-        contactNo=data.contactNo,
         isPremium=False,
         isActive=True,
         isEmailVerified=False,
@@ -86,23 +84,22 @@ def register_student(db: Session, data: StudentRegister) -> Student:
     logger.info(f"New student registered (unverified): {student.emailId}")
 
     # Send OTP email
-    from app.services.email_service import email_service
     try:
         email_service.send_verification_otp(student.emailId, student.fullName, otp)
         logger.info(f"OTP sent to {student.emailId}")
     except Exception as e:
         logger.error(f"Failed to send OTP email: {str(e)}")
         # Don't fail registration if email fails
-    
+
     return student
 
 
-def login_student(
+async def login_student(
     db: Session,
     data: StudentLogin,
     device_info: Optional[str] = None,
     ip_address: Optional[str] = None,
-) -> Tuple[Student, TokenResponse]:
+) -> Tuple[Student, str, str]:
     """
     Login student with email/password.
 
@@ -113,7 +110,7 @@ def login_student(
         ip_address: Optional IP address
 
     Returns:
-        Tuple of (Student model, TokenResponse)
+        Tuple of (Student model, access_token, refresh_token)
 
     Raises:
         HTTPException: If credentials invalid or account inactive
@@ -157,18 +154,20 @@ def login_student(
 
     logger.info(f"Student logged in: {student.emailId}")
 
-    # Generate tokens
-    tokens = _create_tokens_for_student(db, student, device_info, ip_address)
+    # Generate tokens and create Redis session
+    access_token, refresh_token, jti = await _create_tokens_for_student(
+        db, student, device_info, ip_address
+    )
 
-    return student, tokens
+    return student, access_token, refresh_token
 
 
-def google_auth_student(
+async def google_auth_student(
     db: Session,
     data: StudentGoogleAuth,
     device_info: Optional[str] = None,
     ip_address: Optional[str] = None,
-) -> Tuple[Student, TokenResponse]:
+) -> Tuple[Student, str, str]:
     """
     Authenticate student with Google OAuth.
     Creates new student if doesn't exist.
@@ -180,7 +179,7 @@ def google_auth_student(
         ip_address: Optional IP address
 
     Returns:
-        Tuple of (Student model, TokenResponse)
+        Tuple of (Student model, access_token, refresh_token)
 
     Raises:
         HTTPException: If Google token invalid
@@ -193,6 +192,7 @@ def google_auth_student(
 
         google_id = id_info["sub"]
         email = id_info["email"]
+        full_name = id_info.get("name", email.split("@")[0])  # Extract name or use email prefix
         profile_pic = data.profilePic or id_info.get("picture")
 
         # Check if student exists with this Google ID
@@ -217,22 +217,26 @@ def google_auth_student(
             # Create new student
             student = Student(
                 emailId=email,
+                fullName=full_name,
                 googleId=google_id,
                 authProvider=AuthProvider.GOOGLE,
                 role=UserRole.STUDENT,
                 profilePic=profile_pic,
                 isPremium=False,
                 isActive=True,
+                isEmailVerified=True,  # Google accounts are pre-verified
             )
             db.add(student)
             db.commit()
             db.refresh(student)
             logger.info(f"New student registered via Google: {student.emailId}")
 
-        # Generate tokens
-        tokens = _create_tokens_for_student(db, student, device_info, ip_address)
+        # Generate tokens and create Redis session
+        access_token, refresh_token, jti = await _create_tokens_for_student(
+            db, student, device_info, ip_address
+        )
 
-        return student, tokens
+        return student, access_token, refresh_token
 
     except ValueError as e:
         logger.error(f"Google token verification failed: {str(e)}")
@@ -242,7 +246,7 @@ def google_auth_student(
 # ========== Admin Authentication ==========
 
 
-def register_admin(db: Session, data: AdminRegister) -> Tuple[Admin, TokenResponse]:
+async def register_admin(db: Session, data: AdminRegister) -> Tuple[Admin, str, str]:
     """
     Register a new admin account.
 
@@ -251,7 +255,7 @@ def register_admin(db: Session, data: AdminRegister) -> Tuple[Admin, TokenRespon
         data: Admin registration data
 
     Returns:
-        Tuple of (Admin model, TokenResponse)
+        Tuple of (Admin model, access_token, refresh_token)
 
     Raises:
         HTTPException: If email already exists
@@ -278,18 +282,18 @@ def register_admin(db: Session, data: AdminRegister) -> Tuple[Admin, TokenRespon
 
     logger.info(f"New admin registered: {admin.email}")
 
-    # Generate tokens
-    tokens = _create_tokens_for_admin(db, admin)
+    # Generate tokens and create Redis session
+    access_token, refresh_token, jti = await _create_tokens_for_admin(db, admin)
 
-    return admin, tokens
+    return admin, access_token, refresh_token
 
 
-def login_admin(
+async def login_admin(
     db: Session,
     data: AdminLogin,
     device_info: Optional[str] = None,
     ip_address: Optional[str] = None,
-) -> Tuple[Admin, TokenResponse]:
+) -> Tuple[Admin, str, str]:
     """
     Login admin with email/password.
 
@@ -300,7 +304,7 @@ def login_admin(
         ip_address: Optional IP address
 
     Returns:
-        Tuple of (Admin model, TokenResponse)
+        Tuple of (Admin model, access_token, refresh_token)
 
     Raises:
         HTTPException: If credentials invalid or account inactive
@@ -330,21 +334,23 @@ def login_admin(
 
     logger.info(f"Admin logged in: {admin.email}")
 
-    # Generate tokens
-    tokens = _create_tokens_for_admin(db, admin, device_info, ip_address)
+    # Generate tokens and create Redis session
+    access_token, refresh_token, jti = await _create_tokens_for_admin(
+        db, admin, device_info, ip_address
+    )
 
-    return admin, tokens
+    return admin, access_token, refresh_token
 
 
 # ========== Token Management ==========
 
 
-def refresh_access_token(
+async def refresh_access_token(
     db: Session,
     refresh_token_str: str,
     device_info: Optional[str] = None,
     ip_address: Optional[str] = None,
-) -> TokenResponse:
+) -> Tuple[str, str]:
     """
     Refresh access token using refresh token.
     Implements token rotation for security.
@@ -356,7 +362,7 @@ def refresh_access_token(
         ip_address: Optional IP address
 
     Returns:
-        New TokenResponse with rotated tokens
+        Tuple of (new_access_token, new_refresh_token)
 
     Raises:
         HTTPException: If refresh token invalid or revoked
@@ -364,7 +370,7 @@ def refresh_access_token(
     from app.core.security import verify_refresh_token
 
     # Verify refresh token
-    payload = verify_refresh_token(refresh_token_str, db)
+    payload = await verify_refresh_token(refresh_token_str, db)
 
     user_id = int(payload.get("sub"))
     role = payload.get("role")
@@ -376,6 +382,9 @@ def refresh_access_token(
         old_token.isRevoked = True
         db.commit()
 
+    # Delete old session from Redis
+    await redis_cache.delete_session(jti)
+
     # Create new tokens
     if role == UserRole.STUDENT.value:
         student = db.query(Student).filter(Student.id == user_id).first()
@@ -384,23 +393,30 @@ def refresh_access_token(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Student account not found or inactive",
             )
-        return _create_tokens_for_student(db, student, device_info, ip_address)
+        access_token, refresh_token, _ = await _create_tokens_for_student(
+            db, student, device_info, ip_address
+        )
+        return access_token, refresh_token
     else:
         admin = db.query(Admin).filter(Admin.id == user_id).first()
         if not admin or not admin.isActive:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Admin account not found or inactive"
             )
-        return _create_tokens_for_admin(db, admin, device_info, ip_address)
+        access_token, refresh_token, _ = await _create_tokens_for_admin(
+            db, admin, device_info, ip_address
+        )
+        return access_token, refresh_token
 
 
-def logout_user(db: Session, refresh_token_str: str) -> None:
+async def logout_user(db: Session, refresh_token_str: str, user_id: int) -> None:
     """
-    Logout user by revoking refresh token.
+    Logout user by revoking refresh token and clearing cache.
 
     Args:
         db: Database session
         refresh_token_str: Refresh token JWT
+        user_id: User ID for cache invalidation
     """
     from app.core.security import decode_token
 
@@ -408,12 +424,19 @@ def logout_user(db: Session, refresh_token_str: str) -> None:
         payload = decode_token(refresh_token_str, token_type="refresh")
         jti = payload.get("jti")
 
-        # Revoke token
+        # Revoke token in database
         token = db.query(RefreshToken).filter(RefreshToken.token == jti).first()
         if token:
             token.isRevoked = True
             db.commit()
             logger.info(f"User logged out, token revoked: {jti}")
+
+        # Delete session from Redis
+        await redis_cache.delete_session(jti)
+
+        # Invalidate user cache
+        await redis_cache.delete_user(user_id)
+
     except Exception as e:
         logger.warning(f"Logout failed: {str(e)}")
         # Don't raise exception, just log
@@ -503,9 +526,11 @@ def reset_password(db: Session, token: str, new_password: str) -> None:
     logger.info(f"Password reset successful for: {student.emailId}")
 
 
-def change_password(db: Session, student: Student, old_password: str, new_password: str) -> None:
+async def change_password(
+    db: Session, student: Student, old_password: str, new_password: str
+) -> None:
     """
-    Change student password.
+    Change student password and invalidate all sessions.
 
     Args:
         db: Database session
@@ -537,28 +562,32 @@ def change_password(db: Session, student: Student, old_password: str, new_passwo
 
     db.commit()
 
+    # Invalidate user cache and all sessions
+    await redis_cache.delete_user(student.id)
+    await redis_cache.delete_all_user_sessions(student.id)
+
     logger.info(f"Password changed for: {student.emailId}")
 
 
 # ========== Helper Functions ==========
 
 
-def _create_tokens_for_student(
+async def _create_tokens_for_student(
     db: Session,
     student: Student,
     device_info: Optional[str] = None,
     ip_address: Optional[str] = None,
-) -> TokenResponse:
-    """Create access and refresh tokens for student."""
+) -> Tuple[str, str, str]:
+    """Create access and refresh tokens for student with Redis session."""
     # Create access token
     access_token = create_access_token(
         {"sub": str(student.id), "role": UserRole.STUDENT.value, "email": student.emailId}
     )
 
     # Create refresh token
-    refresh_token = create_refresh_token(student.id, UserRole.STUDENT.value)
+    refresh_token, jti = create_refresh_token(student.id, UserRole.STUDENT.value)
 
-    # Decode to get JTI and expiry
+    # Decode to get expiry
     from jose import jwt
 
     refresh_payload = jwt.decode(
@@ -567,7 +596,7 @@ def _create_tokens_for_student(
 
     # Store refresh token in database
     db_refresh_token = RefreshToken(
-        token=refresh_payload["jti"],
+        token=jti,
         studentId=student.id,
         expiresAt=datetime.fromtimestamp(refresh_payload["exp"]),
         deviceInfo=device_info,
@@ -576,27 +605,31 @@ def _create_tokens_for_student(
     db.add(db_refresh_token)
     db.commit()
 
-    return TokenResponse(
-        accessToken=access_token,
-        refreshToken=refresh_token,
-        tokenType="bearer",
-        expiresIn=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    # Create session in Redis
+    await redis_cache.create_session(
+        jti=jti,
+        user_id=student.id,
+        role=UserRole.STUDENT.value,
+        device_info=device_info,
+        ip_address=ip_address,
     )
 
+    return access_token, refresh_token, jti
 
-def _create_tokens_for_admin(
+
+async def _create_tokens_for_admin(
     db: Session, admin: Admin, device_info: Optional[str] = None, ip_address: Optional[str] = None
-) -> TokenResponse:
-    """Create access and refresh tokens for admin."""
+) -> Tuple[str, str, str]:
+    """Create access and refresh tokens for admin with Redis session."""
     # Create access token
     access_token = create_access_token(
         {"sub": str(admin.id), "role": UserRole.ADMIN.value, "email": admin.email}
     )
 
     # Create refresh token
-    refresh_token = create_refresh_token(admin.id, UserRole.ADMIN.value)
+    refresh_token, jti = create_refresh_token(admin.id, UserRole.ADMIN.value)
 
-    # Decode to get JTI and expiry
+    # Decode to get expiry
     from jose import jwt
 
     refresh_payload = jwt.decode(
@@ -605,7 +638,7 @@ def _create_tokens_for_admin(
 
     # Store refresh token in database
     db_refresh_token = RefreshToken(
-        token=refresh_payload["jti"],
+        token=jti,
         adminId=admin.id,
         expiresAt=datetime.fromtimestamp(refresh_payload["exp"]),
         deviceInfo=device_info,
@@ -614,9 +647,13 @@ def _create_tokens_for_admin(
     db.add(db_refresh_token)
     db.commit()
 
-    return TokenResponse(
-        accessToken=access_token,
-        refreshToken=refresh_token,
-        tokenType="bearer",
-        expiresIn=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    # Create session in Redis
+    await redis_cache.create_session(
+        jti=jti,
+        user_id=admin.id,
+        role=UserRole.ADMIN.value,
+        device_info=device_info,
+        ip_address=ip_address,
     )
+
+    return access_token, refresh_token, jti

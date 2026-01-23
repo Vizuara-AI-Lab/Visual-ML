@@ -13,7 +13,7 @@ from app.schemas.auth import TokenResponse
 from app.core.logging import logger
 
 
-def verify_email_otp(db: Session, email: str, otp: str) -> Tuple[Student, TokenResponse]:
+async def verify_email_otp(db: Session, email: str, otp: str) -> Tuple[Student, str, str]:
     """
     Verify student email with OTP and activate account.
     
@@ -23,7 +23,7 @@ def verify_email_otp(db: Session, email: str, otp: str) -> Tuple[Student, TokenR
         otp: 6-digit OTP code
         
     Returns:
-        Tuple of (Student model, TokenResponse)
+        Tuple of (Student model, access_token, refresh_token)
         
     Raises:
         HTTPException: If OTP invalid or expired
@@ -88,10 +88,10 @@ def verify_email_otp(db: Session, email: str, otp: str) -> Tuple[Student, TokenR
         logger.error(f"Failed to schedule emails: {str(e)}")
         # Don't fail verification if email scheduling fails
     
-    # Generate tokens
-    tokens = _create_tokens_for_student(db, student)
+    # Generate tokens and create Redis session
+    access_token, refresh_token, jti = await _create_tokens_for_student(db, student)
     
-    return student, tokens
+    return student, access_token, refresh_token
 
 
 def resend_verification_otp(db: Session, email: str) -> None:

@@ -28,9 +28,6 @@ const SignIn: React.FC = () => {
         console.error("VITE_GOOGLE_CLIENT_ID not configured");
         return;
       }
-
-      console.log("✅ Initializing Google Sign-In button...");
-
       // @ts-expect-error - Google Sign-In loaded from CDN
       window.google.accounts.id.initialize({
         client_id: clientId,
@@ -47,10 +44,7 @@ const SignIn: React.FC = () => {
           width: googleButtonRef.current.offsetWidth,
           text: "signin_with",
         }
-      );
-
-      console.log("✅ Google Sign-In button rendered");
-    };
+      );    };
 
     // Wait for Google SDK to load
     const checkGoogleLoaded = setInterval(() => {
@@ -65,27 +59,16 @@ const SignIn: React.FC = () => {
   }, []);
 
   const handleGoogleCallback = async (response: any) => {
-    console.log("🎉 Google Sign-In callback triggered");
     setLoading(true);
     setError("");
 
     try {
-      console.log("📤 Sending ID token to backend...");
       const result = await axiosInstance.post("/auth/student/google", {
         idToken: response.credential,
       });
-
-      console.log("✅ Authentication successful!");
-      
-      // Store tokens
-      localStorage.setItem("accessToken", result.data.tokens.accessToken);
-      localStorage.setItem("refreshToken", result.data.tokens.refreshToken);
       localStorage.setItem("user", JSON.stringify(result.data.user));
-
-      // Navigate to dashboard
       navigate("/dashboard");
     } catch (err: any) {
-      console.error("❌ Google Sign-In failed:", err);
       setError(
         err.response?.data?.detail ||
         err.response?.data?.message ||
@@ -114,13 +97,7 @@ const SignIn: React.FC = () => {
         "/auth/student/login",
         formData,
       );
-
-      // Store tokens
-      localStorage.setItem("accessToken", response.data.tokens.accessToken);
-      localStorage.setItem("refreshToken", response.data.tokens.refreshToken);
       localStorage.setItem("user", JSON.stringify(response.data.user));
-
-      // Navigate to dashboard
       navigate("/dashboard");
     } catch (err: unknown) {
       const error = err as { response?: { data?: { detail?: string } } };
@@ -281,7 +258,7 @@ const SignIn: React.FC = () => {
           <p className="text-center text-sm text-gray-600">
             Don't have an account?{" "}
             <a
-              onClick={() => navigate("/auth/signup")}
+              onClick={() => navigate("/signup")}
               className="font-medium text-[#29ABE2] hover:text-[#FF00FF] transition-colors cursor-pointer"
             >
               Sign up

@@ -176,7 +176,10 @@ async def train_regression_model(
     try:
         logger.info(f"Training regression model: {request.algorithm}")
 
-        result = await ml_service.train_model(
+        # Offload to Celery
+        from app.tasks.ml_tasks import train_model_task
+        
+        task = train_model_task.delay(
             dataset_path=request.dataset_path,
             target_column=request.target_column,
             algorithm=request.algorithm,
@@ -186,7 +189,15 @@ async def train_regression_model(
             val_ratio=request.validation_split,
         )
 
-        return TrainModelResponse(**result)
+        return TrainModelResponse(
+            success=True,
+            model_id=None,  # Will be available when task completes
+            model_path=None,
+            model_version=None,
+            training_metrics={},
+            test_metrics={},
+            metadata={"task_id": task.id, "status": "processing"}
+        )
 
     except BaseMLException as e:
         logger.error(f"Training failed: {str(e)}")
@@ -227,7 +238,10 @@ async def train_classification_model(
     try:
         logger.info(f"Training classification model: {request.algorithm}")
 
-        result = await ml_service.train_model(
+        # Offload to Celery
+        from app.tasks.ml_tasks import train_model_task
+        
+        task = train_model_task.delay(
             dataset_path=request.dataset_path,
             target_column=request.target_column,
             algorithm=request.algorithm,
@@ -237,7 +251,15 @@ async def train_classification_model(
             val_ratio=request.validation_split,
         )
 
-        return TrainModelResponse(**result)
+        return TrainModelResponse(
+            success=True,
+            model_id=None,
+            model_path=None,
+            model_version=None,
+            training_metrics={},
+            test_metrics={},
+            metadata={"task_id": task.id, "status": "processing"}
+        )
 
     except BaseMLException as e:
         logger.error(f"Training failed: {str(e)}")

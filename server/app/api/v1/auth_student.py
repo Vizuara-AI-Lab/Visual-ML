@@ -1,9 +1,8 @@
 """
-Authentication API endpoints for students and admins.
-Implements complete RBAC authentication with Google OAuth.
+Authentication API endpoints for students .
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -17,21 +16,25 @@ from app.schemas.auth import (
     ResendOTPRequest,
     AdminLogin,
     AdminRegister,
-    TokenResponse,
-    RefreshTokenRequest,
     StudentResponse,
     AdminResponse,
     StudentUpdate,
     ChangePassword,
     ForgotPassword,
     ResetPassword,
-    AuthResponse,
     StudentListItem,
     AdminUpdateStudent,
 )
 from app.services import auth_service
-from app.core.security import get_current_student, get_current_admin
+from app.core.security import (
+    get_current_student,
+    get_current_admin,
+    set_auth_cookies,
+    clear_auth_cookies,
+    decode_token,
+)
 from app.core.logging import logger
+from app.core.redis_cache import redis_cache
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -62,67 +65,94 @@ async def register_student(data: StudentRegister, request: Request, db: Session 
     }
 
 
-@router.post("/student/login", response_model=AuthResponse)
-async def login_student(data: StudentLogin, request: Request, db: Session = Depends(get_db)):
+@router.post("/student/login")
+async def login_student(
+    data: StudentLogin,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
+):
     """
     Login student with email and password.
+    Sets HTTP-only cookies for authentication.
 
-    Returns access token and refresh token.
+    Returns user data only (tokens in cookies).
     """
     device_info = request.headers.get("User-Agent")
     ip_address = request.client.host if request.client else None
 
-    student, tokens = auth_service.login_student(db, data, device_info, ip_address)
-
-    return AuthResponse(
-        user=StudentResponse.model_validate(student), tokens=tokens, message="Login successful"
+    student, access_token, refresh_token = await auth_service.login_student(
+        db, data, device_info, ip_address
     )
 
+    # Set HTTP-only cookies
+    set_auth_cookies(response, access_token, refresh_token)
 
-@router.post("/student/google", response_model=AuthResponse)
+    return {
+        "user": StudentResponse.model_validate(student),
+        "message": "Login successful"
+    }
+
+
+@router.post("/student/google")
 async def google_auth_student(
-    data: StudentGoogleAuth, request: Request, db: Session = Depends(get_db)
+    data: StudentGoogleAuth,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
 ):
     """
     Authenticate student with Google OAuth.
     Creates new account if doesn't exist.
+    Sets HTTP-only cookies for authentication.
 
     - **idToken**: Google ID token from frontend (Google Sign-In)
     - **profilePic**: Optional profile picture URL
 
-    Returns access token and refresh token.
+    Returns user data only (tokens in cookies).
     """
     device_info = request.headers.get("User-Agent")
     ip_address = request.client.host if request.client else None
 
-    student, tokens = auth_service.google_auth_student(db, data, device_info, ip_address)
-
-    return AuthResponse(
-        user=StudentResponse.model_validate(student),
-        tokens=tokens,
-        message="Google authentication successful",
+    student, access_token, refresh_token = await auth_service.google_auth_student(
+        db, data, device_info, ip_address
     )
 
+    # Set HTTP-only cookies
+    set_auth_cookies(response, access_token, refresh_token)
 
-@router.post("/verify-email", response_model=AuthResponse)
-async def verify_email(data: VerifyEmailRequest, db: Session = Depends(get_db)):
+    return {
+        "user": StudentResponse.model_validate(student),
+        "message": "Google authentication successful"
+    }
+
+
+@router.post("/verify-email")
+async def verify_email(
+    data: VerifyEmailRequest,
+    response: Response,
+    db: Session = Depends(get_db)
+):
     """
     Verify student email with OTP code.
+    Sets HTTP-only cookies for authentication.
     
     - **emailId**: Student email
     - **otp**: 6-digit OTP code from email
     
-    Returns access token and refresh token after successful verification.
+    Returns user data only (tokens in cookies).
     """
     from app.services.otp_service import verify_email_otp
     
-    student, tokens = verify_email_otp(db, data.emailId, data.otp)
+    student, access_token, refresh_token = await verify_email_otp(db, data.emailId, data.otp)
     
-    return AuthResponse(
-        user=StudentResponse.model_validate(student),
-        tokens=tokens,
-        message="Email verified successfully! Welcome to Visual ML."
-    )
+    # Set HTTP-only cookies
+    set_auth_cookies(response, access_token, refresh_token)
+    
+    return {
+        "user": StudentResponse.model_validate(student),
+        "message": "Email verified successfully! Welcome to Visual ML."
+    }
 
 
 @router.post("/resend-otp")
@@ -146,68 +176,131 @@ async def resend_otp(data: ResendOTPRequest, db: Session = Depends(get_db)):
 # ========== Admin Login ==========
 
 
-@router.post("/admin/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-async def register_admin(data: AdminRegister, request: Request, db: Session = Depends(get_db)):
+@router.post("/admin/register", status_code=status.HTTP_201_CREATED)
+async def register_admin(
+    data: AdminRegister,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
+):
     """
     Register a new admin account.
+    Sets HTTP-only cookies for authentication.
 
     - **email**: Unique admin email
     - **password**: Min 8 chars with uppercase, lowercase, digit
     - **name**: Optional admin name
 
-    Returns access token and refresh token.
+    Returns user data only (tokens in cookies).
     """
-    admin, tokens = auth_service.register_admin(db, data)
+    admin, access_token, refresh_token = await auth_service.register_admin(db, data)
 
-    return AuthResponse(
-        user=AdminResponse.model_validate(admin),
-        tokens=tokens,
-        message="Admin registered successfully",
-    )
+    # Set HTTP-only cookies
+    set_auth_cookies(response, access_token, refresh_token)
+
+    return {
+        "user": AdminResponse.model_validate(admin),
+        "message": "Admin registered successfully"
+    }
 
 
-@router.post("/admin/login", response_model=AuthResponse)
-async def login_admin(data: AdminLogin, request: Request, db: Session = Depends(get_db)):
+@router.post("/admin/login")
+async def login_admin(
+    data: AdminLogin,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
+):
     """
     Login admin with email and password.
+    Sets HTTP-only cookies for authentication.
 
-    Returns access token and refresh token.
+    Returns user data only (tokens in cookies).
     """
     device_info = request.headers.get("User-Agent")
     ip_address = request.client.host if request.client else None
 
-    admin, tokens = auth_service.login_admin(db, data, device_info, ip_address)
-
-    return AuthResponse(
-        user=AdminResponse.model_validate(admin), tokens=tokens, message="Admin login successful"
+    admin, access_token, refresh_token = await auth_service.login_admin(
+        db, data, device_info, ip_address
     )
+
+    # Set HTTP-only cookies
+    set_auth_cookies(response, access_token, refresh_token)
+
+    return {
+        "user": AdminResponse.model_validate(admin),
+        "message": "Admin login successful"
+    }
 
 
 # ========== Token Management ==========
 
 
-@router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(data: RefreshTokenRequest, request: Request, db: Session = Depends(get_db)):
+@router.post("/refresh")
+async def refresh_token(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
+):
     """
-    Refresh access token using refresh token.
+    Refresh access token using refresh token from cookie.
     Implements token rotation - old refresh token is revoked.
 
-    Returns new access token and refresh token.
+    Returns success message (new tokens in cookies).
     """
+    # Get refresh token from cookie
+    refresh_token_str = request.cookies.get("refresh_token")
+    if not refresh_token_str:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token not found in cookies"
+        )
+
     device_info = request.headers.get("User-Agent")
     ip_address = request.client.host if request.client else None
 
-    tokens = auth_service.refresh_access_token(db, data.refreshToken, device_info, ip_address)
+    # Refresh tokens
+    access_token, new_refresh_token = await auth_service.refresh_access_token(
+        db, refresh_token_str, device_info, ip_address
+    )
 
-    return tokens
+    # Set new cookies
+    set_auth_cookies(response, access_token, new_refresh_token)
+
+    return {"message": "Token refreshed successfully"}
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(data: RefreshTokenRequest, db: Session = Depends(get_db)):
+@router.post("/logout")
+async def logout(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
+):
     """
-    Logout user by revoking refresh token.
+    Logout user by revoking refresh token and clearing cookies.
+    Invalidates Redis cache and all sessions.
     """
-    auth_service.logout_user(db, data.refreshToken)
+    # Get tokens from cookies
+    access_token = request.cookies.get("access_token")
+    refresh_token_str = request.cookies.get("refresh_token")
+
+    # Get user ID from access token for cache invalidation
+    user_id = None
+    if access_token:
+        try:
+            payload = decode_token(access_token)
+            user_id = int(payload.get("sub"))
+        except:
+            pass
+
+    # Revoke refresh token and clear cache
+    if refresh_token_str and user_id:
+        await auth_service.logout_user(db, refresh_token_str, user_id)
+
+    # Clear cookies
+    clear_auth_cookies(response)
+
+    return {"message": "Logged out successfully"}
 
 
 # ========== Student Profile Management ==========
@@ -250,23 +343,32 @@ async def update_student_profile(
     db.commit()
     db.refresh(student)
 
+    # ✅ Invalidate cache to reflect changes immediately
+    await redis_cache.delete_user(student.id)
+
     logger.info(f"Student profile updated: {student.emailId}")
 
     return StudentResponse.model_validate(student)
 
 
-@router.post("/student/change-password", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/student/change-password")
 async def change_password(
     data: ChangePassword,
+    response: Response,
     student: Student = Depends(get_current_student),
     db: Session = Depends(get_db),
 ):
     """
     Change student password.
     Only for students with LOCAL authentication.
-    Revokes all refresh tokens for security.
+    Revokes all refresh tokens and clears cookies for security.
     """
-    auth_service.change_password(db, student, data.oldPassword, data.newPassword)
+    await auth_service.change_password(db, student, data.oldPassword, data.newPassword)
+
+    # Clear cookies (user must login again)
+    clear_auth_cookies(response)
+
+    return {"message": "Password changed successfully. Please login again."}
 
 
 @router.post("/student/forgot-password", status_code=status.HTTP_200_OK)
@@ -404,4 +506,39 @@ async def update_student(
     db.commit()
     db.refresh(student)
 
+    # ✅ Invalidate cache to reflect admin changes immediately
+    await redis_cache.delete_user(student.id)
+    
+    # If deactivated, also clear all sessions
+    if data.isActive is not None and not data.isActive:
+        await redis_cache.delete_all_user_sessions(student.id)
+
     return StudentResponse.model_validate(student)
+
+
+# ========== Development Utils (UNSECURED) ==========
+
+
+@router.delete("/dev/student/{student_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def dev_delete_student(student_id: int, db: Session = Depends(get_db)):
+    """
+    [DEV ONLY] Delete a student by ID.
+    No authentication required.
+    Deletes user and clears cache.
+    """
+    logger.warning(f"DEV: Deleting student {student_id}")
+
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+
+    # Clear cache first
+    await redis_cache.delete_user(student_id)
+    await redis_cache.delete_all_user_sessions(student_id)
+
+    # Delete from DB
+    db.delete(student)
+    db.commit()
+
+    return None
+

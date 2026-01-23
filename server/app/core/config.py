@@ -61,8 +61,14 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     REDIS_PASSWORD: Optional[str] = None
-    CACHE_TTL: int = 3600  # 1 hour
-    ENABLE_CACHE: bool = False  # Enable in production
+    CACHE_TTL: int = 900  # 15 minutes (optimized from 1 hour)
+    ENABLE_CACHE: bool = True  # ✅ ENABLED for production
+
+    # Database Connection Pool (for production scalability)
+    DB_POOL_SIZE: int = 20  # Max persistent connections
+    DB_MAX_OVERFLOW: int = 10  # Allow 10 extra connections
+    DB_POOL_TIMEOUT: int = 30  # Wait 30s for connection
+    DB_POOL_RECYCLE: int = 3600  # Recycle connections after 1 hour
 
     # S3/Storage (for production)
     USE_S3: bool = False
@@ -97,8 +103,8 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:5173"
 
     # Brevo Email Service
-    BREVO_API_KEY: Optional[str] = None
-    BREVO_SENDER_EMAIL: str = "noreply@visualml.com"
+    BREVO_API_KEY: Optional[str] = ""
+    BREVO_SENDER_EMAIL: str = "mrsachinchaurasiya@gmail.com"
     BREVO_SENDER_NAME: str = "Visual ML"
 
     # Redis URL for Celery

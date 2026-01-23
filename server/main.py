@@ -11,8 +11,10 @@ from app.core.config import settings
 from app.core.logging import logger
 from app.core.rate_limit import RateLimitMiddleware
 from app.core.exceptions import BaseMLException
-from app.api.v1 import pipelines, auth, genai_pipelines, knowledge_base, secrets, projects
+from app.api.v1 import pipelines, genai_pipelines, knowledge_base, secrets, projects
 from pathlib import Path
+
+from app.api.v1 import auth_student
 
 
 @asynccontextmanager
@@ -50,13 +52,18 @@ origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
-# CORS middleware
+# CORS middleware - configured for cookie-based authentication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        # Add production domains here
+    ],
+    allow_credentials=True,  # REQUIRED for cookies
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID"],  # For request tracing
 )
 
 # Rate limiting middleware
@@ -128,7 +135,7 @@ async def root():
 
 
 # Include routers
-app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
+app.include_router(auth_student.router, prefix=settings.API_V1_PREFIX)
 app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
 
 # GenAI routes

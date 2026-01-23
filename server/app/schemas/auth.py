@@ -58,7 +58,6 @@ class StudentRegister(BaseModel):
         return v
 
 
-
 class StudentLogin(BaseModel):
     """Student login request."""
 
@@ -92,7 +91,6 @@ class StudentGoogleAuth(BaseModel):
 
     idToken: str = Field(..., description="Google ID token from frontend")
     profilePic: Optional[str] = Field(None, description="Google profile picture URL")
-
 
 
 # ========== Admin Login ==========
@@ -153,6 +151,7 @@ class StudentResponse(BaseModel):
 
     id: int
     emailId: str
+    fullName: str
     role: UserRole
     authProvider: AuthProvider
     collegeOrSchool: Optional[str] = None
