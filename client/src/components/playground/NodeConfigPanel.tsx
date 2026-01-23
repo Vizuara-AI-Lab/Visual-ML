@@ -5,6 +5,8 @@
 import { useState } from "react";
 import type { BaseNodeData } from "../../types/pipeline";
 import type { Node } from "@xyflow/react";
+import { useUploadDataset } from "../../hooks/mutations/useUploadDataset";
+import { useParams } from "react-router-dom";
 
 interface NodeConfigPanelProps {
   node: Node<BaseNodeData>;
@@ -17,6 +19,10 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
     node.data.config || {},
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [uploading, setUploading] = useState(false);
+
+  const { id: projectId } = useParams<{ id: string }>();
+  const uploadDataset = useUploadDataset();
 
   const nodeData = node.data as BaseNodeData;
 
@@ -233,29 +239,87 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
       case "upload_file":
         return (
           <>
-            {renderField("filename", "Filename")}
-            {renderField("content_type", "Content Type")}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Upload File
+                Upload CSV File
               </label>
               <input
                 type="file"
                 accept=".csv"
-                onChange={(e) => {
+                disabled={uploading}
+                onChange={async (e) => {
                   const file = e.target.files?.[0];
-                  if (file) {
-                    updateField("filename", file.name);
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      updateField("file_content", reader.result);
-                    };
-                    reader.readAsDataURL(file);
+                  if (file && projectId) {
+                    try {
+                      setUploading(true);
+                      setErrors({});
+
+                      // Upload to S3 via API
+                      const result = await uploadDataset.mutateAsync({
+                        file,
+                        projectId: parseInt(projectId),
+                      });
+
+                      // Update node config with dataset info
+                      updateField("filename", result.dataset.filename);
+                      updateField("dataset_id", result.dataset.dataset_id);
+                      updateField("file_path", result.dataset.file_path);
+                      updateField(
+                        "storage_backend",
+                        result.dataset.storage_backend,
+                      );
+                      updateField("s3_key", result.dataset.s3_key);
+                      updateField("n_rows", result.dataset.n_rows);
+                      updateField("n_columns", result.dataset.n_columns);
+                      updateField("columns", result.dataset.columns);
+                      updateField("uploaded", true);
+
+                      setUploading(false);
+                    } catch (error: any) {
+                      setUploading(false);
+                      setErrors({
+                        file: error.response?.data?.detail || "Upload failed",
+                      });
+                    }
                   }
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               />
+              {uploading && (
+                <p className="mt-1 text-xs text-blue-600">
+                  Uploading to S3... Please wait.
+                </p>
+              )}
+              {errors.file && (
+                <p className="mt-1 text-xs text-red-600">{errors.file}</p>
+              )}
+              {config.uploaded && (
+                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+                  ✓ Uploaded: {config.filename as string}
+                  <br />
+                  Dataset ID: {config.dataset_id as string}
+                  <br />
+                  Rows: {config.n_rows as number}, Columns:{" "}
+                  {config.n_columns as number}
+                  <br />
+                  Storage: {config.storage_backend as string}
+                </div>
+              )}
             </div>
+            {config.uploaded && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Dataset Info
+                </label>
+                <textarea
+                  value={(config.dataset_info as string) || ""}
+                  onChange={(e) => updateField("dataset_info", e.target.value)}
+                  rows={2}
+                  placeholder="Optional: Add notes about this dataset"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
           </>
         );
 

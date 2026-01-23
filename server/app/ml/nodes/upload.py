@@ -1,6 +1,6 @@
 """
 Upload File Node - Handles dataset uploads with validation.
-Stores files in memory/DB and S3 for production scalability.
+Stores files in S3 for production scalability with DB metadata.
 """
 
 from typing import Type, Optional, Dict, Any
@@ -14,6 +14,7 @@ from app.core.exceptions import FileUploadError, InvalidDatasetError
 from app.core.config import settings
 from app.core.logging import logger
 from app.utils.ids import generate_id
+from app.services.s3_service import s3_service
 
 
 class UploadFileInput(NodeInput):
@@ -22,6 +23,9 @@ class UploadFileInput(NodeInput):
     file_content: bytes = Field(..., description="File content as bytes")
     filename: str = Field(..., description="Original filename")
     content_type: Optional[str] = Field(None, description="MIME type")
+    project_id: Optional[int] = Field(None, description="Project ID for dataset association")
+    user_id: Optional[int] = Field(None, description="User ID for ownership")
+    node_id: Optional[int] = Field(None, description="Node ID for linking")
 
     @field_validator("filename")
     @classmethod
@@ -62,13 +66,17 @@ class UploadFileOutput(NodeOutput):
 
     dataset_id: str = Field(..., description="Unique dataset identifier")
     filename: str = Field(..., description="Stored filename")
-    file_path: str = Field(..., description="Path to stored file")
+    file_path: str = Field(..., description="Path to stored file (S3 key or local path)")
+    storage_backend: str = Field(..., description="Storage backend used (s3 or local)")
+    s3_bucket: Optional[str] = Field(None, description="S3 bucket if using S3")
+    s3_key: Optional[str] = Field(None, description="S3 object key if using S3")
     n_rows: int = Field(..., description="Number of rows in dataset")
     n_columns: int = Field(..., description="Number of columns in dataset")
     columns: list[str] = Field(..., description="Column names")
     dtypes: Dict[str, str] = Field(..., description="Data types of columns")
     memory_usage_mb: float = Field(..., description="Memory usage in MB")
-    preview: list[Dict[str, Any]] = Field(..., description="First 5 rows preview")
+    preview: list[Dict[str, Any]] = Field(..., description="First 10 rows preview")
+    file_size: int = Field(..., description="File size in bytes")
 
 
 class UploadFileNode(BaseNode):
@@ -93,22 +101,27 @@ class UploadFileNode(BaseNode):
 
     node_type = "upload_file"
 
-    def __init__(
-        self, node_id: Optional[str] = None, storage_backend: str = "local"  # 'local' or 's3'
-    ):
+    def __init__(self, node_id: Optional[str] = None, storage_backend: str = None):
         """
         Initialize Upload File node.
 
         Args:
             node_id: Unique node identifier
-            storage_backend: Storage backend to use ('local' or 's3')
+            storage_backend: Storage backend to use ('local' or 's3', auto-detects from settings)
         """
         super().__init__(node_id)
-        self.storage_backend = storage_backend
+
+        # Auto-detect storage backend from settings if not specified
+        if storage_backend is None:
+            self.storage_backend = "s3" if settings.USE_S3 else "local"
+        else:
+            self.storage_backend = storage_backend
 
         # Create upload directory if using local storage
-        if storage_backend == "local":
+        if self.storage_backend == "local":
             Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Upload node initialized with storage backend: {self.storage_backend}")
 
     def get_input_schema(self) -> Type[NodeInput]:
         """Return input schema."""
@@ -140,9 +153,14 @@ class UploadFileNode(BaseNode):
             # Validate CSV structure
             self._validate_csv_structure(df)
 
-            # Store file
-            file_path = await self._store_file(
-                dataset_id, input_data.filename, input_data.file_content
+            # Store file (S3 or local)
+            storage_result = await self._store_file(
+                dataset_id=dataset_id,
+                filename=input_data.filename,
+                file_content=input_data.file_content,
+                project_id=input_data.project_id,
+                user_id=input_data.user_id,
+                df=df,
             )
 
             # Calculate memory usage
@@ -151,11 +169,12 @@ class UploadFileNode(BaseNode):
             # Get data types
             dtypes = {col: str(dtype) for col, dtype in df.dtypes.items()}
 
-            # Generate preview (first 5 rows)
-            preview = df.head(5).to_dict(orient="records")
+            # Generate preview (first 10 rows)
+            preview = df.head(10).to_dict(orient="records")
 
             logger.info(
                 f"File uploaded successfully - Dataset ID: {dataset_id}, "
+                f"Storage: {storage_result['storage_backend']}, "
                 f"Rows: {len(df)}, Columns: {len(df.columns)}"
             )
 
@@ -164,13 +183,17 @@ class UploadFileNode(BaseNode):
                 execution_time_ms=0,  # Set by base class
                 dataset_id=dataset_id,
                 filename=input_data.filename,
-                file_path=str(file_path),
+                file_path=storage_result["file_path"],
+                storage_backend=storage_result["storage_backend"],
+                s3_bucket=storage_result.get("s3_bucket"),
+                s3_key=storage_result.get("s3_key"),
                 n_rows=len(df),
                 n_columns=len(df.columns),
                 columns=df.columns.tolist(),
                 dtypes=dtypes,
                 memory_usage_mb=round(memory_usage_mb, 2),
                 preview=preview,
+                file_size=len(input_data.file_content),
             )
 
         except FileUploadError:
@@ -250,37 +273,176 @@ class UploadFileNode(BaseNode):
                 expected_format="CSV with all columns named in header row",
             )
 
-    async def _store_file(self, dataset_id: str, filename: str, file_content: bytes) -> Path:
+    async def _store_file(
+        self,
+        dataset_id: str,
+        filename: str,
+        file_content: bytes,
+        project_id: Optional[int] = None,
+        user_id: Optional[int] = None,
+        df: Optional[pd.DataFrame] = None,
+    ) -> Dict[str, Any]:
         """
-        Store file to storage backend.
+        Store file to S3 or local storage and save metadata to database.
 
         Args:
             dataset_id: Unique dataset identifier
             filename: Original filename
             file_content: File bytes
+            project_id: Project ID for association
+            user_id: User ID for ownership
+            df: Parsed DataFrame for metadata
 
         Returns:
-            Path to stored file
+            Dict with storage details (storage_backend, file_path, s3_bucket, s3_key)
         """
         # Generate storage filename
-        ext = Path(filename).suffix
+        ext = Path(filename).suffix or ".csv"
         storage_filename = f"{dataset_id}{ext}"
 
-        if self.storage_backend == "local":
-            # Store locally
-            file_path = Path(settings.UPLOAD_DIR) / storage_filename
-            file_path.write_bytes(file_content)
-            logger.info(f"File stored locally: {file_path}")
-            return file_path
+        if self.storage_backend == "s3" and settings.USE_S3:
+            try:
+                # Generate S3 key with project-based structure
+                s3_key = s3_service.generate_s3_key(
+                    project_id=project_id or 0,
+                    dataset_id=dataset_id,
+                    filename=filename,
+                    use_date_partition=settings.S3_USE_DATE_PARTITION,
+                )
 
-        elif self.storage_backend == "s3":
-            # TODO: Implement S3 storage
-            # This would use boto3 to upload to S3
-            # For now, fallback to local
-            logger.warning("S3 storage not implemented, using local storage")
-            file_path = Path(settings.UPLOAD_DIR) / storage_filename
-            file_path.write_bytes(file_content)
-            return file_path
+                # Upload to S3
+                s3_url = await s3_service.upload_file(
+                    file_content=file_content,
+                    s3_key=s3_key,
+                    content_type="text/csv",
+                    metadata={
+                        "dataset_id": dataset_id,
+                        "project_id": str(project_id) if project_id else "",
+                        "original_filename": filename,
+                    },
+                )
 
-        else:
-            raise ValueError(f"Unknown storage backend: {self.storage_backend}")
+                logger.info(f"File uploaded to S3: {s3_url}")
+
+                # Save metadata to database (if db available)
+                if project_id and user_id and df is not None:
+                    await self._save_dataset_metadata(
+                        dataset_id=dataset_id,
+                        filename=filename,
+                        file_content=file_content,
+                        project_id=project_id,
+                        user_id=user_id,
+                        df=df,
+                        storage_backend="s3",
+                        s3_bucket=settings.S3_BUCKET,
+                        s3_key=s3_key,
+                    )
+
+                return {
+                    "storage_backend": "s3",
+                    "file_path": s3_key,
+                    "s3_bucket": settings.S3_BUCKET,
+                    "s3_key": s3_key,
+                }
+
+            except Exception as e:
+                logger.error(f"S3 upload failed, falling back to local: {str(e)}")
+                # Fallback to local storage
+                self.storage_backend = "local"
+
+        # Local storage (default or fallback)
+        file_path = Path(settings.UPLOAD_DIR) / storage_filename
+        file_path.write_bytes(file_content)
+        logger.info(f"File stored locally: {file_path}")
+
+        # Save metadata to database (if db available)
+        if project_id and user_id and df is not None:
+            await self._save_dataset_metadata(
+                dataset_id=dataset_id,
+                filename=filename,
+                file_content=file_content,
+                project_id=project_id,
+                user_id=user_id,
+                df=df,
+                storage_backend="local",
+                local_path=str(file_path),
+            )
+
+        return {
+            "storage_backend": "local",
+            "file_path": str(file_path),
+            "s3_bucket": None,
+            "s3_key": None,
+        }
+
+    async def _save_dataset_metadata(
+        self,
+        dataset_id: str,
+        filename: str,
+        file_content: bytes,
+        project_id: int,
+        user_id: int,
+        df: pd.DataFrame,
+        storage_backend: str,
+        s3_bucket: Optional[str] = None,
+        s3_key: Optional[str] = None,
+        local_path: Optional[str] = None,
+    ):
+        """
+        Save dataset metadata to database.
+
+        Args:
+            dataset_id: Unique dataset ID
+            filename: Original filename
+            file_content: File bytes
+            project_id: Project ID
+            user_id: User ID
+            df: Parsed DataFrame
+            storage_backend: Storage type (s3 or local)
+            s3_bucket: S3 bucket name
+            s3_key: S3 object key
+            local_path: Local file path
+        """
+        try:
+            from app.models.dataset import Dataset
+            from app.db.session import SessionLocal
+
+            # Calculate metadata
+            memory_usage_mb = df.memory_usage(deep=True).sum() / (1024 * 1024)
+            dtypes = {col: str(dtype) for col, dtype in df.dtypes.items()}
+            preview_data = df.head(10).to_dict(orient="records")
+
+            # Create database record
+            db = SessionLocal()
+            try:
+                dataset = Dataset(
+                    dataset_id=dataset_id,
+                    project_id=project_id,
+                    user_id=user_id,
+                    filename=filename,
+                    content_type="text/csv",
+                    file_size=len(file_content),
+                    file_extension=Path(filename).suffix or ".csv",
+                    storage_backend=storage_backend,
+                    s3_bucket=s3_bucket,
+                    s3_key=s3_key,
+                    s3_region=settings.S3_REGION if storage_backend == "s3" else None,
+                    local_path=local_path,
+                    n_rows=len(df),
+                    n_columns=len(df.columns),
+                    columns=df.columns.tolist(),
+                    dtypes=dtypes,
+                    memory_usage_mb=round(memory_usage_mb, 2),
+                    preview_data=preview_data,
+                    is_validated=True,
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow(),
+                )
+                db.add(dataset)
+                db.commit()
+                logger.info(f"Dataset metadata saved to database: {dataset_id}")
+            finally:
+                db.close()
+
+        except Exception as e:
+            logger.error(f"Failed to save dataset metadata: {str(e)}")

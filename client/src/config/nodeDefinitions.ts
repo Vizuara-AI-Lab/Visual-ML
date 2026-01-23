@@ -72,13 +72,16 @@ export const nodeCategories: NodeCategory[] = [
       {
         type: "upload_file",
         label: "Upload Dataset",
-        description: "Upload a CSV file from your computer",
+        description:
+          "Upload CSV to S3 cloud storage (supports 3-4 datasets per project)",
         category: "data-sources",
         icon: Upload,
         color: "#3B82F6",
         defaultConfig: {
           filename: "",
           content_type: "text/csv",
+          storage_backend: "s3", // Auto-detect from settings
+          uploaded: false,
         },
         configFields: [
           {
@@ -86,7 +89,14 @@ export const nodeCategories: NodeCategory[] = [
             label: "Select CSV File",
             type: "file",
             required: true,
-            description: "Upload your dataset in CSV format",
+            description: "Upload your dataset in CSV format (max 100MB)",
+          },
+          {
+            name: "dataset_info",
+            label: "Dataset Info",
+            type: "textarea",
+            required: false,
+            description: "Optional description of your dataset",
           },
         ],
       },

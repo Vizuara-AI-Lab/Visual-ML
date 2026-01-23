@@ -71,11 +71,13 @@ class Settings(BaseSettings):
     DB_POOL_RECYCLE: int = 3600  # Recycle connections after 1 hour
 
     # S3/Storage (for production)
-    USE_S3: bool = False
-    S3_BUCKET: Optional[str] = None
-    S3_REGION: Optional[str] = None
-    AWS_ACCESS_KEY_ID: Optional[str] = None
-    AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    USE_S3: bool = True  # Set to True to enable S3 storage
+    S3_BUCKET: Optional[str] = None  # e.g., "visual-ml-datasets"
+    S3_REGION: Optional[str] = "us-east-1"  # AWS region
+    AWS_ACCESS_KEY_ID: Optional[str] = None  # AWS access key from env
+    AWS_SECRET_ACCESS_KEY: Optional[str] = None  # AWS secret key from env
+    S3_PRESIGNED_URL_EXPIRY: int = 3600  # Presigned URL expiry in seconds (1 hour)
+    S3_USE_DATE_PARTITION: bool = True  # Use date-based folder structure in S3
 
     # Background Workers (Celery)
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"

@@ -34,6 +34,7 @@ google-generativeai>=0.8.6
 aiofiles>=25.1.0
 email-validator>=2.3.0
 brevo-python>=1.2.0
+boto3>=1.34.0
 
 [dev]
 pytest>=7.0.0

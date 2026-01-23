@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.logging import logger
 from app.core.rate_limit import RateLimitMiddleware
 from app.core.exceptions import BaseMLException
-from app.api.v1 import pipelines, genai_pipelines, knowledge_base, secrets, projects
+from app.api.v1 import pipelines, genai_pipelines, knowledge_base, secrets, projects, datasets
 from pathlib import Path
 
 from app.api.v1 import auth_student
@@ -45,7 +45,6 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description="Production-ready ML platform for Linear & Logistic Regression",
     lifespan=lifespan,
-    
 )
 
 origins = [
@@ -137,6 +136,7 @@ async def root():
 # Include routers
 app.include_router(auth_student.router, prefix=settings.API_V1_PREFIX)
 app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
+app.include_router(datasets.router, prefix=settings.API_V1_PREFIX)
 
 # GenAI routes
 app.include_router(
