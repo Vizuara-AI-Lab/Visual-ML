@@ -3,19 +3,48 @@ import { env } from "./env";
 
 const axiosInstance = axios.create({
   baseURL: env.API_URL,
-  withCredentials: true,  // ✅ CRITICAL: Send cookies with every request
+  withCredentials: true, // ✅ CRITICAL: Send cookies with every request
   headers: {
     "Content-Type": "application/json",
   },
 });
+
+// Request interceptor for logging
+axiosInstance.interceptors.request.use(
+  (config) => {
+    console.log("🌐 [AXIOS REQUEST]", config.method?.toUpperCase(), config.url);
+    console.log("📍 Full URL:", config.baseURL + config.url);
+    if (config.data instanceof FormData) {
+      console.log("📦 Data: FormData (file upload)");
+    } else {
+      console.log("📦 Data:", config.data);
+    }
+    return config;
+  },
+  (error) => {
+    console.error("❌ [AXIOS REQUEST ERROR]", error);
+    return Promise.reject(error);
+  },
+);
 
 // ❌ REMOVED: Authorization header interceptor (cookies are sent automatically)
 // No need to manually add tokens to headers
 
 // Response interceptor to handle token refresh
 axiosInstance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log("✅ [AXIOS RESPONSE]", response.status, response.config.url);
+    console.log("📥 Data:", response.data);
+    return response;
+  },
   async (error) => {
+    console.error(
+      "❌ [AXIOS ERROR]",
+      error.response?.status,
+      error.config?.url,
+    );
+    console.error("📥 Error Data:", error.response?.data);
+
     const originalRequest = error.config;
 
     // Don't attempt token refresh for auth endpoints (login, register, etc.)
@@ -53,4 +82,5 @@ axiosInstance.interceptors.response.use(
   },
 );
 
+export const apiClient = axiosInstance;
 export default axiosInstance;

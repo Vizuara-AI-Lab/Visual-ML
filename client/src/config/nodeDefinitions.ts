@@ -5,7 +5,6 @@
 import type { NodeType } from "../types/pipeline";
 import type { LucideIcon } from "lucide-react";
 import {
-  Upload,
   Link,
   Database,
   Split,
@@ -22,6 +21,7 @@ import {
   Layers,
   Zap,
   Cloud,
+  Upload,
 } from "lucide-react";
 
 export interface NodeCategory {
@@ -72,31 +72,32 @@ export const nodeCategories: NodeCategory[] = [
       {
         type: "upload_file",
         label: "Upload Dataset",
-        description:
-          "Upload CSV to S3 cloud storage (supports 3-4 datasets per project)",
+        description: "Upload your own CSV file",
         category: "data-sources",
         icon: Upload,
         color: "#3B82F6",
         defaultConfig: {
+          dataset_id: "",
           filename: "",
-          content_type: "text/csv",
-          storage_backend: "s3", // Auto-detect from settings
-          uploaded: false,
+          n_rows: 0,
+          n_columns: 0,
+          columns: [],
         },
         configFields: [
           {
-            name: "file",
-            label: "Select CSV File",
+            name: "filename",
+            label: "Dataset File",
             type: "file",
             required: true,
-            description: "Upload your dataset in CSV format (max 100MB)",
+            description: "Upload a CSV file",
           },
           {
-            name: "dataset_info",
-            label: "Dataset Info",
-            type: "textarea",
+            name: "dataset_id",
+            label: "Dataset ID",
+            type: "text",
             required: false,
-            description: "Optional description of your dataset",
+            description: "Auto-filled after upload",
+            autoFill: true,
           },
         ],
       },
@@ -370,25 +371,6 @@ export const nodeCategories: NodeCategory[] = [
           hyperparameters: {
             fit_intercept: true,
             copy_X: true,
-          },
-        },
-      },
-      {
-        type: "train",
-        label: "Logistic Regression",
-        description: "Train logistic regression model",
-        category: "ml-algorithms",
-        icon: Brain,
-        color: "#F97316",
-        defaultConfig: {
-          train_dataset_path: "",
-          target_column: "",
-          algorithm: "logistic_regression",
-          task_type: "classification",
-          hyperparameters: {
-            C: 1.0,
-            max_iter: 1000,
-            solver: "lbfgs",
           },
         },
       },

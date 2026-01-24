@@ -54,7 +54,7 @@ export default function PlayGround() {
     const saveTimer = setTimeout(() => {
       const state = getProjectState();
       saveProject.mutate({ id: projectId, state });
-    }, 5000); // 5 seconds debounce
+    }, 10000*6); // 60 seconds debounce
 
     return () => clearTimeout(saveTimer);
   }, [nodes, edges, projectId, saveProject, getProjectState]);

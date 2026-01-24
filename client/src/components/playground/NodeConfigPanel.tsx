@@ -5,8 +5,8 @@
 import { useState } from "react";
 import type { BaseNodeData } from "../../types/pipeline";
 import type { Node } from "@xyflow/react";
-import { useUploadDataset } from "../../hooks/mutations/useUploadDataset";
-import { useParams } from "react-router-dom";
+import { UploadDatasetButton } from "./UploadDatasetButton";
+import { usePlaygroundStore } from "../../store/playgroundStore";
 
 interface NodeConfigPanelProps {
   node: Node<BaseNodeData>;
@@ -15,14 +15,19 @@ interface NodeConfigPanelProps {
 }
 
 const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
+  console.log("🎛️ NodeConfigPanel rendered for node:", node);
+  console.log("📝 Node type:", node.data.type);
+  console.log("⚙️ Node data:", node.data);
+
   const [config, setConfig] = useState<Record<string, unknown>>(
     node.data.config || {},
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [uploading, setUploading] = useState(false);
+  const currentProjectId = usePlaygroundStore(
+    (state) => state.currentProjectId,
+  );
 
-  const { id: projectId } = useParams<{ id: string }>();
-  const uploadDataset = useUploadDataset();
+  console.log("🆔 Current project ID:", currentProjectId);
 
   const nodeData = node.data as BaseNodeData;
 
@@ -42,12 +47,6 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
     const newErrors: Record<string, string> = {};
 
     switch (nodeData.type) {
-      case "upload_file":
-        if (!config.filename) {
-          newErrors.filename = "Filename is required";
-        }
-        break;
-
       case "preprocess":
         if (!config.dataset_path) {
           newErrors.dataset_path = "Dataset path is required";
@@ -235,92 +234,66 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
   };
 
   const renderConfigFields = () => {
+    console.log("🎨 Rendering config fields for node type:", nodeData.type);
+    console.log("📍 Current project ID:", currentProjectId);
+
     switch (nodeData.type) {
       case "upload_file":
+        console.log("📤 Rendering upload_file config");
         return (
-          <>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Upload CSV File
-              </label>
-              <input
-                type="file"
-                accept=".csv"
-                disabled={uploading}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (file && projectId) {
-                    try {
-                      setUploading(true);
-                      setErrors({});
-
-                      // Upload to S3 via API
-                      const result = await uploadDataset.mutateAsync({
-                        file,
-                        projectId: parseInt(projectId),
-                      });
-
-                      // Update node config with dataset info
-                      updateField("filename", result.dataset.filename);
-                      updateField("dataset_id", result.dataset.dataset_id);
-                      updateField("file_path", result.dataset.file_path);
-                      updateField(
-                        "storage_backend",
-                        result.dataset.storage_backend,
-                      );
-                      updateField("s3_key", result.dataset.s3_key);
-                      updateField("n_rows", result.dataset.n_rows);
-                      updateField("n_columns", result.dataset.n_columns);
-                      updateField("columns", result.dataset.columns);
-                      updateField("uploaded", true);
-
-                      setUploading(false);
-                    } catch (error: any) {
-                      setUploading(false);
-                      setErrors({
-                        file: error.response?.data?.detail || "Upload failed",
-                      });
-                    }
-                  }
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-              />
-              {uploading && (
-                <p className="mt-1 text-xs text-blue-600">
-                  Uploading to S3... Please wait.
-                </p>
-              )}
-              {errors.file && (
-                <p className="mt-1 text-xs text-red-600">{errors.file}</p>
-              )}
-              {config.uploaded && (
-                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
-                  ✓ Uploaded: {config.filename as string}
-                  <br />
-                  Dataset ID: {config.dataset_id as string}
-                  <br />
-                  Rows: {config.n_rows as number}, Columns:{" "}
-                  {config.n_columns as number}
-                  <br />
-                  Storage: {config.storage_backend as string}
+          <div className="space-y-4">
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800 mb-3">
+                Upload a CSV file to use in your ML pipeline
+              </p>
+              {currentProjectId ? (
+                <UploadDatasetButton
+                  projectId={parseInt(currentProjectId)}
+                  onUploadComplete={(datasetData) => {
+                    console.log(
+                      "✅ Upload complete, auto-filling config:",
+                      datasetData,
+                    );
+                    // Auto-fill dataset metadata
+                    setConfig({
+                      dataset_id: datasetData.dataset_id,
+                      filename: datasetData.filename,
+                      n_rows: datasetData.n_rows,
+                      n_columns: datasetData.n_columns,
+                      columns: datasetData.columns,
+                      dtypes: datasetData.dtypes,
+                    });
+                  }}
+                />
+              ) : (
+                <div className="text-red-600 text-sm">
+                  No project selected. Please save your pipeline first.
                 </div>
               )}
             </div>
-            {config.uploaded && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Dataset Info
-                </label>
-                <textarea
-                  value={(config.dataset_info as string) || ""}
-                  onChange={(e) => updateField("dataset_info", e.target.value)}
-                  rows={2}
-                  placeholder="Optional: Add notes about this dataset"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+
+            {config.dataset_id && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg space-y-2">
+                <h4 className="font-semibold text-green-900 text-sm">
+                  Dataset Loaded
+                </h4>
+                <div className="text-xs text-green-800 space-y-1">
+                  <p>
+                    <strong>File:</strong> {config.filename as string}
+                  </p>
+                  <p>
+                    <strong>Rows:</strong> {config.n_rows as number}
+                  </p>
+                  <p>
+                    <strong>Columns:</strong> {config.n_columns as number}
+                  </p>
+                  <p>
+                    <strong>Dataset ID:</strong> {config.dataset_id as string}
+                  </p>
+                </div>
               </div>
             )}
-          </>
+          </div>
         );
 
       case "preprocess":
@@ -381,95 +354,7 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
           <>
             {renderField("train_dataset_path", "Training Dataset Path")}
             {renderField("target_column", "Target Column")}
-            {renderField("task_type", "Task Type", "select", [
-              { value: "regression", label: "Regression" },
-              { value: "classification", label: "Classification" },
-            ])}
-            {renderField(
-              "algorithm",
-              "Algorithm",
-              "select",
-              config.task_type === "classification"
-                ? [
-                    {
-                      value: "logistic_regression",
-                      label: "Logistic Regression",
-                    },
-                  ]
-                : [{ value: "linear_regression", label: "Linear Regression" }],
-            )}
             {renderField("model_name", "Model Name (Optional)")}
-
-            {/* Hyperparameters */}
-            <div className="mb-4 p-3 bg-gray-50 rounded-md">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">
-                Hyperparameters
-              </h4>
-              {config.algorithm === "linear_regression" && (
-                <>
-                  <div className="mb-2">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        checked={
-                          (config.hyperparameters as any)?.fit_intercept ?? true
-                        }
-                        onChange={(e) =>
-                          updateField("hyperparameters", {
-                            ...(config.hyperparameters as object),
-                            fit_intercept: e.target.checked,
-                          })
-                        }
-                        className="rounded border-gray-300"
-                      />
-                      <span className="text-sm text-gray-700">
-                        Fit Intercept
-                      </span>
-                    </label>
-                  </div>
-                </>
-              )}
-              {config.algorithm === "logistic_regression" && (
-                <>
-                  <div className="mb-2">
-                    <label className="block text-xs text-gray-600 mb-1">
-                      C (Inverse Regularization)
-                    </label>
-                    <input
-                      type="number"
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      value={(config.hyperparameters as any)?.C ?? 1.0}
-                      onChange={(e) =>
-                        updateField("hyperparameters", {
-                          ...(config.hyperparameters as object),
-                          C: parseFloat(e.target.value) || 1.0,
-                        })
-                      }
-                      step="0.1"
-                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                    />
-                  </div>
-                  <div className="mb-2">
-                    <label className="block text-xs text-gray-600 mb-1">
-                      Max Iterations
-                    </label>
-                    <input
-                      type="number"
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      value={(config.hyperparameters as any)?.max_iter ?? 1000}
-                      onChange={(e) =>
-                        updateField("hyperparameters", {
-                          ...(config.hyperparameters as object),
-                          max_iter: parseInt(e.target.value) || 1000,
-                        })
-                      }
-                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
           </>
         );
 

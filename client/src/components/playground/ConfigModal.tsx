@@ -3,6 +3,7 @@ import { X, Save } from "lucide-react";
 import { useState } from "react";
 import { getNodeByType } from "../../config/nodeDefinitions";
 import { usePlaygroundStore } from "../../store/playgroundStore";
+import { UploadDatasetButton } from "./UploadDatasetButton";
 
 interface ConfigModalProps {
   nodeId: string | null;
@@ -10,10 +11,16 @@ interface ConfigModalProps {
 }
 
 export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
-  const { getNodeById, updateNodeConfig, datasetMetadata } =
+  console.log("🎨 ConfigModal opened for nodeId:", nodeId);
+
+  const { getNodeById, updateNodeConfig, datasetMetadata, currentProjectId } =
     usePlaygroundStore();
   const node = nodeId ? getNodeById(nodeId) : null;
   const nodeDef = node ? getNodeByType(node.type) : null;
+
+  console.log("📦 Node:", node);
+  console.log("📋 Node definition:", nodeDef);
+  console.log("🆔 Current project ID:", currentProjectId);
 
   const [config, setConfig] = useState<Record<string, unknown>>(
     () => node?.data.config || {},
@@ -93,7 +100,66 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
 
           {/* Body */}
           <div className="p-6 overflow-y-auto max-h-[calc(80vh-180px)]">
-            {nodeDef.configFields && nodeDef.configFields.length > 0 ? (
+            {/* Special handling for upload_file node */}
+            {node.type === "upload_file" ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-blue-900/20 border border-blue-700 rounded-lg">
+                  <p className="text-sm text-blue-200 mb-3">
+                    Upload a CSV file to use in your ML pipeline
+                  </p>
+                  {currentProjectId ? (
+                    <UploadDatasetButton
+                      projectId={parseInt(currentProjectId)}
+                      onUploadComplete={(datasetData) => {
+                        console.log(
+                          "✅ Upload complete, updating config:",
+                          datasetData,
+                        );
+                        // Auto-fill dataset metadata
+                        const newConfig = {
+                          dataset_id: datasetData.dataset_id,
+                          filename: datasetData.filename,
+                          n_rows: datasetData.n_rows,
+                          n_columns: datasetData.n_columns,
+                          columns: datasetData.columns,
+                          dtypes: datasetData.dtypes,
+                        };
+                        setConfig(newConfig);
+                        // Auto-save after upload
+                        updateNodeConfig(node.id, newConfig);
+                      }}
+                    />
+                  ) : (
+                    <div className="text-red-400 text-sm p-3 bg-red-900/20 border border-red-700 rounded">
+                      ⚠️ No project selected. Please save your pipeline first.
+                    </div>
+                  )}
+                </div>
+
+                {config.dataset_id && (
+                  <div className="p-4 bg-green-900/20 border border-green-700 rounded-lg space-y-2">
+                    <h4 className="font-semibold text-green-200 text-sm">
+                      ✅ Dataset Loaded
+                    </h4>
+                    <div className="text-xs text-green-300 space-y-1">
+                      <p>
+                        <strong>File:</strong> {config.filename as string}
+                      </p>
+                      <p>
+                        <strong>Rows:</strong> {config.n_rows as number}
+                      </p>
+                      <p>
+                        <strong>Columns:</strong> {config.n_columns as number}
+                      </p>
+                      <p>
+                        <strong>Dataset ID:</strong>{" "}
+                        {config.dataset_id as string}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : nodeDef.configFields && nodeDef.configFields.length > 0 ? (
               <div className="space-y-4">
                 {nodeDef.configFields.map((field) => {
                   const autoFilledValue = field.autoFill

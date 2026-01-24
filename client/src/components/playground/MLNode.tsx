@@ -22,7 +22,7 @@ const MLNode = ({ data }: NodeProps<BaseNodeData>) => {
       }}
     >
       {/* Input Handle */}
-      {nodeData.type !== "upload_file" && (
+      {nodeData.type !== "load_url" && nodeData.type !== "sample_dataset" && (
         <Handle
           type="target"
           position={Position.Top}
