@@ -39,29 +39,41 @@ async def upload_dataset(
     4. File is validated, uploaded to S3, and metadata is stored
     5. Dataset reference is returned for use in ML pipeline
 
-    **Student Authentication Required**
+    **Authentication Required - JWT from HTTP-only cookies**
     """
-    try:
-        # Verify project exists and belongs to student
-        from app.models.genai import GenAIPipeline
+    logger.info(
+        f"📤 Dataset upload request - Project: {project_id}, User: {student.id} ({student.emailId})"
+    )
+    logger.info(f"📄 File: {file.filename}, Content-Type: {file.content_type}")
 
-        project = (
-            db.query(GenAIPipeline)
-            .filter(GenAIPipeline.id == project_id, GenAIPipeline.studentId == student.id)
-            .first()
+    # Verify project ownership
+    from app.models.genai import GenAIPipeline
+
+    project = (
+        db.query(GenAIPipeline)
+        .filter(GenAIPipeline.id == project_id, GenAIPipeline.studentId == student.id)
+        .first()
+    )
+
+    if not project:
+        logger.warning(f"Project {project_id} not found or not owned by user {student.id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found or you don't have permission to upload datasets to it",
         )
 
-        if not project:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Project {project_id} not found or not owned by you",
-            )
+    try:
+        student_id = student.id
 
         # Read file content
         file_content = await file.read()
+        logger.info(
+            f"✅ File content read - Size: {len(file_content)} bytes ({len(file_content) / (1024 * 1024):.2f} MB)"
+        )
 
         # Validate file extension
         filename = file.filename or "unknown.csv"
+        logger.info(f"📝 Validating file: {filename}")
         if not filename.endswith((".csv", ".txt", ".json")):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -76,28 +88,25 @@ async def upload_dataset(
                 detail=f"File too large ({file_size_mb:.2f}MB). Max: {settings.MAX_UPLOAD_SIZE_MB}MB",
             )
 
-        # Create upload node and process
-        upload_node = UploadFileNode()
+        # Create upload node (hardcode s3 for now)
+        upload_node = UploadFileNode(storage_backend="s3")
+        logger.info(f"🔧 Upload node created with storage backend: s3")
 
-        # Prepare input
+        # Set DB session on node
+        upload_node.db = db
+
+        # Prepare input (removed node_type as it's not in UploadFileInput schema)
         upload_input = UploadFileInput(
-            node_type="upload_file",
             file_content=file_content,
             filename=file.filename or "unknown.csv",
             content_type=file.content_type or "text/csv",
             project_id=project_id,
-            user_id=student.id,
+            user_id=student_id,
             node_id=None,
         )
 
-        # Execute upload (handles S3 upload + DB metadata)
-        result = await upload_node.execute(upload_input)
-
-        logger.info(
-            f"Dataset uploaded - ID: {result.dataset_id}, "
-            f"Project: {project_id}, Student: {student.id}, "
-            f"Storage: {result.storage_backend}"
-        )
+        logger.info(f"📦 Upload input prepared - User ID: {student_id}")
+        result = await upload_node.execute(upload_input.model_dump())
 
         return {
             "success": True,
@@ -115,18 +124,58 @@ async def upload_dataset(
                 "dtypes": result.dtypes,
                 "memory_usage_mb": result.memory_usage_mb,
                 "file_size": result.file_size,
-                "preview": result.preview,
             },
         }
 
     except HTTPException:
+        # Re-raise HTTP exceptions (401, 403, 404, etc.)
         raise
+    except FileUploadError as e:
+        logger.error(f"File upload error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File upload failed: {str(e)}",
+        )
+    except InvalidDatasetError as e:
+        logger.error(f"Invalid dataset: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid dataset: {str(e)}",
+        )
     except Exception as e:
         logger.error(f"Dataset upload failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to upload dataset: {str(e)}",
         )
+
+
+@router.get("/debug/all")
+async def debug_list_all_datasets(
+    db: Session = Depends(get_db),
+):
+    """
+    Debug endpoint to list ALL datasets in database (no auth).
+    **FOR TESTING ONLY**
+    """
+    datasets = db.query(Dataset).order_by(Dataset.created_at.desc()).all()
+
+    return {
+        "total": len(datasets),
+        "datasets": [
+            {
+                "id": d.id,
+                "dataset_id": d.dataset_id,
+                "project_id": d.project_id,
+                "user_id": d.user_id,
+                "filename": d.filename,
+                "n_rows": d.n_rows,
+                "n_columns": d.n_columns,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+            }
+            for d in datasets
+        ],
+    }
 
 
 @router.get("/project/{project_id}", response_model=List[dict])

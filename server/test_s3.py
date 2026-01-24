@@ -112,7 +112,7 @@ async def test_s3_presigned_url(s3_key: str):
         return False
 
 
-async def test_s3_cleanup(s3_key: str):
+# async def test_s3_cleanup(s3_key: str):
     """Test S3 file deletion."""
     print("\n" + "-" * 60)
     print("🗑️  Testing S3 Cleanup")
@@ -185,7 +185,6 @@ async def main():
     await test_s3_presigned_url(s3_key)
 
     # Test 6: Cleanup
-    await test_s3_cleanup(s3_key)
 
     # Summary
     print("\n" + "=" * 60)

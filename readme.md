@@ -30,3 +30,8 @@ uvicorn main:app --reload
   "password": "606280Sk$",
   "name": "string"
 }
+
+Remove preview_data from the database model (or at least stop storing it)
+
+
+config model and nodal config model

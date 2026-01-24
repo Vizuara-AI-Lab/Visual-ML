@@ -75,7 +75,6 @@ class UploadFileOutput(NodeOutput):
     columns: list[str] = Field(..., description="Column names")
     dtypes: Dict[str, str] = Field(..., description="Data types of columns")
     memory_usage_mb: float = Field(..., description="Memory usage in MB")
-    preview: list[Dict[str, Any]] = Field(..., description="First 10 rows preview")
     file_size: int = Field(..., description="File size in bytes")
 
 
@@ -169,9 +168,6 @@ class UploadFileNode(BaseNode):
             # Get data types
             dtypes = {col: str(dtype) for col, dtype in df.dtypes.items()}
 
-            # Generate preview (first 10 rows)
-            preview = df.head(10).to_dict(orient="records")
-
             logger.info(
                 f"File uploaded successfully - Dataset ID: {dataset_id}, "
                 f"Storage: {storage_result['storage_backend']}, "
@@ -192,7 +188,6 @@ class UploadFileNode(BaseNode):
                 columns=df.columns.tolist(),
                 dtypes=dtypes,
                 memory_usage_mb=round(memory_usage_mb, 2),
-                preview=preview,
                 file_size=len(input_data.file_content),
             )
 
@@ -301,6 +296,7 @@ class UploadFileNode(BaseNode):
         storage_filename = f"{dataset_id}{ext}"
 
         if self.storage_backend == "s3" and settings.USE_S3:
+            s3_key = None
             try:
                 # Generate S3 key with project-based structure
                 s3_key = s3_service.generate_s3_key(
@@ -322,21 +318,32 @@ class UploadFileNode(BaseNode):
                     },
                 )
 
-                logger.info(f"File uploaded to S3: {s3_url}")
+                logger.info(f"✅ File uploaded to S3: {s3_url}")
 
-                # Save metadata to database (if db available)
+                # Save metadata to database (atomic - if fails, cleanup S3)
                 if project_id and user_id and df is not None:
-                    await self._save_dataset_metadata(
-                        dataset_id=dataset_id,
-                        filename=filename,
-                        file_content=file_content,
-                        project_id=project_id,
-                        user_id=user_id,
-                        df=df,
-                        storage_backend="s3",
-                        s3_bucket=settings.S3_BUCKET,
-                        s3_key=s3_key,
-                    )
+                    try:
+                        await self._save_dataset_metadata(
+                            dataset_id=dataset_id,
+                            filename=filename,
+                            file_content=file_content,
+                            project_id=project_id,
+                            user_id=user_id,
+                            df=df,
+                            storage_backend="s3",
+                            s3_bucket=settings.S3_BUCKET,
+                            s3_key=s3_key,
+                        )
+                    except Exception as db_error:
+                        # Database save failed - cleanup S3 upload
+                        logger.error(f"❌ DB save failed, cleaning up S3 upload: {s3_key}")
+                        try:
+                            await s3_service.delete_file(s3_key)
+                            logger.info(f"🗑️ Deleted orphaned S3 file: {s3_key}")
+                        except Exception as cleanup_error:
+                            logger.error(f"Failed to cleanup S3 file: {cleanup_error}")
+                        # Re-raise the original DB error
+                        raise db_error
 
                 return {
                     "storage_backend": "s3",
@@ -345,10 +352,18 @@ class UploadFileNode(BaseNode):
                     "s3_key": s3_key,
                 }
 
+            except FileUploadError:
+                # File upload errors should be raised immediately
+                raise
+            except InvalidDatasetError:
+                # Dataset validation errors should be raised immediately
+                raise
             except Exception as e:
-                logger.error(f"S3 upload failed, falling back to local: {str(e)}")
-                # Fallback to local storage
-                self.storage_backend = "local"
+                logger.error(f"❌ S3 upload or DB save failed: {str(e)}", exc_info=True)
+                # Don't fallback to local storage - fail fast
+                raise FileUploadError(
+                    reason=f"Failed to upload to S3 or save metadata: {str(e)}", filename=filename
+                )
 
         # Local storage (default or fallback)
         file_path = Path(settings.UPLOAD_DIR) / storage_filename
@@ -407,10 +422,13 @@ class UploadFileNode(BaseNode):
             from app.models.dataset import Dataset
             from app.db.session import SessionLocal
 
+            logger.info(
+                f"💾 Saving dataset metadata - ID: {dataset_id}, Project: {project_id}, User: {user_id}"
+            )
+
             # Calculate metadata
             memory_usage_mb = df.memory_usage(deep=True).sum() / (1024 * 1024)
             dtypes = {col: str(dtype) for col, dtype in df.dtypes.items()}
-            preview_data = df.head(10).to_dict(orient="records")
 
             # Create database record
             db = SessionLocal()
@@ -433,16 +451,37 @@ class UploadFileNode(BaseNode):
                     columns=df.columns.tolist(),
                     dtypes=dtypes,
                     memory_usage_mb=round(memory_usage_mb, 2),
-                    preview_data=preview_data,
+                    preview_data=None,
                     is_validated=True,
                     created_at=datetime.utcnow(),
                     updated_at=datetime.utcnow(),
                 )
+                logger.info(f"📦 Dataset object created, attempting commit...")
                 db.add(dataset)
                 db.commit()
-                logger.info(f"Dataset metadata saved to database: {dataset_id}")
+                db.refresh(dataset)
+                logger.info(
+                    f"✅ Dataset metadata saved to database: {dataset_id} (DB ID: {dataset.id})"
+                )
+            except KeyError as ke:
+                db.rollback()
+                logger.error(f"❌ KeyError during commit - missing key: {ke}", exc_info=True)
+                logger.error(f"Dataset attributes: {vars(dataset)}")
+                raise
+            except Exception as db_error:
+                db.rollback()
+                logger.error(
+                    f"❌ Database commit failed - Error type: {type(db_error).__name__}",
+                    exc_info=True,
+                )
+                logger.error(f"❌ Error message: {str(db_error)}")
+                raise
             finally:
                 db.close()
 
+        except KeyError as ke:
+            logger.error(f"❌ KeyError in dataset save: {ke}", exc_info=True)
+            raise ValueError(f"Missing required field during dataset save: {ke}")
         except Exception as e:
-            logger.error(f"Failed to save dataset metadata: {str(e)}")
+            logger.error(f"❌ Failed to save dataset metadata: {str(e)}", exc_info=True)
+            raise ValueError(f"Database save failed: {str(e)}")
