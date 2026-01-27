@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Eye, EyeOff, Mail, Lock } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User } from "lucide-react";
 import axiosInstance from "../../lib/axios";
 import { useNavigate } from "react-router";
 
 const SignUp: React.FC = () => {
-  const Navigate = useNavigate();
+  const navigate = useNavigate();
   const googleButtonRef = useRef<HTMLDivElement>(null);
   const [formData, setFormData] = useState({
     emailId: "",
     password: "",
+    fullName: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -76,7 +77,7 @@ const SignUp: React.FC = () => {
       await axiosInstance.post("/auth/student/register", formData);
 
       // Navigate to OTP verification
-      Navigate("/verify-email", { state: { email: formData.emailId } });
+      navigate("/verify-email", { state: { email: formData.emailId } });
     } catch (err: unknown) {
       const error = err as {
         response?: { data?: { detail?: string | Array<{ msg: string }> } };
@@ -126,8 +127,6 @@ const SignUp: React.FC = () => {
         width: googleButtonRef.current.offsetWidth,
         text: "signup_with",
       });
-
-      console.log("✅ Google Sign-Up button rendered");
     };
 
     // Wait for Google SDK to load
@@ -143,30 +142,17 @@ const SignUp: React.FC = () => {
   }, []);
 
   const handleGoogleCallback = async (response: any) => {
-    console.log("🎉 Google callback received!");
-    console.log("Token:", response.credential ? "✅ Present" : "❌ Missing");
-
     setLoading(true);
     setError("");
 
     try {
-      console.log("📤 Sending to backend...");
       const result = await axiosInstance.post("/auth/student/google", {
         idToken: response.credential,
       });
 
-      console.log("📥 Backend response:", result.data);
-
-      // Store tokens
-      localStorage.setItem("accessToken", result.data.tokens.accessToken);
-      localStorage.setItem("refreshToken", result.data.tokens.refreshToken);
       localStorage.setItem("user", JSON.stringify(result.data.user));
-
-      console.log("✅ Authentication successful! Navigating...");
-      Navigate("/dashboard");
+      navigate("/dashboard");
     } catch (err: any) {
-      console.error("❌ Authentication failed:", err);
-      console.error("Error details:", err.response?.data);
       setError(
         err.response?.data?.detail ||
           err.response?.data?.message ||
@@ -210,6 +196,39 @@ const SignUp: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email Input */}
+
+            <div>
+              <label
+                htmlFor="emailId"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Name <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  id="fullName"
+                  name="fullName"
+                  type="text"
+                  required
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  className={`block w-full pl-10 pr-3 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#29ABE2] focus:border-transparent transition-all ${
+                    validationErrors.fullName
+                      ? "border-red-300"
+                      : "border-gray-200"
+                  }`}
+                  placeholder="John Doe"
+                />
+              </div>
+              {validationErrors.fullName && (
+                <p className="mt-1 text-sm text-red-600">
+                  {validationErrors.fullName}
+                </p>
+              )}
+            </div>
             <div>
               <label
                 htmlFor="emailId"
@@ -350,8 +369,11 @@ const SignUp: React.FC = () => {
           <p className="text-center text-sm text-gray-600">
             Already have an account?{" "}
             <a
-              href="/auth/signin"
-              className="font-medium text-[#29ABE2] hover:text-[#FF00FF] transition-colors"
+              onClick={()=>
+
+                navigate("/signin")
+              }
+              className="font-medium text-[#29ABE2] hover:text-[#FF00FF] transition-colors hover:underline cursor-pointer"
             >
               Sign in
             </a>

@@ -4,8 +4,14 @@
 
 export type NodeType =
   | "upload_file"
+  | "select_dataset"
   | "load_url"
   | "sample_dataset"
+  | "table_view"
+  | "data_preview"
+  | "statistics_view"
+  | "column_info"
+  | "chart_view"
   | "preprocess"
   | "split"
   | "feature_selection"
@@ -31,13 +37,6 @@ export interface BaseNodeData extends Record<string, unknown> {
   validationErrors?: string[];
   icon?: string;
   color?: string;
-}
-
-// Upload File Node Configuration
-export interface UploadFileConfig {
-  file_content?: string; // base64 encoded
-  filename?: string;
-  content_type?: string;
 }
 
 // Preprocess Node Configuration

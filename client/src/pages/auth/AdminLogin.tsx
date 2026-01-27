@@ -27,9 +27,8 @@ const AdminLogin: React.FC = () => {
     try {
       const response = await axiosInstance.post("/auth/admin/login", formData);
       
-      // Store tokens and user data
-      localStorage.setItem("accessToken", response.data.tokens.accessToken);
-      localStorage.setItem("refreshToken", response.data.tokens.refreshToken);
+      // ✅ Cookies are set automatically by backend
+      // Store only user data (no tokens needed)
       localStorage.setItem("userRole", "ADMIN");
       localStorage.setItem("adminData", JSON.stringify(response.data.user));
 

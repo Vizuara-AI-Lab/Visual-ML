@@ -79,9 +79,8 @@ export default function OTPVerification() {
         otp: otpCode,
       });
 
-      // Save tokens
-      localStorage.setItem('accessToken', response.data.tokens.accessToken);
-      localStorage.setItem('refreshToken', response.data.tokens.refreshToken);
+      // ✅ Cookies are set automatically by backend
+      // Store only user data (no tokens needed)
       localStorage.setItem('user', JSON.stringify(response.data.user));
 
       // Navigate to dashboard

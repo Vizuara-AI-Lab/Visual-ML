@@ -6,18 +6,6 @@ import type { NodeMetadata } from "../types/pipeline";
 
 export const nodeDefinitions: NodeMetadata[] = [
   {
-    type: "upload_file",
-    label: "Upload Data",
-    description: "Upload and validate a CSV dataset",
-    color: "#3B82F6", // blue
-    icon: "📤",
-    category: "input",
-    defaultConfig: {
-      filename: "",
-      content_type: "text/csv",
-    },
-  },
-  {
     type: "preprocess",
     label: "Preprocess Data",
     description: "Clean data and handle missing values",

@@ -16,6 +16,7 @@ import {
 import { useProjects } from "../../hooks/queries/useProjects";
 import { useDeleteProject } from "../../hooks/mutations/useDeleteProject";
 import { CreateProjectModal } from "../../components/projects/CreateProjectModal";
+import { useAllDatasets } from "../../hooks/queries/useAllDatasets";
 
 interface User {
   emailId: string;
@@ -38,13 +39,9 @@ const StudentDashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  // Use TanStack Query hooks
   const { data: projects = [], isLoading } = useProjects();
   const deleteProject = useDeleteProject();
-
-  React.useEffect(() => {
-    loadUserData();
-  }, []);
+  const { data: allDatasetsData } = useAllDatasets();
 
   const loadUserData = () => {
     const userData = localStorage.getItem("user");
@@ -52,6 +49,10 @@ const StudentDashboard: React.FC = () => {
       setUser(JSON.parse(userData));
     }
   };
+
+  React.useEffect(() => {
+    loadUserData();
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
@@ -69,7 +70,10 @@ const StudentDashboard: React.FC = () => {
     navigate(`/playground/${projectId}`);
   };
 
-  const handleDeleteProject = async (e: React.MouseEvent, projectId: number) => {
+  const handleDeleteProject = async (
+    e: React.MouseEvent,
+    projectId: number,
+  ) => {
     e.stopPropagation();
     if (window.confirm("Are you sure you want to delete this project?")) {
       await deleteProject.mutateAsync(projectId);
@@ -185,7 +189,9 @@ const StudentDashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Datasets</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">0</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {allDatasetsData?.total || 0}
+                </p>
               </div>
               <div className="p-3 bg-green-100 rounded-lg">
                 <Database className="h-6 w-6 text-green-600" />

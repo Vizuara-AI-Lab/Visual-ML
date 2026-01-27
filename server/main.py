@@ -4,15 +4,17 @@ FastAPI application entry point for Visual-ML.
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.logging import logger
-from app.core.rate_limit import RateLimitMiddleware
 from app.core.exceptions import BaseMLException
-from app.api.v1 import pipelines, auth, genai_pipelines, knowledge_base, secrets, projects
+from app.api.v1 import pipelines, genai_pipelines, knowledge_base, secrets, projects, datasets
 from pathlib import Path
+
+from app.api.v1 import auth_student
 
 
 @asynccontextmanager
@@ -43,24 +45,24 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description="Production-ready ML platform for Linear & Logistic Regression",
     lifespan=lifespan,
-    
 )
 
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-# CORS middleware
+origins = ["http://localhost:5173", "http://127.0.0.1:5173", "https://visual-ml-fdxt.vercel.app/"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://visual-ml-fdxt.vercel.app/",
+    ],
+    allow_credentials=True,  # REQUIRED for cookies
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID"],  # For request tracing
 )
 
-# Rate limiting middleware
-app.add_middleware(RateLimitMiddleware)
+# GZIP compression middleware - compress responses > 1KB
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 # Exception handlers
@@ -128,8 +130,9 @@ async def root():
 
 
 # Include routers
-app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
+app.include_router(auth_student.router, prefix=settings.API_V1_PREFIX)
 app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
+app.include_router(datasets.router, prefix=settings.API_V1_PREFIX)
 
 # GenAI routes
 app.include_router(

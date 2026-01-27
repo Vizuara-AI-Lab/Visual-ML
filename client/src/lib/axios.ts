@@ -3,29 +3,48 @@ import { env } from "./env";
 
 const axiosInstance = axios.create({
   baseURL: env.API_URL,
+  withCredentials: true, // ✅ CRITICAL: Send cookies with every request
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// Request interceptor to add auth token
+// Request interceptor for logging
 axiosInstance.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("accessToken");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    console.log("🌐 [AXIOS REQUEST]", config.method?.toUpperCase(), config.url);
+    console.log("📍 Full URL:", config.baseURL + config.url);
+    if (config.data instanceof FormData) {
+      console.log("📦 Data: FormData (file upload)");
+    } else {
+      console.log("📦 Data:", config.data);
     }
     return config;
   },
   (error) => {
+    console.error("❌ [AXIOS REQUEST ERROR]", error);
     return Promise.reject(error);
   },
 );
 
+// ❌ REMOVED: Authorization header interceptor (cookies are sent automatically)
+// No need to manually add tokens to headers
+
 // Response interceptor to handle token refresh
 axiosInstance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log("✅ [AXIOS RESPONSE]", response.status, response.config.url);
+    console.log("📥 Data:", response.data);
+    return response;
+  },
   async (error) => {
+    console.error(
+      "❌ [AXIOS ERROR]",
+      error.response?.status,
+      error.config?.url,
+    );
+    console.error("📥 Error Data:", error.response?.data);
+
     const originalRequest = error.config;
 
     // Don't attempt token refresh for auth endpoints (login, register, etc.)
@@ -45,28 +64,14 @@ axiosInstance.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = localStorage.getItem("refreshToken");
-        if (!refreshToken) {
-          throw new Error("No refresh token");
-        }
+        // Try to refresh token (cookies are sent automatically)
+        await axiosInstance.post("/auth/refresh");
 
-        // Try to refresh token
-        const response = await axios.post(`${env.API_URL}/auth/refresh`, {
-          refreshToken,
-        });
-
-        const { accessToken, refreshToken: newRefreshToken } = response.data;
-
-        localStorage.setItem("accessToken", accessToken);
-        localStorage.setItem("refreshToken", newRefreshToken);
-
-        // Retry original request with new token
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        // ✅ New cookies are set automatically by backend
+        // Retry original request (cookies will be sent automatically)
         return axiosInstance(originalRequest);
       } catch (refreshError) {
         // Refresh failed, logout user
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
         localStorage.removeItem("user");
         window.location.href = "/auth/signin";
         return Promise.reject(refreshError);
@@ -77,4 +82,5 @@ axiosInstance.interceptors.response.use(
   },
 );
 
+export const apiClient = axiosInstance;
 export default axiosInstance;

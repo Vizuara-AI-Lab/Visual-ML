@@ -2,9 +2,15 @@
  * Node Configuration Panel - Configure node parameters with validation
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { BaseNodeData } from "../../types/pipeline";
 import type { Node } from "@xyflow/react";
+import { UploadDatasetButton } from "./UploadDatasetButton";
+import { usePlaygroundStore } from "../../store/playgroundStore";
+import {
+  listAllUserDatasets,
+  type DatasetMetadata,
+} from "../../lib/api/datasetApi";
 
 interface NodeConfigPanelProps {
   node: Node<BaseNodeData>;
@@ -13,12 +19,45 @@ interface NodeConfigPanelProps {
 }
 
 const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
+  console.log("🎛️ NodeConfigPanel rendered for node:", node);
+  console.log("📝 Node type:", node.data.type);
+  console.log("⚙️ Node data:", node.data);
+
   const [config, setConfig] = useState<Record<string, unknown>>(
     node.data.config || {},
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [userDatasets, setUserDatasets] = useState<DatasetMetadata[]>([]);
+  const [loadingDatasets, setLoadingDatasets] = useState(false);
+  const currentProjectId = usePlaygroundStore(
+    (state) => state.currentProjectId,
+  );
+
+  console.log("🆔 Current project ID:", currentProjectId);
 
   const nodeData = node.data as BaseNodeData;
+
+  // Load user datasets for select_dataset node
+  useEffect(() => {
+    const loadDatasets = async () => {
+      if (nodeData.type === "select_dataset") {
+        setLoadingDatasets(true);
+        try {
+          const response = await listAllUserDatasets();
+          setUserDatasets(response.datasets);
+        } catch (error) {
+          console.error("Failed to load datasets:", error);
+          setErrors((prev) => ({
+            ...prev,
+            dataset_fetch: "Failed to load datasets",
+          }));
+        } finally {
+          setLoadingDatasets(false);
+        }
+      }
+    };
+    loadDatasets();
+  }, [nodeData.type]);
 
   const updateField = (field: string, value: unknown) => {
     setConfig((prev) => ({ ...prev, [field]: value }));
@@ -36,12 +75,6 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
     const newErrors: Record<string, string> = {};
 
     switch (nodeData.type) {
-      case "upload_file":
-        if (!config.filename) {
-          newErrors.filename = "Filename is required";
-        }
-        break;
-
       case "preprocess":
         if (!config.dataset_path) {
           newErrors.dataset_path = "Dataset path is required";
@@ -229,34 +262,281 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
   };
 
   const renderConfigFields = () => {
+    console.log("🎨 Rendering config fields for node type:", nodeData.type);
+    console.log("📍 Current project ID:", currentProjectId);
+
     switch (nodeData.type) {
       case "upload_file":
+        console.log("📤 Rendering upload_file config");
         return (
-          <>
-            {renderField("filename", "Filename")}
-            {renderField("content_type", "Content Type")}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Upload File
-              </label>
-              <input
-                type="file"
-                accept=".csv"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    updateField("filename", file.name);
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      updateField("file_content", reader.result);
-                    };
-                    reader.readAsDataURL(file);
-                  }
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+          <div className="space-y-4">
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800 mb-3">
+                Upload a CSV file to use in your ML pipeline
+              </p>
+              {currentProjectId ? (
+                <UploadDatasetButton
+                  nodeId={node.id}
+                  projectId={parseInt(currentProjectId)}
+                  onUploadComplete={(datasetData) => {
+                    console.log(
+                      "✅ Upload complete for node",
+                      node.id,
+                      "auto-filling config:",
+                      datasetData,
+                    );
+                    // Auto-fill dataset metadata
+                    setConfig({
+                      dataset_id: datasetData.dataset_id,
+                      filename: datasetData.filename,
+                      n_rows: datasetData.n_rows,
+                      n_columns: datasetData.n_columns,
+                      columns: datasetData.columns,
+                      dtypes: datasetData.dtypes,
+                    });
+                  }}
+                />
+              ) : (
+                <div className="text-red-600 text-sm">
+                  No project selected. Please save your pipeline first.
+                </div>
+              )}
             </div>
-          </>
+
+            {(config.dataset_id as string) && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg space-y-2">
+                <h4 className="font-semibold text-green-900 text-sm">
+                  Dataset Loaded
+                </h4>
+                <div className="text-xs text-green-800 space-y-1">
+                  <p>
+                    <strong>File:</strong> {String(config.filename)}
+                  </p>
+                  <p>
+                    <strong>Rows:</strong> {String(config.n_rows)}
+                  </p>
+                  <p>
+                    <strong>Columns:</strong> {String(config.n_columns)}
+                  </p>
+                  <p>
+                    <strong>Dataset ID:</strong> {String(config.dataset_id)}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+
+      case "select_dataset":
+        console.log("📋 Rendering select_dataset config");
+        return (
+          <div className="space-y-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-800 mb-3">
+                Select a dataset from your previously uploaded datasets
+              </p>
+              {loadingDatasets ? (
+                <div className="text-sm text-gray-600">Loading datasets...</div>
+              ) : userDatasets.length > 0 ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Available Datasets
+                  </label>
+                  <select
+                    value={(config.dataset_id as string) || ""}
+                    onChange={(e) => {
+                      const selectedDataset = userDatasets.find(
+                        (ds) => ds.dataset_id === e.target.value,
+                      );
+                      if (selectedDataset) {
+                        setConfig({
+                          dataset_id: selectedDataset.dataset_id,
+                          filename: selectedDataset.filename,
+                          n_rows: selectedDataset.n_rows,
+                          n_columns: selectedDataset.n_columns,
+                          columns: selectedDataset.columns,
+                          dtypes: selectedDataset.dtypes,
+                        });
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">-- Select a dataset --</option>
+                    {userDatasets.map((dataset) => (
+                      <option
+                        key={dataset.dataset_id}
+                        value={dataset.dataset_id}
+                      >
+                        {dataset.filename} ({dataset.n_rows} rows,{" "}
+                        {dataset.n_columns} cols)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-600">
+                  No datasets available. Upload a dataset first.
+                </div>
+              )}
+            </div>
+
+            {(config.dataset_id as string) && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+                <h4 className="font-semibold text-blue-900 text-sm">
+                  Selected Dataset
+                </h4>
+                <div className="text-xs text-blue-800 space-y-1">
+                  <p>
+                    <strong>File:</strong> {String(config.filename)}
+                  </p>
+                  <p>
+                    <strong>Rows:</strong> {String(config.n_rows)}
+                  </p>
+                  <p>
+                    <strong>Columns:</strong> {String(config.n_columns)}
+                  </p>
+                  <p>
+                    <strong>Dataset ID:</strong> {String(config.dataset_id)}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+
+      case "table_view":
+        return (
+          <div className="space-y-4">
+            <div className="p-4 bg-cyan-50 border border-cyan-200 rounded-lg">
+              <p className="text-sm text-cyan-800 mb-3">
+                Display your dataset in a table format
+              </p>
+              <p className="text-xs text-cyan-700">
+                Connect this node to a data source to view the data
+              </p>
+            </div>
+            {renderField("dataset_id", "Dataset Source", "text")}
+            {renderField("max_rows", "Max Rows to Display", "number", {
+              min: 10,
+              max: 1000,
+            })}
+            {(config.dataset_id as string) && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  ✓ Ready to display table view on pipeline execution
+                </p>
+              </div>
+            )}
+          </div>
+        );
+
+      case "data_preview":
+        return (
+          <div className="space-y-4">
+            <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+              <p className="text-sm text-purple-800 mb-3">
+                Quick preview of first and last rows
+              </p>
+              <p className="text-xs text-purple-700">
+                Shows head and tail of the dataset
+              </p>
+            </div>
+            {renderField("dataset_id", "Dataset Source", "text")}
+            {renderField("head_rows", "First N Rows", "number", {
+              min: 1,
+              max: 50,
+            })}
+            {renderField("tail_rows", "Last N Rows", "number", {
+              min: 1,
+              max: 50,
+            })}
+            {(config.dataset_id as string) && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  ✓ Ready to preview data on pipeline execution
+                </p>
+              </div>
+            )}
+          </div>
+        );
+
+      case "statistics_view":
+        return (
+          <div className="space-y-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-800 mb-3">
+                Statistical summary of your dataset
+              </p>
+              <p className="text-xs text-green-700">
+                Shows mean, std, min, max, quartiles, etc.
+              </p>
+            </div>
+            {renderField("dataset_id", "Dataset Source", "text")}
+            {renderField("include_all", "Include All Columns", "checkbox")}
+            {(config.dataset_id as string) && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  ✓ Ready to show statistics on pipeline execution
+                </p>
+              </div>
+            )}
+          </div>
+        );
+
+      case "column_info":
+        return (
+          <div className="space-y-4">
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800 mb-3">
+                Column information and data quality
+              </p>
+              <p className="text-xs text-amber-700">
+                Shows data types, missing values, and unique counts
+              </p>
+            </div>
+            {renderField("dataset_id", "Dataset Source", "text")}
+            {renderField("show_dtypes", "Show Data Types", "checkbox")}
+            {renderField("show_missing", "Show Missing Values", "checkbox")}
+            {renderField("show_unique", "Show Unique Counts", "checkbox")}
+            {(config.dataset_id as string) && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  ✓ Ready to display column info on pipeline execution
+                </p>
+              </div>
+            )}
+          </div>
+        );
+
+      case "chart_view":
+        return (
+          <div className="space-y-4">
+            <div className="p-4 bg-pink-50 border border-pink-200 rounded-lg">
+              <p className="text-sm text-pink-800 mb-3">
+                Visualize your data with charts
+              </p>
+              <p className="text-xs text-pink-700">
+                Choose chart type and columns to visualize
+              </p>
+            </div>
+            {renderField("dataset_id", "Dataset Source", "text")}
+            {renderField("chart_type", "Chart Type", "select", [
+              { value: "bar", label: "Bar Chart" },
+              { value: "line", label: "Line Chart" },
+              { value: "scatter", label: "Scatter Plot" },
+              { value: "histogram", label: "Histogram" },
+              { value: "pie", label: "Pie Chart" },
+            ])}
+            {renderField("x_column", "X-Axis Column", "text")}
+            {renderField("y_column", "Y-Axis Column", "text")}
+            {(config.dataset_id as string) && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  ✓ Ready to display chart on pipeline execution
+                </p>
+              </div>
+            )}
+          </div>
         );
 
       case "preprocess":
@@ -317,95 +597,7 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
           <>
             {renderField("train_dataset_path", "Training Dataset Path")}
             {renderField("target_column", "Target Column")}
-            {renderField("task_type", "Task Type", "select", [
-              { value: "regression", label: "Regression" },
-              { value: "classification", label: "Classification" },
-            ])}
-            {renderField(
-              "algorithm",
-              "Algorithm",
-              "select",
-              config.task_type === "classification"
-                ? [
-                    {
-                      value: "logistic_regression",
-                      label: "Logistic Regression",
-                    },
-                  ]
-                : [{ value: "linear_regression", label: "Linear Regression" }],
-            )}
             {renderField("model_name", "Model Name (Optional)")}
-
-            {/* Hyperparameters */}
-            <div className="mb-4 p-3 bg-gray-50 rounded-md">
-              <h4 className="text-sm font-semibold text-gray-700 mb-2">
-                Hyperparameters
-              </h4>
-              {config.algorithm === "linear_regression" && (
-                <>
-                  <div className="mb-2">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        checked={
-                          (config.hyperparameters as any)?.fit_intercept ?? true
-                        }
-                        onChange={(e) =>
-                          updateField("hyperparameters", {
-                            ...(config.hyperparameters as object),
-                            fit_intercept: e.target.checked,
-                          })
-                        }
-                        className="rounded border-gray-300"
-                      />
-                      <span className="text-sm text-gray-700">
-                        Fit Intercept
-                      </span>
-                    </label>
-                  </div>
-                </>
-              )}
-              {config.algorithm === "logistic_regression" && (
-                <>
-                  <div className="mb-2">
-                    <label className="block text-xs text-gray-600 mb-1">
-                      C (Inverse Regularization)
-                    </label>
-                    <input
-                      type="number"
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      value={(config.hyperparameters as any)?.C ?? 1.0}
-                      onChange={(e) =>
-                        updateField("hyperparameters", {
-                          ...(config.hyperparameters as object),
-                          C: parseFloat(e.target.value) || 1.0,
-                        })
-                      }
-                      step="0.1"
-                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                    />
-                  </div>
-                  <div className="mb-2">
-                    <label className="block text-xs text-gray-600 mb-1">
-                      Max Iterations
-                    </label>
-                    <input
-                      type="number"
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      value={(config.hyperparameters as any)?.max_iter ?? 1000}
-                      onChange={(e) =>
-                        updateField("hyperparameters", {
-                          ...(config.hyperparameters as object),
-                          max_iter: parseInt(e.target.value) || 1000,
-                        })
-                      }
-                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
           </>
         );
 

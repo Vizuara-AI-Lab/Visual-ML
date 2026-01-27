@@ -4,6 +4,7 @@ Import all models here for Alembic migrations.
 
 from app.db.session import Base
 from app.models.user import Student, Admin, RefreshToken
+from app.models.dataset import Dataset
 from app.models.genai import (
     GenAIPipeline,
     GenAINode,
@@ -17,4 +18,4 @@ from app.models.genai import (
     ConversationMemory,
 )
 
-__all__ = ["Base", "Student", "Admin", "RefreshToken"]
+__all__ = ["Base", "Student", "Admin", "RefreshToken", "Dataset"]

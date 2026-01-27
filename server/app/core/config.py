@@ -61,15 +61,23 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     REDIS_PASSWORD: Optional[str] = None
-    CACHE_TTL: int = 3600  # 1 hour
-    ENABLE_CACHE: bool = False  # Enable in production
+    CACHE_TTL: int = 900  # 15 minutes (optimized from 1 hour)
+    ENABLE_CACHE: bool = True  # ✅ ENABLED for production
+
+    # Database Connection Pool (for production scalability)
+    DB_POOL_SIZE: int = 20  # Max persistent connections
+    DB_MAX_OVERFLOW: int = 10  # Allow 10 extra connections
+    DB_POOL_TIMEOUT: int = 30  # Wait 30s for connection
+    DB_POOL_RECYCLE: int = 3600  # Recycle connections after 1 hour
 
     # S3/Storage (for production)
-    USE_S3: bool = False
-    S3_BUCKET: Optional[str] = None
-    S3_REGION: Optional[str] = None
-    AWS_ACCESS_KEY_ID: Optional[str] = None
-    AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    USE_S3: bool = True  # Set to True to enable S3 storage
+    S3_BUCKET: Optional[str] = None  # e.g., "visual-ml-datasets"
+    S3_REGION: Optional[str] = "us-east-1"  # AWS region
+    AWS_ACCESS_KEY_ID: Optional[str] = None  # AWS access key from env
+    AWS_SECRET_ACCESS_KEY: Optional[str] = None  # AWS secret key from env
+    S3_PRESIGNED_URL_EXPIRY: int = 3600  # Presigned URL expiry in seconds (1 hour)
+    S3_USE_DATE_PARTITION: bool = True  # Use date-based folder structure in S3
 
     # Background Workers (Celery)
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
@@ -97,8 +105,8 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:5173"
 
     # Brevo Email Service
-    BREVO_API_KEY: Optional[str] = None
-    BREVO_SENDER_EMAIL: str = "noreply@visualml.com"
+    BREVO_API_KEY: Optional[str] = ""
+    BREVO_SENDER_EMAIL: str = "mrsachinchaurasiya@gmail.com"
     BREVO_SENDER_NAME: str = "Visual ML"
 
     # Redis URL for Celery
