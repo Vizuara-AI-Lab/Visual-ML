@@ -121,7 +121,11 @@ export const ResultsPanel = ({ isOpen, onClose }: ResultsPanelProps) => {
                                 {nodeResult.error && (
                                   <div className="flex items-start gap-2 mt-2 text-xs text-red-400">
                                     <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
-                                    <span>{nodeResult.error}</span>
+                                    <span>
+                                      {typeof nodeResult.error === "string"
+                                        ? nodeResult.error
+                                        : JSON.stringify(nodeResult.error)}
+                                    </span>
                                   </div>
                                 )}
                               </div>

@@ -5,9 +5,9 @@
 import { useState, useRef } from "react";
 import { Upload, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { uploadDataset } from "../../lib/api/datasetApi";
-import { usePlaygroundStore } from "../../store/playgroundStore";
 
 interface UploadDatasetButtonProps {
+  nodeId: string;
   projectId: number;
   onUploadComplete?: (datasetData: {
     dataset_id: string;
@@ -20,10 +20,16 @@ interface UploadDatasetButtonProps {
 }
 
 export const UploadDatasetButton = ({
+  nodeId,
   projectId,
   onUploadComplete,
 }: UploadDatasetButtonProps) => {
-  console.log("🔧 UploadDatasetButton MOUNTED with projectId:", projectId);
+  console.log(
+    "🔧 UploadDatasetButton MOUNTED with nodeId:",
+    nodeId,
+    "projectId:",
+    projectId,
+  );
 
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);

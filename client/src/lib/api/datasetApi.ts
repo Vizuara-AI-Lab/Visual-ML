@@ -116,3 +116,24 @@ export const deleteDataset = async (
   );
   return response.data;
 };
+
+/**
+ * List all datasets for the current user
+ */
+export const listAllUserDatasets = async (
+  limit = 50,
+  offset = 0,
+): Promise<{
+  datasets: DatasetMetadata[];
+  total: number;
+  limit: number;
+  offset: number;
+}> => {
+  const response = await axios.get<{
+    datasets: DatasetMetadata[];
+    total: number;
+    limit: number;
+    offset: number;
+  }>(`/datasets?limit=${limit}&offset=${offset}`);
+  return response.data;
+};

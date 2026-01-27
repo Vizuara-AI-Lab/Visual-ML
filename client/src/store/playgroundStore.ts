@@ -39,7 +39,11 @@ interface PlaygroundStore {
   // React Flow state
   nodes: Node<BaseNodeData>[];
   edges: Edge[];
-  setNodes: (nodes: Node<BaseNodeData>[]) => void;
+  setNodes: (
+    nodes:
+      | Node<BaseNodeData>[]
+      | ((prev: Node<BaseNodeData>[]) => Node<BaseNodeData>[]),
+  ) => void;
   setEdges: (edges: Edge[]) => void;
   addNode: (node: Node<BaseNodeData>) => void;
   updateNode: (nodeId: string, data: Partial<BaseNodeData>) => void;
@@ -97,10 +101,16 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
   currentProjectId: null,
 
   // Node actions
-  setNodes: (nodes) =>
-    set(() => ({
-      nodes,
-    })),
+  setNodes: (nodesOrUpdater) =>
+    set((state) => {
+      const newNodes =
+        typeof nodesOrUpdater === "function"
+          ? nodesOrUpdater(state.nodes)
+          : nodesOrUpdater;
+      return {
+        nodes: Array.isArray(newNodes) ? newNodes : [],
+      };
+    }),
 
   setEdges: (edges) =>
     set(() => ({
@@ -108,9 +118,13 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
     })),
 
   addNode: (node) =>
-    set((state) => ({
-      nodes: [...state.nodes, node],
-    })),
+    set((state) => {
+      console.log("🔧 Store: Adding node to state", node);
+      console.log("🔧 Store: Current nodes:", state.nodes);
+      const newNodes = [...state.nodes, node];
+      console.log("🔧 Store: New nodes array:", newNodes);
+      return { nodes: newNodes };
+    }),
 
   updateNode: (nodeId, data) =>
     set((state) => ({
@@ -152,8 +166,8 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
 
   loadProjectState: (state) =>
     set({
-      nodes: state.nodes || [],
-      edges: state.edges || [],
+      nodes: Array.isArray(state.nodes) ? state.nodes : [],
+      edges: Array.isArray(state.edges) ? state.edges : [],
       datasetMetadata: state.datasetMetadata || null,
       executionResult: state.executionResult || null,
     }),
@@ -182,6 +196,19 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
           ? { ...node, data: { ...node.data, config, isConfigured: true } }
           : node,
       ),
+      // Clear execution results for this node when config changes
+      executionResult: state.executionResult
+        ? {
+            ...state.executionResult,
+            nodeResults: state.executionResult.nodeResults
+              ? Object.fromEntries(
+                  Object.entries(state.executionResult.nodeResults).filter(
+                    ([id]) => id !== nodeId,
+                  ),
+                )
+              : {},
+          }
+        : null,
     })),
 
   clearAll: () =>

@@ -1,9 +1,13 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Save } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { getNodeByType } from "../../config/nodeDefinitions";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 import { UploadDatasetButton } from "./UploadDatasetButton";
+import {
+  listProjectDatasets,
+  type DatasetMetadata,
+} from "../../lib/api/datasetApi";
 
 interface ConfigModalProps {
   nodeId: string | null;
@@ -13,8 +17,13 @@ interface ConfigModalProps {
 export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
   console.log("🎨 ConfigModal opened for nodeId:", nodeId);
 
-  const { getNodeById, updateNodeConfig, datasetMetadata, currentProjectId } =
-    usePlaygroundStore();
+  const {
+    getNodeById,
+    updateNodeConfig,
+    datasetMetadata,
+    currentProjectId,
+    edges,
+  } = usePlaygroundStore();
   const node = nodeId ? getNodeById(nodeId) : null;
   const nodeDef = node ? getNodeByType(node.type) : null;
 
@@ -25,8 +34,49 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
   const [config, setConfig] = useState<Record<string, unknown>>(
     () => node?.data.config || {},
   );
+  const [userDatasets, setUserDatasets] = useState<DatasetMetadata[]>([]);
+  const [loadingDatasets, setLoadingDatasets] = useState(false);
+
+  // Fetch user's datasets for select_dataset node
+  useEffect(() => {
+    if (node?.type === "select_dataset" && currentProjectId) {
+      setLoadingDatasets(true);
+      listProjectDatasets(parseInt(currentProjectId))
+        .then((datasets) => {
+          console.log("📊 Loaded datasets:", datasets);
+          setUserDatasets(datasets);
+        })
+        .catch((error) => {
+          console.error("❌ Failed to load datasets:", error);
+        })
+        .finally(() => {
+          setLoadingDatasets(false);
+        });
+    }
+  }, [node?.type, currentProjectId]);
 
   if (!node || !nodeDef) return null;
+
+  // Get connected source node for view nodes
+  const getConnectedSourceNode = () => {
+    const incomingEdge = edges.find((edge) => edge.target === nodeId);
+    if (incomingEdge) {
+      const sourceNode = getNodeById(incomingEdge.source);
+      return sourceNode;
+    }
+    return null;
+  };
+
+  const connectedSourceNode = getConnectedSourceNode();
+
+  // Get available columns from connected source node
+  const getAvailableColumns = (): string[] => {
+    if (!connectedSourceNode) return [];
+    const sourceConfig = connectedSourceNode.data.config;
+    return (sourceConfig?.columns as string[]) || [];
+  };
+
+  const availableColumns = getAvailableColumns();
 
   const handleSave = () => {
     updateNodeConfig(node.id, config);
@@ -39,6 +89,21 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
 
   // Auto-fill logic based on dataset metadata
   const getAutoFilledValue = (fieldName: string): unknown => {
+    // For view nodes, auto-fill dataset_id from connected source node
+    if (fieldName === "dataset_id" && connectedSourceNode) {
+      const sourceConfig = connectedSourceNode.data.config;
+      if (sourceConfig?.dataset_id) {
+        return sourceConfig.dataset_id;
+      }
+      // If source is an upload node, use its dataset_id
+      if (
+        connectedSourceNode.type === "upload_file" &&
+        sourceConfig?.dataset_id
+      ) {
+        return sourceConfig.dataset_id;
+      }
+    }
+
     if (!datasetMetadata) return undefined;
 
     if (fieldName === "dataset_path" && datasetMetadata.dataset_id) {
@@ -168,6 +233,17 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                   const currentValue =
                     config[field.name] ?? autoFilledValue ?? field.defaultValue;
 
+                  // Check if this is a dataset_id field for view nodes (should be read-only)
+                  const isDatasetIdField =
+                    field.name === "dataset_id" &&
+                    [
+                      "table_view",
+                      "data_preview",
+                      "statistics_view",
+                      "column_info",
+                      "chart_view",
+                    ].includes(node.type);
+
                   return (
                     <div key={field.name}>
                       <label className="block text-sm font-medium text-gray-200 mb-2">
@@ -178,15 +254,36 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                       </label>
 
                       {field.type === "text" && (
-                        <input
-                          type="text"
-                          value={(currentValue as string) || ""}
-                          onChange={(e) =>
-                            handleFieldChange(field.name, e.target.value)
-                          }
-                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder={field.description}
-                        />
+                        <div>
+                          <input
+                            type="text"
+                            value={(currentValue as string) || ""}
+                            onChange={(e) =>
+                              handleFieldChange(field.name, e.target.value)
+                            }
+                            readOnly={isDatasetIdField}
+                            className={`w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                              isDatasetIdField
+                                ? "cursor-not-allowed opacity-75"
+                                : ""
+                            }`}
+                            placeholder={
+                              isDatasetIdField && !currentValue
+                                ? "Connect a data source node"
+                                : field.description
+                            }
+                          />
+                          {isDatasetIdField && connectedSourceNode && (
+                            <p className="text-xs text-green-400 mt-1">
+                              ✓ Connected to: {connectedSourceNode.data.label}
+                            </p>
+                          )}
+                          {isDatasetIdField && !connectedSourceNode && (
+                            <p className="text-xs text-amber-400 mt-1">
+                              ⚠ Connect an upload dataset node to this view node
+                            </p>
+                          )}
+                        </div>
                       )}
 
                       {field.type === "number" && (
@@ -207,28 +304,108 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                       )}
 
                       {field.type === "select" && (
-                        <select
-                          value={(currentValue as string) || ""}
-                          onChange={(e) =>
-                            handleFieldChange(field.name, e.target.value)
-                          }
-                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="">Select {field.label}</option>
-                          {field.options?.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
+                        <div>
+                          <select
+                            value={(currentValue as string) || ""}
+                            onChange={(e) => {
+                              const selectedValue = e.target.value;
+                              handleFieldChange(field.name, selectedValue);
+
+                              // For select_dataset, also store metadata
+                              if (
+                                node.type === "select_dataset" &&
+                                field.name === "dataset_id"
+                              ) {
+                                const selectedDataset = userDatasets.find(
+                                  (ds) => ds.dataset_id === selectedValue,
+                                );
+                                if (selectedDataset) {
+                                  setConfig((prev) => ({
+                                    ...prev,
+                                    dataset_id: selectedDataset.dataset_id,
+                                    filename: selectedDataset.filename,
+                                    n_rows: selectedDataset.n_rows,
+                                    n_columns: selectedDataset.n_columns,
+                                    columns: selectedDataset.columns,
+                                  }));
+                                }
+                              }
+                            }}
+                            disabled={
+                              loadingDatasets &&
+                              node.type === "select_dataset" &&
+                              field.name === "dataset_id"
+                            }
+                            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <option value="">
+                              {loadingDatasets &&
+                              node.type === "select_dataset" &&
+                              field.name === "dataset_id"
+                                ? "Loading datasets..."
+                                : `Select ${field.label}`}
                             </option>
-                          ))}
-                          {field.autoFill &&
-                            datasetMetadata?.columns &&
-                            field.name === "target_column" &&
-                            datasetMetadata.columns.map((col: string) => (
-                              <option key={col} value={col}>
-                                {col}
-                              </option>
-                            ))}
-                        </select>
+
+                            {/* For select_dataset node, show user's uploaded datasets */}
+                            {node.type === "select_dataset" &&
+                            field.name === "dataset_id" ? (
+                              userDatasets.length > 0 ? (
+                                userDatasets.map((dataset) => (
+                                  <option
+                                    key={dataset.dataset_id}
+                                    value={dataset.dataset_id}
+                                  >
+                                    {dataset.filename} ({dataset.n_rows} rows,{" "}
+                                    {dataset.n_columns} cols)
+                                  </option>
+                                ))
+                              ) : (
+                                !loadingDatasets && (
+                                  <option disabled>
+                                    No datasets uploaded yet
+                                  </option>
+                                )
+                              )
+                            ) : (
+                              <>
+                                {/* Regular options from field definition */}
+                                {field.options?.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                                {/* Auto-fill columns for target_column field */}
+                                {field.autoFill &&
+                                  datasetMetadata?.columns &&
+                                  field.name === "target_column" &&
+                                  datasetMetadata.columns.map((col: string) => (
+                                    <option key={col} value={col}>
+                                      {col}
+                                    </option>
+                                  ))}
+                                {/* Auto-fill columns for chart view column selection */}
+                                {field.autoFill &&
+                                  node.type === "chart_view" &&
+                                  (field.name === "x_column" ||
+                                    field.name === "y_column") &&
+                                  availableColumns.map((col: string) => (
+                                    <option key={col} value={col}>
+                                      {col}
+                                    </option>
+                                  ))}
+                              </>
+                            )}
+                          </select>
+
+                          {/* Show selected dataset info for select_dataset */}
+                          {node.type === "select_dataset" &&
+                            field.name === "dataset_id" &&
+                            config.dataset_id && (
+                              <p className="text-xs text-green-400 mt-1">
+                                ✓ Selected: {config.filename as string}
+                              </p>
+                            )}
+                        </div>
                       )}
 
                       {field.type === "textarea" && (
@@ -241,6 +418,52 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                           className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder={field.description}
                         />
+                      )}
+
+                      {field.type === "multiselect" && (
+                        <div>
+                          <select
+                            multiple
+                            value={
+                              currentValue
+                                ? (currentValue as string)
+                                    .split(",")
+                                    .map((s) => s.trim())
+                                : []
+                            }
+                            onChange={(e) => {
+                              const selected = Array.from(
+                                e.target.selectedOptions,
+                                (option) => option.value,
+                              );
+                              handleFieldChange(field.name, selected.join(","));
+                            }}
+                            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            size={Math.min(availableColumns.length || 5, 8)}
+                          >
+                            {availableColumns.length > 0 ? (
+                              availableColumns.map((col: string) => (
+                                <option key={col} value={col}>
+                                  {col}
+                                </option>
+                              ))
+                            ) : (
+                              <option disabled>
+                                Connect a data source to see columns
+                              </option>
+                            )}
+                          </select>
+                          {availableColumns.length > 0 && (
+                            <p className="text-xs text-gray-400 mt-1">
+                              💡 Hold Ctrl/Cmd to select multiple columns
+                            </p>
+                          )}
+                          {!connectedSourceNode && (
+                            <p className="text-xs text-amber-400 mt-1">
+                              ⚠ Connect a data source node first
+                            </p>
+                          )}
+                        </div>
                       )}
 
                       {field.type === "checkbox" && (

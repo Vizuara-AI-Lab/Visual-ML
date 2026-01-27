@@ -5,6 +5,7 @@ import "@xyflow/react/dist/style.css";
 import { Sidebar } from "../../components/playground/Sidebar";
 import { Canvas } from "../../components/playground/Canvas";
 import { ConfigModal } from "../../components/playground/ConfigModal";
+import { ViewNodeModal } from "../../components/playground/ViewNodeModal";
 import { Toolbar } from "../../components/playground/Toolbar";
 import { ResultsPanel } from "../../components/playground/ResultsPanel";
 import { usePlaygroundStore } from "../../store/playgroundStore";
@@ -16,8 +17,9 @@ import { useSaveProject } from "../../hooks/mutations/useSaveProject";
 export default function PlayGround() {
   const { projectId } = useParams<{ projectId: string }>();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [viewNodeId, setViewNodeId] = useState<string | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
-  
+
   const {
     nodes,
     edges,
@@ -27,7 +29,36 @@ export default function PlayGround() {
     setCurrentProjectId,
     loadProjectState,
     getProjectState,
+    executionResult,
   } = usePlaygroundStore();
+
+  // Handle node click - show view data modal for view nodes, config for others
+  const handleNodeClick = (nodeId: string) => {
+    const node = nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+
+    const viewNodeTypes = [
+      "table_view",
+      "data_preview",
+      "statistics_view",
+      "column_info",
+      "chart_view",
+    ];
+
+    // If it's a view node
+    if (viewNodeTypes.includes(node.data.type)) {
+      // If configured and has execution results, show view modal
+      if (node.data.isConfigured && executionResult?.nodeResults?.[nodeId]) {
+        setViewNodeId(nodeId);
+      } else {
+        // Otherwise show config modal
+        setSelectedNodeId(nodeId);
+      }
+    } else {
+      // For non-view nodes, always show config modal
+      setSelectedNodeId(nodeId);
+    }
+  };
 
   // Load project state if projectId exists
   const { data: projectStateData } = useProjectState(projectId);
@@ -47,17 +78,25 @@ export default function PlayGround() {
     }
   }, [projectStateData, loadProjectState]);
 
-  // Auto-save every 5 seconds when there are changes
+  // Listen for custom event from View Data button on nodes
   useEffect(() => {
-    if (!projectId || nodes.length === 0) return;
+    const handleOpenViewModal = (event: CustomEvent) => {
+      const { nodeId } = event.detail;
+      setViewNodeId(nodeId);
+    };
 
-    const saveTimer = setTimeout(() => {
-      const state = getProjectState();
-      saveProject.mutate({ id: projectId, state });
-    }, 10000*6); // 60 seconds debounce
+    window.addEventListener(
+      "openViewNodeModal",
+      handleOpenViewModal as EventListener,
+    );
 
-    return () => clearTimeout(saveTimer);
-  }, [nodes, edges, projectId, saveProject, getProjectState]);
+    return () => {
+      window.removeEventListener(
+        "openViewNodeModal",
+        handleOpenViewModal as EventListener,
+      );
+    };
+  }, []);
 
   const onNodeDragStart = (event: React.DragEvent, nodeType: string) => {
     event.dataTransfer.setData("application/reactflow", nodeType);
@@ -83,9 +122,20 @@ export default function PlayGround() {
         pipeline_name: "Playground Pipeline",
       });
 
+      // Store results by node ID
+      const nodeResults: Record<string, any> = {};
+      if (result.results) {
+        result.results.forEach((nodeResult: any, index: number) => {
+          const nodeId = sortedNodes[index]?.id;
+          if (nodeId) {
+            nodeResults[nodeId] = nodeResult;
+          }
+        });
+      }
+
       setExecutionResult({
         success: result.success,
-        nodeResults: {},
+        nodeResults,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
@@ -114,9 +164,16 @@ export default function PlayGround() {
       alert("No project selected. Please create a project first.");
       return;
     }
-    
+
     const state = getProjectState();
-    saveProject.mutate({ id: projectId, state });
+    saveProject.mutate(
+      { id: projectId, state },
+      {
+        onSuccess: () => {
+          console.log("✅ Project saved successfully");
+        },
+      },
+    );
   };
 
   const handleLoad = () => {
@@ -161,7 +218,7 @@ export default function PlayGround() {
       <div className="flex-1 flex overflow-hidden">
         <ReactFlowProvider>
           <Sidebar onNodeDragStart={onNodeDragStart} />
-          <Canvas onNodeClick={setSelectedNodeId} />
+          <Canvas onNodeClick={handleNodeClick} />
         </ReactFlowProvider>
 
         <ResultsPanel
@@ -174,6 +231,8 @@ export default function PlayGround() {
         nodeId={selectedNodeId}
         onClose={() => setSelectedNodeId(null)}
       />
+
+      <ViewNodeModal nodeId={viewNodeId} onClose={() => setViewNodeId(null)} />
     </div>
   );
 }

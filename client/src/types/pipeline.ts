@@ -3,8 +3,15 @@
  */
 
 export type NodeType =
+  | "upload_file"
+  | "select_dataset"
   | "load_url"
   | "sample_dataset"
+  | "table_view"
+  | "data_preview"
+  | "statistics_view"
+  | "column_info"
+  | "chart_view"
   | "preprocess"
   | "split"
   | "feature_selection"

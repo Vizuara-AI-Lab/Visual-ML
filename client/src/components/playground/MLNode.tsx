@@ -6,13 +6,42 @@ import { memo } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import type { BaseNodeData } from "../../types/pipeline";
+import { Eye, X } from "lucide-react";
+import { usePlaygroundStore } from "../../store/playgroundStore";
 
-const MLNode = ({ data }: NodeProps<BaseNodeData>) => {
+const MLNode = ({ data, id }: NodeProps<BaseNodeData>) => {
   const nodeData = data as BaseNodeData;
+  const { executionResult, deleteNode } = usePlaygroundStore();
+
+  const viewNodeTypes = [
+    "table_view",
+    "data_preview",
+    "statistics_view",
+    "column_info",
+    "chart_view",
+  ];
+
+  const isViewNode = viewNodeTypes.includes(nodeData.type);
+  const hasExecutionResults = executionResult?.nodeResults?.[id];
+  const showViewButton =
+    isViewNode && nodeData.isConfigured && hasExecutionResults;
+
+  const handleViewData = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Dispatch custom event to open view modal
+    window.dispatchEvent(
+      new CustomEvent("openViewNodeModal", { detail: { nodeId: id } }),
+    );
+  };
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteNode(id);
+  };
 
   return (
     <div
-      className={`px-4 py-3 rounded-lg border-2 shadow-lg transition-all min-w-[180px] border-gray-300 ${
+      className={`px-4 py-3 rounded-lg border-2 shadow-lg transition-all min-w-[180px] border-gray-300 relative group ${
         !nodeData.isConfigured ? "opacity-70" : ""
       }`}
       style={{
@@ -21,6 +50,15 @@ const MLNode = ({ data }: NodeProps<BaseNodeData>) => {
         borderLeftColor: nodeData.color || "#gray",
       }}
     >
+      {/* Delete Button */}
+      <button
+        onClick={handleDelete}
+        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+        title="Delete node"
+      >
+        <X className="w-3 h-3" />
+      </button>
+
       {/* Input Handle */}
       {nodeData.type !== "load_url" && nodeData.type !== "sample_dataset" && (
         <Handle
@@ -49,6 +87,17 @@ const MLNode = ({ data }: NodeProps<BaseNodeData>) => {
           <div className="mt-1 text-xs text-red-600">
             {nodeData.validationErrors.length} error(s)
           </div>
+        )}
+
+        {/* View Data Button */}
+        {showViewButton && (
+          <button
+            onClick={handleViewData}
+            className="mt-2 w-full px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded flex items-center justify-center gap-1.5 transition-colors"
+          >
+            <Eye className="w-3 h-3" />
+            View Data
+          </button>
         )}
       </div>
 

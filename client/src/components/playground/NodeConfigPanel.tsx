@@ -2,11 +2,15 @@
  * Node Configuration Panel - Configure node parameters with validation
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { BaseNodeData } from "../../types/pipeline";
 import type { Node } from "@xyflow/react";
 import { UploadDatasetButton } from "./UploadDatasetButton";
 import { usePlaygroundStore } from "../../store/playgroundStore";
+import {
+  listAllUserDatasets,
+  type DatasetMetadata,
+} from "../../lib/api/datasetApi";
 
 interface NodeConfigPanelProps {
   node: Node<BaseNodeData>;
@@ -23,6 +27,8 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
     node.data.config || {},
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [userDatasets, setUserDatasets] = useState<DatasetMetadata[]>([]);
+  const [loadingDatasets, setLoadingDatasets] = useState(false);
   const currentProjectId = usePlaygroundStore(
     (state) => state.currentProjectId,
   );
@@ -30,6 +36,28 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
   console.log("🆔 Current project ID:", currentProjectId);
 
   const nodeData = node.data as BaseNodeData;
+
+  // Load user datasets for select_dataset node
+  useEffect(() => {
+    const loadDatasets = async () => {
+      if (nodeData.type === "select_dataset") {
+        setLoadingDatasets(true);
+        try {
+          const response = await listAllUserDatasets();
+          setUserDatasets(response.datasets);
+        } catch (error) {
+          console.error("Failed to load datasets:", error);
+          setErrors((prev) => ({
+            ...prev,
+            dataset_fetch: "Failed to load datasets",
+          }));
+        } finally {
+          setLoadingDatasets(false);
+        }
+      }
+    };
+    loadDatasets();
+  }, [nodeData.type]);
 
   const updateField = (field: string, value: unknown) => {
     setConfig((prev) => ({ ...prev, [field]: value }));
@@ -248,10 +276,13 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
               </p>
               {currentProjectId ? (
                 <UploadDatasetButton
+                  nodeId={node.id}
                   projectId={parseInt(currentProjectId)}
                   onUploadComplete={(datasetData) => {
                     console.log(
-                      "✅ Upload complete, auto-filling config:",
+                      "✅ Upload complete for node",
+                      node.id,
+                      "auto-filling config:",
                       datasetData,
                     );
                     // Auto-fill dataset metadata
@@ -272,25 +303,237 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
               )}
             </div>
 
-            {config.dataset_id && (
+            {(config.dataset_id as string) && (
               <div className="p-4 bg-green-50 border border-green-200 rounded-lg space-y-2">
                 <h4 className="font-semibold text-green-900 text-sm">
                   Dataset Loaded
                 </h4>
                 <div className="text-xs text-green-800 space-y-1">
                   <p>
-                    <strong>File:</strong> {config.filename as string}
+                    <strong>File:</strong> {String(config.filename)}
                   </p>
                   <p>
-                    <strong>Rows:</strong> {config.n_rows as number}
+                    <strong>Rows:</strong> {String(config.n_rows)}
                   </p>
                   <p>
-                    <strong>Columns:</strong> {config.n_columns as number}
+                    <strong>Columns:</strong> {String(config.n_columns)}
                   </p>
                   <p>
-                    <strong>Dataset ID:</strong> {config.dataset_id as string}
+                    <strong>Dataset ID:</strong> {String(config.dataset_id)}
                   </p>
                 </div>
+              </div>
+            )}
+          </div>
+        );
+
+      case "select_dataset":
+        console.log("📋 Rendering select_dataset config");
+        return (
+          <div className="space-y-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-800 mb-3">
+                Select a dataset from your previously uploaded datasets
+              </p>
+              {loadingDatasets ? (
+                <div className="text-sm text-gray-600">Loading datasets...</div>
+              ) : userDatasets.length > 0 ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Available Datasets
+                  </label>
+                  <select
+                    value={(config.dataset_id as string) || ""}
+                    onChange={(e) => {
+                      const selectedDataset = userDatasets.find(
+                        (ds) => ds.dataset_id === e.target.value,
+                      );
+                      if (selectedDataset) {
+                        setConfig({
+                          dataset_id: selectedDataset.dataset_id,
+                          filename: selectedDataset.filename,
+                          n_rows: selectedDataset.n_rows,
+                          n_columns: selectedDataset.n_columns,
+                          columns: selectedDataset.columns,
+                          dtypes: selectedDataset.dtypes,
+                        });
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">-- Select a dataset --</option>
+                    {userDatasets.map((dataset) => (
+                      <option
+                        key={dataset.dataset_id}
+                        value={dataset.dataset_id}
+                      >
+                        {dataset.filename} ({dataset.n_rows} rows,{" "}
+                        {dataset.n_columns} cols)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-600">
+                  No datasets available. Upload a dataset first.
+                </div>
+              )}
+            </div>
+
+            {(config.dataset_id as string) && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+                <h4 className="font-semibold text-blue-900 text-sm">
+                  Selected Dataset
+                </h4>
+                <div className="text-xs text-blue-800 space-y-1">
+                  <p>
+                    <strong>File:</strong> {String(config.filename)}
+                  </p>
+                  <p>
+                    <strong>Rows:</strong> {String(config.n_rows)}
+                  </p>
+                  <p>
+                    <strong>Columns:</strong> {String(config.n_columns)}
+                  </p>
+                  <p>
+                    <strong>Dataset ID:</strong> {String(config.dataset_id)}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+
+      case "table_view":
+        return (
+          <div className="space-y-4">
+            <div className="p-4 bg-cyan-50 border border-cyan-200 rounded-lg">
+              <p className="text-sm text-cyan-800 mb-3">
+                Display your dataset in a table format
+              </p>
+              <p className="text-xs text-cyan-700">
+                Connect this node to a data source to view the data
+              </p>
+            </div>
+            {renderField("dataset_id", "Dataset Source", "text")}
+            {renderField("max_rows", "Max Rows to Display", "number", {
+              min: 10,
+              max: 1000,
+            })}
+            {(config.dataset_id as string) && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  ✓ Ready to display table view on pipeline execution
+                </p>
+              </div>
+            )}
+          </div>
+        );
+
+      case "data_preview":
+        return (
+          <div className="space-y-4">
+            <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+              <p className="text-sm text-purple-800 mb-3">
+                Quick preview of first and last rows
+              </p>
+              <p className="text-xs text-purple-700">
+                Shows head and tail of the dataset
+              </p>
+            </div>
+            {renderField("dataset_id", "Dataset Source", "text")}
+            {renderField("head_rows", "First N Rows", "number", {
+              min: 1,
+              max: 50,
+            })}
+            {renderField("tail_rows", "Last N Rows", "number", {
+              min: 1,
+              max: 50,
+            })}
+            {(config.dataset_id as string) && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  ✓ Ready to preview data on pipeline execution
+                </p>
+              </div>
+            )}
+          </div>
+        );
+
+      case "statistics_view":
+        return (
+          <div className="space-y-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-800 mb-3">
+                Statistical summary of your dataset
+              </p>
+              <p className="text-xs text-green-700">
+                Shows mean, std, min, max, quartiles, etc.
+              </p>
+            </div>
+            {renderField("dataset_id", "Dataset Source", "text")}
+            {renderField("include_all", "Include All Columns", "checkbox")}
+            {(config.dataset_id as string) && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  ✓ Ready to show statistics on pipeline execution
+                </p>
+              </div>
+            )}
+          </div>
+        );
+
+      case "column_info":
+        return (
+          <div className="space-y-4">
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800 mb-3">
+                Column information and data quality
+              </p>
+              <p className="text-xs text-amber-700">
+                Shows data types, missing values, and unique counts
+              </p>
+            </div>
+            {renderField("dataset_id", "Dataset Source", "text")}
+            {renderField("show_dtypes", "Show Data Types", "checkbox")}
+            {renderField("show_missing", "Show Missing Values", "checkbox")}
+            {renderField("show_unique", "Show Unique Counts", "checkbox")}
+            {(config.dataset_id as string) && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  ✓ Ready to display column info on pipeline execution
+                </p>
+              </div>
+            )}
+          </div>
+        );
+
+      case "chart_view":
+        return (
+          <div className="space-y-4">
+            <div className="p-4 bg-pink-50 border border-pink-200 rounded-lg">
+              <p className="text-sm text-pink-800 mb-3">
+                Visualize your data with charts
+              </p>
+              <p className="text-xs text-pink-700">
+                Choose chart type and columns to visualize
+              </p>
+            </div>
+            {renderField("dataset_id", "Dataset Source", "text")}
+            {renderField("chart_type", "Chart Type", "select", [
+              { value: "bar", label: "Bar Chart" },
+              { value: "line", label: "Line Chart" },
+              { value: "scatter", label: "Scatter Plot" },
+              { value: "histogram", label: "Histogram" },
+              { value: "pie", label: "Pie Chart" },
+            ])}
+            {renderField("x_column", "X-Axis Column", "text")}
+            {renderField("y_column", "Y-Axis Column", "text")}
+            {(config.dataset_id as string) && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  ✓ Ready to display chart on pipeline execution
+                </p>
               </div>
             )}
           </div>

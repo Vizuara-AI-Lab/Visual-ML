@@ -10,6 +10,7 @@ import {
   applyNodeChanges,
   applyEdgeChanges,
   type Node,
+  useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { usePlaygroundStore } from "../../store/playgroundStore";
@@ -19,8 +20,14 @@ import type { NodeType, BaseNodeData } from "../../types/pipeline";
 
 const nodeTypes: Record<string, React.ComponentType<any>> = {
   upload_file: MLNode,
+  select_dataset: MLNode,
   load_url: MLNode,
   sample_dataset: MLNode,
+  table_view: MLNode,
+  data_preview: MLNode,
+  statistics_view: MLNode,
+  column_info: MLNode,
+  chart_view: MLNode,
   split: MLNode,
   preprocess: MLNode,
   feature_selection: MLNode,
@@ -41,21 +48,25 @@ interface CanvasProps {
 
 export const Canvas = ({ onNodeClick }: CanvasProps) => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const { screenToFlowPosition } = useReactFlow();
   const { nodes, edges, addNode, setNodes, setEdges, addEdge } =
     usePlaygroundStore();
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
-      setNodes(applyNodeChanges(changes, nodes) as Node<BaseNodeData>[]);
+      setNodes(
+        (prevNodes) =>
+          applyNodeChanges(changes, prevNodes) as Node<BaseNodeData>[],
+      );
     },
-    [setNodes, nodes],
+    [setNodes], // Stable dependency - prevents unnecessary re-renders
   );
 
   const onEdgesChange: OnEdgesChange = useCallback(
     (changes) => {
-      setEdges(applyEdgeChanges(changes, edges));
+      setEdges((prevEdges) => applyEdgeChanges(changes, prevEdges));
     },
-    [setEdges, edges],
+    [setEdges], // Stable dependency
   );
 
   const onConnect: OnConnect = useCallback(
@@ -81,20 +92,25 @@ export const Canvas = ({ onNodeClick }: CanvasProps) => {
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
-
-      const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
-      if (!reactFlowBounds) return;
+      event.stopPropagation();
 
       const type = event.dataTransfer.getData("application/reactflow");
-      if (!type) return;
+      if (!type) {
+        console.log("❌ No node type in drag data");
+        return;
+      }
 
       const nodeDef = getNodeByType(type as NodeType);
-      if (!nodeDef) return;
+      if (!nodeDef) {
+        console.log("❌ No node definition found for type:", type);
+        return;
+      }
 
-      const position = {
-        x: event.clientX - reactFlowBounds.left - 100,
-        y: event.clientY - reactFlowBounds.top - 25,
-      };
+      // Convert screen coordinates to flow coordinates
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
 
       const newNode = {
         id: `${type}-${Date.now()}`,
@@ -103,16 +119,21 @@ export const Canvas = ({ onNodeClick }: CanvasProps) => {
         data: {
           label: nodeDef.label,
           type: nodeDef.type,
-          config: nodeDef.defaultConfig,
+          // Deep clone defaultConfig so each instance has independent state
+          config: JSON.parse(JSON.stringify(nodeDef.defaultConfig)),
           isConfigured: false,
           color: nodeDef.color,
           icon: nodeDef.icon.name,
         },
       };
 
+      console.log("✅ Adding node:", newNode);
+      console.log("📍 Position:", position);
+      console.log("📊 Current nodes count:", nodes.length);
       addNode(newNode);
+      console.log("✅ Node added successfully");
     },
-    [addNode],
+    [addNode, screenToFlowPosition, nodes.length],
   );
 
   return (
