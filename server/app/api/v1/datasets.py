@@ -3,7 +3,7 @@ Dataset API endpoints for dataset upload, management, and retrieval.
 Production-ready with S3 support, validation, and metadata caching.
 """
 
-from typing import List, Optional
+from typing import List
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from app.models.dataset import Dataset
 from app.models.user import Student
 from app.core.security import get_current_student
 from app.core.logging import logger
+from app.core.redis_cache import redis_cache
 from app.db.session import get_db
 from app.ml.nodes.upload import UploadFileNode, UploadFileInput
 from app.services.s3_service import s3_service
@@ -150,34 +151,6 @@ async def upload_dataset(
         )
 
 
-@router.get("/debug/all")
-async def debug_list_all_datasets(
-    db: Session = Depends(get_db),
-):
-    """
-    Debug endpoint to list ALL datasets in database (no auth).
-    **FOR TESTING ONLY**
-    """
-    datasets = db.query(Dataset).order_by(Dataset.created_at.desc()).all()
-
-    return {
-        "total": len(datasets),
-        "datasets": [
-            {
-                "id": d.id,
-                "dataset_id": d.dataset_id,
-                "project_id": d.project_id,
-                "user_id": d.user_id,
-                "filename": d.filename,
-                "n_rows": d.n_rows,
-                "n_columns": d.n_columns,
-                "created_at": d.created_at.isoformat() if d.created_at else None,
-            }
-            for d in datasets
-        ],
-    }
-
-
 @router.get("/project/{project_id}", response_model=List[dict])
 async def list_project_datasets(
     project_id: int,
@@ -201,6 +174,13 @@ async def list_project_datasets(
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
 
+    # Try cache first
+    cache_key = f"datasets:project:{project_id}"
+    cached = await redis_cache.get(cache_key)
+    if cached:
+        logger.debug(f"Returning cached datasets for project {project_id}")
+        return cached
+
     # Get all datasets for this project
     datasets = (
         db.query(Dataset)
@@ -209,7 +189,12 @@ async def list_project_datasets(
         .all()
     )
 
-    return [dataset.to_dict() for dataset in datasets]
+    result = [dataset.to_dict() for dataset in datasets]
+
+    # Cache for 10 minutes
+    await redis_cache.set(cache_key, result, ttl=600)
+
+    return result
 
 
 @router.get("/{dataset_id}")

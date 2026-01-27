@@ -21,7 +21,7 @@ from app.db.session import get_db
 # Password hashing
 # Password hashing - Argon2 for new, Bcrypt for legacy
 pwd_context = CryptContext(
-    schemes=["argon2", "bcrypt"], 
+    schemes=["argon2", "bcrypt"],
     deprecated="auto",
 )
 
@@ -66,12 +66,14 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     else:
         expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    to_encode.update({
-        "exp": expire,
-        "iat": datetime.utcnow(),
-        "type": "access",
-        "jti": secrets.token_urlsafe(16),  # Unique token ID
-    })
+    to_encode.update(
+        {
+            "exp": expire,
+            "iat": datetime.utcnow(),
+            "type": "access",
+            "jti": secrets.token_urlsafe(16),  # Unique token ID
+        }
+    )
 
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
@@ -332,85 +334,53 @@ async def get_current_student(
     db: Session = Depends(get_db),
 ):
     """
-    Dependency to get current student with Redis caching.
+    Dependency to get current student from JWT claims (NO DATABASE QUERY).
     Ensures user is a STUDENT and account is active.
 
-    Performance:
-    - Cache hit: ~2-5ms
-    - Cache miss: ~50-200ms (DB query + cache update)
+    Performance: ~2-5ms (JWT decode only, no DB/Redis)
 
     Args:
         request: FastAPI request object
         current_user: Current user from token
-        db: Database session
+        db: Database session (not used, kept for compatibility)
 
     Returns:
-        Student model instance
+        Student-like object with data from JWT
 
     Raises:
         HTTPException: If not a student or account inactive
     """
-    from app.models.user import Student, UserRole
+    from app.models.user import UserRole
 
     start_time = time.time()
 
-    if current_user.get("user_role") != UserRole.STUDENT.value:
+    if current_user.get("role") != UserRole.STUDENT.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Student access required")
 
-    user_id = current_user["user_id"]
-
-    # Try Redis cache first
-    cached_user = await redis_cache.get_user(user_id)
-
-    if cached_user:
-        # Cache hit - reconstruct Student object
-        student = Student(**cached_user)
-
-        # Verify critical fields in real-time
-        if not student.isActive:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account is inactive. Please contact administrator.",
-            )
-
-        duration_ms = (time.time() - start_time) * 1000
-        logger.debug(f"get_current_student (CACHE HIT) took {duration_ms:.2f}ms")
-
-        return student
-
-    # Cache miss - query database
-    student = db.query(Student).filter(Student.id == user_id).first()
-    if not student:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
-
-    if not student.isActive:
+    # Check if account is active 
+    if not current_user.get("isActive", True):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive. Please contact administrator.",
         )
 
-    # Cache user data for future requests
-    user_dict = {
-        "id": student.id,
-        "emailId": student.emailId,
-        "fullName": student.fullName,
-        "role": student.role.value,
-        "authProvider": student.authProvider.value,
-        "collegeOrSchool": student.collegeOrSchool,
-        "contactNo": student.contactNo,
-        "recentProject": student.recentProject,
-        "profilePic": student.profilePic,
-        "isPremium": student.isPremium,
-        "isActive": student.isActive,
-        "isEmailVerified": student.isEmailVerified,
-        "createdAt": str(student.createdAt),
-        "lastLogin": str(student.lastLogin) if student.lastLogin else None,
-    }
+    # Create a lightweight Student object from JWT claims (NO DATABASE QUERY!)
+    class JWTStudent:
+        """Lightweight student object from JWT claims"""
 
-    await redis_cache.set_user(user_id, user_dict, ttl=settings.CACHE_TTL)
+        def __init__(self, claims: Dict[str, Any]):
+            self.id = int(claims.get("sub"))
+            self.emailId = claims.get("email")
+            self.fullName = claims.get("fullName", "")
+            self.role = UserRole.STUDENT
+            self.isActive = claims.get("isActive", True)
+            self.isPremium = claims.get("isPremium", False)
+            self.isEmailVerified = claims.get("isEmailVerified", False)
+
+    student = JWTStudent(current_user)
 
     duration_ms = (time.time() - start_time) * 1000
-    logger.debug(f"get_current_student (CACHE MISS) took {duration_ms:.2f}ms")
+    logger.debug(f"get_current_student (JWT ONLY) took {duration_ms:.2f}ms")
 
     return student
 

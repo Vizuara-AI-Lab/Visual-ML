@@ -18,6 +18,7 @@ from app.core.security import get_current_student
 from app.core.logging import logger
 from app.db.session import get_db
 from app.models.user import Student
+from app.core.redis_cache import redis_cache
 from datetime import datetime
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
@@ -31,7 +32,7 @@ async def create_project(
 ):
     """
     Create a new project.
-    
+
     **Student Authentication Required**
     """
     try:
@@ -41,21 +42,23 @@ async def create_project(
             studentId=student.id,
             status=PipelineStatus.DRAFT,
         )
-        
+
         db.add(project)
         db.commit()
         db.refresh(project)
-        
+
+        # Invalidate projects cache
+        await redis_cache.delete(f"projects:student:{student.id}")
+
         logger.info(f"Student {student.id} created project {project.id}: {project.name}")
-        
+
         return ProjectResponse.model_validate(project)
-        
+
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to create project: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create project"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create project"
         )
 
 
@@ -66,17 +69,21 @@ async def list_projects(
 ):
     """
     List all projects for the current student.
-    
+
     **Student Authentication Required**
     """
+    # Query database
     projects = (
         db.query(GenAIPipeline)
         .filter(GenAIPipeline.studentId == student.id)
         .order_by(GenAIPipeline.updatedAt.desc())
         .all()
     )
-    logger.info("print all user projects", projects)
-    return [ProjectListItem.model_validate(p) for p in projects]
+
+    # Convert to Pydantic models
+    result = [ProjectListItem.model_validate(p) for p in projects]
+
+    return result
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -87,24 +94,18 @@ async def get_project(
 ):
     """
     Get project details by ID.
-    
+
     **Student Authentication Required**
     """
     project = (
         db.query(GenAIPipeline)
-        .filter(
-            GenAIPipeline.id == project_id,
-            GenAIPipeline.studentId == student.id
-        )
+        .filter(GenAIPipeline.id == project_id, GenAIPipeline.studentId == student.id)
         .first()
     )
-    
+
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
     return ProjectResponse.model_validate(project)
 
 
@@ -117,36 +118,34 @@ async def update_project(
 ):
     """
     Update project details.
-    
+
     **Student Authentication Required**
     """
     project = (
         db.query(GenAIPipeline)
-        .filter(
-            GenAIPipeline.id == project_id,
-            GenAIPipeline.studentId == student.id
-        )
+        .filter(GenAIPipeline.id == project_id, GenAIPipeline.studentId == student.id)
         .first()
     )
-    
+
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
     if data.name is not None:
         project.name = data.name
     if data.description is not None:
         project.description = data.description
-    
+
     project.updatedAt = datetime.utcnow()
-    
+
     db.commit()
     db.refresh(project)
-    
+
+    # Invalidate caches
+    await redis_cache.delete(f"projects:student:{student.id}")
+    await redis_cache.delete(f"project:state:{project.id}")
+
     logger.info(f"Student {student.id} updated project {project.id}")
-    
+
     return ProjectResponse.model_validate(project)
 
 
@@ -158,27 +157,25 @@ async def delete_project(
 ):
     """
     Delete a project.
-    
+
     **Student Authentication Required**
     """
     project = (
         db.query(GenAIPipeline)
-        .filter(
-            GenAIPipeline.id == project_id,
-            GenAIPipeline.studentId == student.id
-        )
+        .filter(GenAIPipeline.id == project_id, GenAIPipeline.studentId == student.id)
         .first()
     )
-    
+
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
     db.delete(project)
     db.commit()
-    
+
+    # Invalidate caches
+    await redis_cache.delete(f"projects:student:{student.id}")
+    await redis_cache.delete(f"project:state:{project_id}")
+
     logger.info(f"Student {student.id} deleted project {project_id}")
 
 
@@ -191,9 +188,9 @@ async def save_project_state(
 ):
     """
     Save playground state for a project.
-    
+
     **Student Authentication Required**
-    
+
     This endpoint saves the complete playground state including:
     - Nodes (with positions and configurations)
     - Edges (connections between nodes)
@@ -202,27 +199,20 @@ async def save_project_state(
     """
     project = (
         db.query(GenAIPipeline)
-        .filter(
-            GenAIPipeline.id == project_id,
-            GenAIPipeline.studentId == student.id
-        )
+        .filter(GenAIPipeline.id == project_id, GenAIPipeline.studentId == student.id)
         .first()
     )
-    
+
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
     try:
         # Delete existing nodes (edges deleted via CASCADE)
         db.query(GenAINode).filter(GenAINode.pipelineId == project_id).delete()
 
-        
         # Create node ID mapping (React Flow ID -> DB ID)
         node_id_map = {}
-        
+
         # Save nodes
         for node_data in state.nodes:
             node = GenAINode(
@@ -238,12 +228,12 @@ async def save_project_state(
             db.add(node)
             db.flush()  # Get the DB ID
             node_id_map[node_data["id"]] = node.id
-        
+
         # Save edges
         for edge_data in state.edges:
             source_db_id = node_id_map.get(edge_data["source"])
             target_db_id = node_id_map.get(edge_data["target"])
-            
+
             if source_db_id and target_db_id:
                 edge = GenAIEdge(
                     pipelineId=project_id,
@@ -254,31 +244,33 @@ async def save_project_state(
                     label=edge_data.get("label"),
                 )
                 db.add(edge)
-        
+
         # Save metadata in config field
         project.config = {
             "datasetMetadata": state.datasetMetadata,
             "executionResult": state.executionResult,
         }
         project.updatedAt = datetime.utcnow()
-        
+
         db.commit()
         db.refresh(project)
-        
-        logger.info(f"Saved state for project {project_id}: {len(state.nodes)} nodes, {len(state.edges)} edges")
-        
+
+        logger.info(
+            f"Saved state for project {project_id}: {len(state.nodes)} nodes, {len(state.edges)} edges"
+        )
+
         return ProjectStateResponse(
             projectId=project.id,
             state=state,
             updatedAt=project.updatedAt,
         )
-        
+
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to save project state: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save project state: {str(e)}"
+            detail=f"Failed to save project state: {str(e)}",
         )
 
 
@@ -290,30 +282,24 @@ async def get_project_state(
 ):
     """
     Get playground state for a project.
-    
+
     **Student Authentication Required**
     """
     project = (
         db.query(GenAIPipeline)
-        .filter(
-            GenAIPipeline.id == project_id,
-            GenAIPipeline.studentId == student.id
-        )
+        .filter(GenAIPipeline.id == project_id, GenAIPipeline.studentId == student.id)
         .first()
     )
-    
+
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
     # Load nodes
     nodes = db.query(GenAINode).filter(GenAINode.pipelineId == project_id).all()
-    
+
     # Load edges
     edges = db.query(GenAIEdge).filter(GenAIEdge.pipelineId == project_id).all()
-    
+
     # Convert to React Flow format
     nodes_data = [
         {
@@ -328,10 +314,10 @@ async def get_project_state(
         }
         for node in nodes
     ]
-    
+
     # Create node ID mapping (DB ID -> React Flow ID)
     node_id_reverse_map = {node.id: node.nodeId for node in nodes}
-    
+
     edges_data = [
         {
             "id": f"edge-{edge.id}",
@@ -344,17 +330,17 @@ async def get_project_state(
         for edge in edges
         if edge.sourceNodeId in node_id_reverse_map and edge.targetNodeId in node_id_reverse_map
     ]
-    
+
     # Get metadata from config
     config = project.config or {}
-    
+
     state = ProjectState(
         nodes=nodes_data,
         edges=edges_data,
         datasetMetadata=config.get("datasetMetadata"),
         executionResult=config.get("executionResult"),
     )
-    
+
     return ProjectStateResponse(
         projectId=project.id,
         state=state,

@@ -83,9 +83,7 @@ class RedisCache:
             logger.warning(f"Redis get_user failed: {str(e)}, falling back to DB")
             return None
 
-    async def set_user(
-        self, user_id: int, user_data: Dict[str, Any], ttl: int = None
-    ) -> bool:
+    async def set_user(self, user_id: int, user_data: Dict[str, Any], ttl: int = None) -> bool:
         """
         Cache user data.
 
@@ -314,6 +312,124 @@ class RedisCache:
         except Exception as e:
             logger.warning(f"Redis get_cache_stats failed: {str(e)}")
             return {"enabled": True, "error": str(e)}
+
+    # ========== Generic Data Caching ==========
+
+    async def get(self, key: str) -> Optional[Any]:
+        """
+        Get generic data from cache.
+
+        Args:
+            key: Cache key
+
+        Returns:
+            Cached data or None if not found
+        """
+        if not self._enabled:
+            return None
+
+        try:
+            client = await self._get_client()
+            data = await client.get(key)
+
+            if data:
+                logger.debug(f"Cache HIT: {key}")
+                return json.loads(data)
+
+            logger.debug(f"Cache MISS: {key}")
+            return None
+
+        except Exception as e:
+            logger.warning(f"Redis get failed for {key}: {str(e)}")
+            return None
+
+    async def set(self, key: str, value: Any, ttl: int = None) -> bool:
+        """
+        Set generic data in cache.
+
+        Args:
+            key: Cache key
+            value: Data to cache (will be JSON serialized)
+            ttl: Time to live in seconds (default: settings.CACHE_TTL)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._enabled:
+            return False
+
+        try:
+            client = await self._get_client()
+            ttl = ttl or settings.CACHE_TTL
+
+            # Serialize data
+            serialized = json.dumps(value, default=str)
+
+            await client.setex(key, ttl, serialized)
+            logger.debug(f"Cache SET: {key} (TTL: {ttl}s)")
+            return True
+
+        except Exception as e:
+            logger.warning(f"Redis set failed for {key}: {str(e)}")
+            return False
+
+    async def delete(self, key: str) -> bool:
+        """
+        Delete data from cache.
+
+        Args:
+            key: Cache key
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._enabled:
+            return False
+
+        try:
+            client = await self._get_client()
+            await client.delete(key)
+            logger.debug(f"Cache DELETE: {key}")
+            return True
+
+        except Exception as e:
+            logger.warning(f"Redis delete failed for {key}: {str(e)}")
+            return False
+
+    async def invalidate_pattern(self, pattern: str) -> bool:
+        """
+        Invalidate all keys matching a pattern.
+
+        Args:
+            pattern: Key pattern (e.g., "projects:student:*")
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self._enabled:
+            return False
+
+        try:
+            client = await self._get_client()
+            cursor = 0
+            deleted_count = 0
+
+            while True:
+                cursor, keys = await client.scan(cursor, match=pattern, count=100)
+
+                if keys:
+                    await client.delete(*keys)
+                    deleted_count += len(keys)
+
+                if cursor == 0:
+                    break
+
+            logger.info(f"Invalidated {deleted_count} keys matching pattern: {pattern}")
+            return True
+
+        except Exception as e:
+            logger.warning(f"Redis invalidate_pattern failed for {pattern}: {str(e)}")
+            return False
 
 
 # Global Redis cache instance

@@ -579,9 +579,17 @@ async def _create_tokens_for_student(
     ip_address: Optional[str] = None,
 ) -> Tuple[str, str, str]:
     """Create access and refresh tokens for student with Redis session."""
-    # Create access token
+    # Create access token with all necessary user data to avoid DB queries
     access_token = create_access_token(
-        {"sub": str(student.id), "role": UserRole.STUDENT.value, "email": student.emailId}
+        {
+            "sub": str(student.id),
+            "role": UserRole.STUDENT.value,
+            "email": student.emailId,
+            "fullName": student.fullName,
+            "isActive": student.isActive,
+            "isPremium": student.isPremium,
+            "isEmailVerified": student.isEmailVerified,
+        }
     )
 
     # Create refresh token

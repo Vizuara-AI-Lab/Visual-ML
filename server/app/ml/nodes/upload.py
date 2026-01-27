@@ -20,17 +20,30 @@ from app.services.s3_service import s3_service
 class UploadFileInput(NodeInput):
     """Input schema for UploadFile node."""
 
-    file_content: bytes = Field(..., description="File content as bytes")
-    filename: str = Field(..., description="Original filename")
+    # For new uploads
+    file_content: Optional[bytes] = Field(
+        None, description="File content as bytes (for new uploads)"
+    )
+    filename: Optional[str] = Field(None, description="Original filename (for new uploads)")
     content_type: Optional[str] = Field(None, description="MIME type")
     project_id: Optional[int] = Field(None, description="Project ID for dataset association")
     user_id: Optional[int] = Field(None, description="User ID for ownership")
     node_id: Optional[int] = Field(None, description="Node ID for linking")
 
+    # For referencing already uploaded datasets
+    dataset_id: Optional[str] = Field(None, description="Dataset ID for already uploaded files")
+    n_rows: Optional[int] = Field(None, description="Number of rows (metadata)")
+    n_columns: Optional[int] = Field(None, description="Number of columns (metadata)")
+    columns: Optional[list[str]] = Field(None, description="Column names (metadata)")
+    dtypes: Optional[Dict[str, str]] = Field(None, description="Data types (metadata)")
+
     @field_validator("filename")
     @classmethod
-    def validate_filename(cls, v: str) -> str:
+    def validate_filename(cls, v: Optional[str]) -> Optional[str]:
         """Validate filename extension."""
+        if v is None:
+            return None
+
         if not v:
             raise ValueError("Filename cannot be empty")
 
@@ -48,8 +61,11 @@ class UploadFileInput(NodeInput):
 
     @field_validator("file_content")
     @classmethod
-    def validate_file_size(cls, v: bytes) -> bytes:
+    def validate_file_size(cls, v: Optional[bytes]) -> Optional[bytes]:
         """Validate file size."""
+        if v is None:
+            return None
+
         size_mb = len(v) / (1024 * 1024)
 
         if size_mb > settings.MAX_UPLOAD_SIZE_MB:
@@ -141,7 +157,36 @@ class UploadFileNode(BaseNode):
             Upload result with dataset metadata
         """
         try:
-            logger.info(f"Processing file upload: {input_data.filename}")
+            # Case 1: Reference to already uploaded dataset (pipeline execution)
+            if input_data.dataset_id and not input_data.file_content:
+                logger.info(f"Referencing existing dataset: {input_data.dataset_id}")
+
+                # Return the metadata that was already stored
+                return UploadFileOutput(
+                    node_type=self.node_type,
+                    execution_time_ms=0,
+                    dataset_id=input_data.dataset_id,
+                    filename=input_data.filename or "unknown",
+                    file_path=f"datasets/{input_data.dataset_id}",  # Placeholder path
+                    storage_backend=self.storage_backend,
+                    s3_bucket=None,
+                    s3_key=None,
+                    n_rows=input_data.n_rows or 0,
+                    n_columns=input_data.n_columns or 0,
+                    columns=input_data.columns or [],
+                    dtypes=input_data.dtypes or {},
+                    memory_usage_mb=0.0,
+                    file_size=0,
+                )
+
+            # Case 2: New file upload
+            if not input_data.file_content or not input_data.filename:
+                raise FileUploadError(
+                    reason="Either dataset_id or (file_content + filename) must be provided",
+                    filename=input_data.filename or "unknown",
+                )
+
+            logger.info(f"Processing new file upload: {input_data.filename}")
 
             # Generate unique dataset ID
             dataset_id = generate_id("dataset")
@@ -197,7 +242,7 @@ class UploadFileNode(BaseNode):
             raise
         except Exception as e:
             logger.error(f"File upload failed: {str(e)}", exc_info=True)
-            raise FileUploadError(reason=str(e), filename=input_data.filename)
+            raise FileUploadError(reason=str(e), filename=input_data.filename or "unknown")
 
     def _parse_csv(self, file_content: bytes, filename: str) -> pd.DataFrame:
         """

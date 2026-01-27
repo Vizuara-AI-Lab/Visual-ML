@@ -5,10 +5,19 @@ ML Pipeline Engine - Orchestrates node execution and manages pipelines.
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from app.ml.nodes.upload import UploadFileNode
+from app.ml.nodes.select import SelectDatasetNode
+from app.ml.nodes.load_url import LoadUrlNode
 from app.ml.nodes.clean import PreprocessNode
 from app.ml.nodes.split import SplitNode
 from app.ml.nodes.train import TrainNode
 from app.ml.nodes.evaluate import EvaluateNode
+from app.ml.nodes.view import (
+    TableViewNode,
+    DataPreviewNode,
+    StatisticsViewNode,
+    ColumnInfoNode,
+    ChartViewNode,
+)
 from app.core.logging import logger, log_ml_operation
 from app.core.exceptions import NodeExecutionError
 
@@ -28,10 +37,17 @@ class MLPipelineEngine:
         """Initialize pipeline engine."""
         self.nodes = {
             "upload_file": UploadFileNode,
+            "select_dataset": SelectDatasetNode,
+            "load_url": LoadUrlNode,
             "preprocess": PreprocessNode,
             "split": SplitNode,
             "train": TrainNode,
             "evaluate": EvaluateNode,
+            "table_view": TableViewNode,
+            "data_preview": DataPreviewNode,
+            "statistics_view": StatisticsViewNode,
+            "column_info": ColumnInfoNode,
+            "chart_view": ChartViewNode,
         }
         self.execution_history: List[Dict[str, Any]] = []
 

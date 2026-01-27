@@ -61,16 +61,13 @@ async def register_student(data: StudentRegister, request: Request, db: Session 
 
     return {
         "message": "Registration successful! Please check your email for the OTP to verify your account.",
-        "emailId": student.emailId
+        "emailId": student.emailId,
     }
 
 
 @router.post("/student/login")
 async def login_student(
-    data: StudentLogin,
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db)
+    data: StudentLogin, request: Request, response: Response, db: Session = Depends(get_db)
 ):
     """
     Login student with email and password.
@@ -88,18 +85,12 @@ async def login_student(
     # Set HTTP-only cookies
     set_auth_cookies(response, access_token, refresh_token)
 
-    return {
-        "user": StudentResponse.model_validate(student),
-        "message": "Login successful"
-    }
+    return {"user": StudentResponse.model_validate(student), "message": "Login successful"}
 
 
 @router.post("/student/google")
 async def google_auth_student(
-    data: StudentGoogleAuth,
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db)
+    data: StudentGoogleAuth, request: Request, response: Response, db: Session = Depends(get_db)
 ):
     """
     Authenticate student with Google OAuth.
@@ -123,35 +114,31 @@ async def google_auth_student(
 
     return {
         "user": StudentResponse.model_validate(student),
-        "message": "Google authentication successful"
+        "message": "Google authentication successful",
     }
 
 
 @router.post("/verify-email")
-async def verify_email(
-    data: VerifyEmailRequest,
-    response: Response,
-    db: Session = Depends(get_db)
-):
+async def verify_email(data: VerifyEmailRequest, response: Response, db: Session = Depends(get_db)):
     """
     Verify student email with OTP code.
     Sets HTTP-only cookies for authentication.
-    
+
     - **emailId**: Student email
     - **otp**: 6-digit OTP code from email
-    
+
     Returns user data only (tokens in cookies).
     """
     from app.services.otp_service import verify_email_otp
-    
+
     student, access_token, refresh_token = await verify_email_otp(db, data.emailId, data.otp)
-    
+
     # Set HTTP-only cookies
     set_auth_cookies(response, access_token, refresh_token)
-    
+
     return {
         "user": StudentResponse.model_validate(student),
-        "message": "Email verified successfully! Welcome to Visual ML."
+        "message": "Email verified successfully! Welcome to Visual ML.",
     }
 
 
@@ -159,18 +146,16 @@ async def verify_email(
 async def resend_otp(data: ResendOTPRequest, db: Session = Depends(get_db)):
     """
     Resend OTP verification email.
-    
+
     - **emailId**: Student email
-    
+
     Returns success message.
     """
     from app.services.otp_service import resend_verification_otp
-    
+
     resend_verification_otp(db, data.emailId)
-    
-    return {
-        "message": "New OTP sent to your email. Please check your inbox."
-    }
+
+    return {"message": "New OTP sent to your email. Please check your inbox."}
 
 
 # ========== Admin Login ==========
@@ -178,10 +163,7 @@ async def resend_otp(data: ResendOTPRequest, db: Session = Depends(get_db)):
 
 @router.post("/admin/register", status_code=status.HTTP_201_CREATED)
 async def register_admin(
-    data: AdminRegister,
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db)
+    data: AdminRegister, request: Request, response: Response, db: Session = Depends(get_db)
 ):
     """
     Register a new admin account.
@@ -198,18 +180,12 @@ async def register_admin(
     # Set HTTP-only cookies
     set_auth_cookies(response, access_token, refresh_token)
 
-    return {
-        "user": AdminResponse.model_validate(admin),
-        "message": "Admin registered successfully"
-    }
+    return {"user": AdminResponse.model_validate(admin), "message": "Admin registered successfully"}
 
 
 @router.post("/admin/login")
 async def login_admin(
-    data: AdminLogin,
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db)
+    data: AdminLogin, request: Request, response: Response, db: Session = Depends(get_db)
 ):
     """
     Login admin with email and password.
@@ -227,21 +203,14 @@ async def login_admin(
     # Set HTTP-only cookies
     set_auth_cookies(response, access_token, refresh_token)
 
-    return {
-        "user": AdminResponse.model_validate(admin),
-        "message": "Admin login successful"
-    }
+    return {"user": AdminResponse.model_validate(admin), "message": "Admin login successful"}
 
 
 # ========== Token Management ==========
 
 
 @router.post("/refresh")
-async def refresh_token(
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db)
-):
+async def refresh_token(request: Request, response: Response, db: Session = Depends(get_db)):
     """
     Refresh access token using refresh token from cookie.
     Implements token rotation - old refresh token is revoked.
@@ -252,8 +221,7 @@ async def refresh_token(
     refresh_token_str = request.cookies.get("refresh_token")
     if not refresh_token_str:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh token not found in cookies"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token not found in cookies"
         )
 
     device_info = request.headers.get("User-Agent")
@@ -271,11 +239,7 @@ async def refresh_token(
 
 
 @router.post("/logout")
-async def logout(
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db)
-):
+async def logout(request: Request, response: Response, db: Session = Depends(get_db)):
     """
     Logout user by revoking refresh token and clearing cookies.
     Invalidates Redis cache and all sessions.
@@ -430,6 +394,13 @@ async def list_students(
     - **isPremium**: Filter by premium status
     - **isActive**: Filter by active status
     """
+    # Create cache key based on filters
+    cache_key = f"students:list:{skip}:{limit}:{search}:{isPremium}:{isActive}"
+    cached = await redis_cache.get(cache_key)
+    if cached:
+        logger.debug("Returning cached students list")
+        return cached
+
     query = db.query(Student)
 
     # Apply filters
@@ -447,7 +418,12 @@ async def list_students(
     # Pagination
     students = query.offset(skip).limit(limit).all()
 
-    return [StudentListItem.model_validate(s) for s in students]
+    result = [StudentListItem.model_validate(s) for s in students]
+
+    # Cache for 5 minutes
+    await redis_cache.set(cache_key, result, ttl=300)
+
+    return result
 
 
 @router.get("/admin/students/{student_id}", response_model=StudentResponse)
@@ -508,7 +484,7 @@ async def update_student(
 
     # ✅ Invalidate cache to reflect admin changes immediately
     await redis_cache.delete_user(student.id)
-    
+
     # If deactivated, also clear all sessions
     if data.isActive is not None and not data.isActive:
         await redis_cache.delete_all_user_sessions(student.id)
@@ -541,4 +517,3 @@ async def dev_delete_student(student_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return None
-
