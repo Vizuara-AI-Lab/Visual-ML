@@ -5,7 +5,6 @@
 import type { NodeType } from "../types/pipeline";
 import type { LucideIcon } from "lucide-react";
 import {
-  Link,
   Database,
   Split,
   Filter,
@@ -66,6 +65,11 @@ export interface ConfigField {
   max?: number;
   step?: number;
   autoFill?: boolean; // Auto-fill from dataset metadata
+  conditionalDisplay?: {
+    field: string;
+    equals?: string;
+    notEquals?: string;
+  }; // Show field conditionally based on another field's value
 }
 
 export const nodeCategories: NodeCategory[] = [
@@ -127,38 +131,6 @@ export const nodeCategories: NodeCategory[] = [
             type: "select",
             required: true,
             description: "Select from your uploaded datasets",
-          },
-        ],
-      },
-      {
-        type: "load_url",
-        label: "Load from URL",
-        description: "Load dataset from a URL",
-        category: "data-sources",
-        icon: Link,
-        color: "#8B5CF6",
-        defaultConfig: {
-          url: "",
-          format: "csv",
-        },
-        configFields: [
-          {
-            name: "url",
-            label: "Dataset URL",
-            type: "text",
-            required: true,
-            description: "HTTP(S) URL to your dataset",
-          },
-          {
-            name: "format",
-            label: "Format",
-            type: "select",
-            options: [
-              { value: "csv", label: "CSV" },
-              { value: "json", label: "JSON" },
-              { value: "excel", label: "Excel" },
-            ],
-            defaultValue: "csv",
           },
         ],
       },
@@ -379,14 +351,34 @@ export const nodeCategories: NodeCategory[] = [
             required: false,
             autoFill: true,
             description: "Select column for X-axis",
+            conditionalDisplay: { field: "chart_type", notEquals: "pie" },
           },
           {
             name: "y_columns",
-            label: "Y-Axis Columns",
-            type: "multiselect",
+            label: "Y-Axis Column",
+            type: "select",
             required: false,
             autoFill: true,
-            description: "Select one or more columns for Y-axis",
+            description: "Select column for Y-axis",
+            conditionalDisplay: { field: "chart_type", notEquals: "pie" },
+          },
+          {
+            name: "label_column",
+            label: "Label Column",
+            type: "select",
+            required: false,
+            autoFill: true,
+            description: "Column for pie chart labels",
+            conditionalDisplay: { field: "chart_type", equals: "pie" },
+          },
+          {
+            name: "value_column",
+            label: "Value Column",
+            type: "select",
+            required: false,
+            autoFill: true,
+            description: "Column for pie chart values",
+            conditionalDisplay: { field: "chart_type", equals: "pie" },
           },
         ],
       },

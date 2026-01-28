@@ -13,12 +13,42 @@ interface ViewNodeModalProps {
 export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
   const { nodes, executionResult } = usePlaygroundStore();
 
+  const node = nodeId ? nodes.find((n) => n.id === nodeId) : null;
+  const nodeResult = nodeId ? executionResult?.nodeResults?.[nodeId] : null;
+
+  // Early return AFTER all hooks have been called
   if (!nodeId) return null;
 
-  const node = nodes.find((n) => n.id === nodeId);
-  const nodeResult = executionResult?.nodeResults?.[nodeId];
+  console.log("🔍 ViewNodeModal opened for nodeId:", nodeId);
+  console.log("📋 Execution result:", executionResult);
+  console.log("🎯 Found node:", node);
+  console.log("📊 Node result:", nodeResult);
 
-  if (!node || !nodeResult) return null;
+  if (!node) {
+    console.error("❌ Node not found for ID:", nodeId);
+    return null;
+  }
+
+  if (!nodeResult) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-xl w-11/12 max-w-2xl flex flex-col p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">
+            {node.data.label} - No Data
+          </h2>
+          <p className="text-gray-600 mb-4">
+            This node hasn't been executed yet. Please run the pipeline first.
+          </p>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const nodeType = node.data.type;
   const isViewNode = [
@@ -132,15 +162,22 @@ function renderDataPreview(result: any) {
   const headData = result.head_data || [];
   const tailData = result.tail_data || [];
 
+  // Extract columns from first row if not provided
+  const columns =
+    result.columns || (headData.length > 0 ? Object.keys(headData[0]) : []);
+
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold mb-3">First Rows</h3>
-        {renderTableView({ ...result, data: headData })}
+        {renderTableView({ ...result, data: headData, columns })}
       </div>
       <div>
         <h3 className="text-lg font-semibold mb-3">Last Rows</h3>
-        {renderTableView({ ...result, data: tailData })}
+        {renderTableView({ ...result, data: tailData, columns })}
+      </div>
+      <div className="mt-4 text-sm text-gray-600">
+        Total rows: {result.total_rows || 0}
       </div>
     </div>
   );

@@ -5,7 +5,6 @@
 export type NodeType =
   | "upload_file"
   | "select_dataset"
-  | "load_url"
   | "sample_dataset"
   | "table_view"
   | "data_preview"

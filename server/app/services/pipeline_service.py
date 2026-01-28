@@ -101,7 +101,10 @@ class MLPipelineService:
             raise
 
     async def execute_pipeline(
-        self, pipeline: List[Dict[str, Any]], dry_run: bool = False
+        self,
+        pipeline: List[Dict[str, Any]],
+        dry_run: bool = False,
+        current_user: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Execute a complete pipeline.
@@ -109,12 +112,15 @@ class MLPipelineService:
         Args:
             pipeline: List of node configurations
             dry_run: Validate without executing
+            current_user: Current user context for authentication
 
         Returns:
             List of node results
         """
         try:
-            results = await pipeline_engine.execute_pipeline(pipeline=pipeline, dry_run=dry_run)
+            results = await pipeline_engine.execute_pipeline(
+                pipeline=pipeline, dry_run=dry_run, current_user=current_user
+            )
             return results
         except Exception as e:
             logger.error(f"Pipeline execution failed: {str(e)}", exc_info=True)

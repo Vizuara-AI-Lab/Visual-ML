@@ -14,7 +14,7 @@ from app.core.exceptions import NodeExecutionError
 class NodeInput(BaseModel):
     """Base class for node input validation."""
 
-    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+    model_config = ConfigDict(extra="ignore", arbitrary_types_allowed=True)
 
 
 class NodeOutput(BaseModel):

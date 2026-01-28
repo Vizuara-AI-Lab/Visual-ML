@@ -125,7 +125,7 @@ async def execute_pipeline(
         pipeline_config = [node.model_dump() for node in request.pipeline]
 
         results = await ml_service.execute_pipeline(
-            pipeline=pipeline_config, dry_run=request.dry_run
+            pipeline=pipeline_config, dry_run=request.dry_run, current_user=current_user
         )
 
         execution_time = (datetime.utcnow() - start_time).total_seconds()
@@ -178,7 +178,7 @@ async def train_regression_model(
 
         # Offload to Celery
         from app.tasks.ml_tasks import train_model_task
-        
+
         task = train_model_task.delay(
             dataset_path=request.dataset_path,
             target_column=request.target_column,
@@ -196,7 +196,7 @@ async def train_regression_model(
             model_version=None,
             training_metrics={},
             test_metrics={},
-            metadata={"task_id": task.id, "status": "processing"}
+            metadata={"task_id": task.id, "status": "processing"},
         )
 
     except BaseMLException as e:
@@ -240,7 +240,7 @@ async def train_classification_model(
 
         # Offload to Celery
         from app.tasks.ml_tasks import train_model_task
-        
+
         task = train_model_task.delay(
             dataset_path=request.dataset_path,
             target_column=request.target_column,
@@ -258,7 +258,7 @@ async def train_classification_model(
             model_version=None,
             training_metrics={},
             test_metrics={},
-            metadata={"task_id": task.id, "status": "processing"}
+            metadata={"task_id": task.id, "status": "processing"},
         )
 
     except BaseMLException as e:

@@ -2,8 +2,8 @@
 View Nodes - Display and visualize dataset content
 """
 
-from typing import Type, Optional, Dict, Any, List
-from pydantic import Field
+from typing import Type, Optional, Dict, Any, List, Union
+from pydantic import Field, field_validator
 import pandas as pd
 import io
 from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
@@ -27,8 +27,6 @@ class TableViewInput(NodeInput):
     n_columns: Optional[int] = Field(None, description="Number of columns (metadata)")
     columns: Optional[List[str]] = Field(None, description="Column names (metadata)")
     dtypes: Optional[Dict[str, str]] = Field(None, description="Data types (metadata)")
-    url: Optional[str] = Field(None, description="Source URL (from load_url node)")
-    format: Optional[str] = Field(None, description="File format (from load_url node)")
 
 
 class TableViewOutput(NodeOutput):
@@ -55,8 +53,6 @@ class DataPreviewInput(NodeInput):
     n_columns: Optional[int] = Field(None, description="Number of columns (metadata)")
     columns: Optional[List[str]] = Field(None, description="Column names (metadata)")
     dtypes: Optional[Dict[str, str]] = Field(None, description="Data types (metadata)")
-    url: Optional[str] = Field(None, description="Source URL (from load_url node)")
-    format: Optional[str] = Field(None, description="File format (from load_url node)")
 
 
 class DataPreviewOutput(NodeOutput):
@@ -81,8 +77,6 @@ class StatisticsViewInput(NodeInput):
     n_columns: Optional[int] = Field(None, description="Number of columns (metadata)")
     columns: Optional[List[str]] = Field(None, description="Column names (metadata)")
     dtypes: Optional[Dict[str, str]] = Field(None, description="Data types (metadata)")
-    url: Optional[str] = Field(None, description="Source URL (from load_url node)")
-    format: Optional[str] = Field(None, description="File format (from load_url node)")
 
 
 class StatisticsViewOutput(NodeOutput):
@@ -104,8 +98,6 @@ class ColumnInfoInput(NodeInput):
     # Optional metadata fields (passed from upload nodes)
     filename: Optional[str] = Field(None, description="Filename (metadata)")
     n_rows: Optional[int] = Field(None, description="Number of rows (metadata)")
-    url: Optional[str] = Field(None, description="Source URL (from load_url node)")
-    format: Optional[str] = Field(None, description="File format (from load_url node)")
     n_columns: Optional[int] = Field(None, description="Number of columns (metadata)")
     columns: Optional[List[str]] = Field(None, description="Column names (metadata)")
     dtypes: Optional[Dict[str, str]] = Field(None, description="Data types (metadata)")
@@ -126,7 +118,22 @@ class ChartViewInput(NodeInput):
     chart_type: str = Field("bar", description="Type of chart")
     x_column: Optional[str] = Field(None, description="X-axis column")
     y_column: Optional[str] = Field(None, description="Y-axis column")
-    y_columns: Optional[List[str]] = Field(None, description="Multiple Y-axis columns")
+    y_columns: Optional[Union[List[str], str]] = Field(None, description="Multiple Y-axis columns")
+
+    @field_validator("y_columns", mode="before")
+    @classmethod
+    def parse_y_columns(cls, v):
+        """Convert string or comma-separated string to list if needed."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            # If it contains comma, split by comma
+            if "," in v:
+                return [col.strip() for col in v.split(",") if col.strip()]
+            # Otherwise, treat as single column
+            return [v.strip()] if v.strip() else None
+        # Already a list
+        return v
 
     # Optional metadata fields (passed from upload nodes)
     filename: Optional[str] = Field(None, description="Filename (metadata)")
@@ -134,8 +141,6 @@ class ChartViewInput(NodeInput):
     n_columns: Optional[int] = Field(None, description="Number of columns (metadata)")
     columns: Optional[List[str]] = Field(None, description="Column names (metadata)")
     dtypes: Optional[Dict[str, str]] = Field(None, description="Data types (metadata)")
-    url: Optional[str] = Field(None, description="Source URL (from load_url node)")
-    format: Optional[str] = Field(None, description="File format (from load_url node)")
 
 
 class ChartViewOutput(NodeOutput):
@@ -204,6 +209,7 @@ class TableViewNode(BaseViewNode):
         df = await self._load_dataset(input_data.dataset_id)
 
         if df is None or df.empty:
+            logger.warning(f"Dataset is None or empty for dataset_id: {input_data.dataset_id}")
             return TableViewOutput(
                 node_type=self.node_type,
                 execution_time_ms=0,
@@ -215,19 +221,30 @@ class TableViewNode(BaseViewNode):
                 columns=[],
             )
 
-        # Get column names
+        logger.info(f"Dataset loaded - shape: {df.shape}, columns: {df.columns.tolist()}")
+
+        # Get column names - if columns_to_show is None or empty, use all columns
         columns = (
             df.columns.tolist()
-            if input_data.columns_to_show is None
+            if input_data.columns_to_show is None or len(input_data.columns_to_show) == 0
             else input_data.columns_to_show
         )
+
+        logger.info(f"Columns to display: {columns}")
 
         # Limit rows
         max_rows = min(input_data.max_rows, len(df))
         df_limited = df.head(max_rows)
 
+        logger.info(f"Limited dataframe - shape: {df_limited.shape}")
+
         # Convert to list of dicts
-        data = df_limited[columns].to_dict(orient="records")
+        try:
+            data = df_limited[columns].to_dict(orient="records")
+            logger.info(f"Converted {len(data)} rows to dict format")
+        except Exception as e:
+            logger.error(f"Error converting dataframe to dict: {str(e)}")
+            data = []
 
         return TableViewOutput(
             node_type=self.node_type,
@@ -448,8 +465,12 @@ class ChartViewNode(BaseViewNode):
 
         # Check if multiple columns specified
         if input_data.y_columns:
-            # Split by comma and strip whitespace
-            y_cols = [col.strip() for col in input_data.y_columns.split(",") if col.strip()]
+            # Already converted to list by validator, but handle both cases
+            if isinstance(input_data.y_columns, list):
+                y_cols = input_data.y_columns
+            else:
+                # Fallback for string format
+                y_cols = [col.strip() for col in input_data.y_columns.split(",") if col.strip()]
         elif input_data.y_column:
             y_cols = [input_data.y_column]
         else:
@@ -568,16 +589,19 @@ class ChartViewNode(BaseViewNode):
     ) -> Dict[str, Any]:
         """Generate histogram data."""
         # Use y_columns or x_column for histogram
-        cols = []
-        if input_data.y_columns:
-            cols = [col.strip() for col in input_data.y_columns.split(",") if col.strip()]
-        elif input_data.x_column:
+        y_cols = self._get_y_columns(input_data, df)
+
+        if input_data.x_column and not y_cols:
             cols = [input_data.x_column]
+        elif y_cols:
+            cols = y_cols
         else:
             # Use first numeric column
             numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
             if len(numeric_cols) > 0:
                 cols = [numeric_cols[0]]
+            else:
+                cols = []
 
         if not cols:
             return {"error": "Please specify a numeric column"}

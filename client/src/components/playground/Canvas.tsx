@@ -21,7 +21,6 @@ import type { NodeType, BaseNodeData } from "../../types/pipeline";
 const nodeTypes: Record<string, React.ComponentType<any>> = {
   upload_file: MLNode,
   select_dataset: MLNode,
-  load_url: MLNode,
   sample_dataset: MLNode,
   table_view: MLNode,
   data_preview: MLNode,

@@ -6,7 +6,7 @@ import { memo } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import type { BaseNodeData } from "../../types/pipeline";
-import { Eye, X } from "lucide-react";
+import { Eye, X, Settings } from "lucide-react";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 
 const MLNode = ({ data, id }: NodeProps<BaseNodeData>) => {
@@ -31,6 +31,14 @@ const MLNode = ({ data, id }: NodeProps<BaseNodeData>) => {
     // Dispatch custom event to open view modal
     window.dispatchEvent(
       new CustomEvent("openViewNodeModal", { detail: { nodeId: id } }),
+    );
+  };
+
+  const handleReconfig = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Dispatch custom event to open config modal
+    window.dispatchEvent(
+      new CustomEvent("openConfigModal", { detail: { nodeId: id } }),
     );
   };
 
@@ -60,7 +68,7 @@ const MLNode = ({ data, id }: NodeProps<BaseNodeData>) => {
       </button>
 
       {/* Input Handle */}
-      {nodeData.type !== "load_url" && nodeData.type !== "sample_dataset" && (
+      {nodeData.type !== "sample_dataset" && (
         <Handle
           type="target"
           position={Position.Top}
@@ -91,13 +99,22 @@ const MLNode = ({ data, id }: NodeProps<BaseNodeData>) => {
 
         {/* View Data Button */}
         {showViewButton && (
-          <button
-            onClick={handleViewData}
-            className="mt-2 w-full px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded flex items-center justify-center gap-1.5 transition-colors"
-          >
-            <Eye className="w-3 h-3" />
-            View Data
-          </button>
+          <div className="mt-2 flex gap-1">
+            <button
+              onClick={handleViewData}
+              className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Eye className="w-3 h-3" />
+              View Data
+            </button>
+            <button
+              onClick={handleReconfig}
+              className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-xs rounded flex items-center justify-center gap-1.5 transition-colors"
+              title="Reconfigure node"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
+          </div>
         )}
       </div>
 
