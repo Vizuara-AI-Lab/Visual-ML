@@ -8,17 +8,22 @@ import { ConfigModal } from "../../components/playground/ConfigModal";
 import { ViewNodeModal } from "../../components/playground/ViewNodeModal";
 import { Toolbar } from "../../components/playground/Toolbar";
 import { ResultsPanel } from "../../components/playground/ResultsPanel";
+import { ValidationDialog } from "../../components/playground/ValidationDialog";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 import { executePipeline } from "../../features/playground/api";
 import type { NodeType, BaseNodeData } from "../../types/pipeline";
 import { useProjectState } from "../../hooks/queries/useProjectState";
 import { useSaveProject } from "../../hooks/mutations/useSaveProject";
+import { validatePipeline, type ValidationError } from "../../utils/validation";
 
 export default function PlayGround() {
   const { projectId } = useParams<{ projectId: string }>();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [viewNodeId, setViewNodeId] = useState<string | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>(
+    [],
+  );
 
   const {
     nodes,
@@ -30,6 +35,7 @@ export default function PlayGround() {
     loadProjectState,
     getProjectState,
     executionResult,
+    currentProjectId,
   } = usePlaygroundStore();
 
   // Handle node click - show view data modal for view nodes, config for others
@@ -98,6 +104,26 @@ export default function PlayGround() {
     };
   }, []);
 
+  // Listen for custom event from Reconfig button on nodes
+  useEffect(() => {
+    const handleOpenConfigModal = (event: CustomEvent) => {
+      const { nodeId } = event.detail;
+      setSelectedNodeId(nodeId);
+    };
+
+    window.addEventListener(
+      "openConfigModal",
+      handleOpenConfigModal as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "openConfigModal",
+        handleOpenConfigModal as EventListener,
+      );
+    };
+  }, []);
+
   const onNodeDragStart = (event: React.DragEvent, nodeType: string) => {
     event.dataTransfer.setData("application/reactflow", nodeType);
     event.dataTransfer.effectAllowed = "move";
@@ -108,19 +134,58 @@ export default function PlayGround() {
       setIsExecuting(true);
       setResultsOpen(true);
 
+      // 🛡️ VALIDATION: Check pipeline before execution
+      const validationResult = validatePipeline(nodes, edges);
+
+      if (!validationResult.isValid) {
+        setValidationErrors(validationResult.errors);
+
+        setExecutionResult({
+          success: false,
+          error:
+            "Pipeline validation failed. Please fix the errors and try again.",
+          nodeResults: {},
+          timestamp: new Date().toISOString(),
+        });
+
+        setIsExecuting(false);
+        return;
+      }
+
+      // Show warnings if any
+      const warnings = validationResult.errors.filter(
+        (e) => e.type === "warning",
+      );
+      if (warnings.length > 0) {
+        setValidationErrors(warnings);
+        setIsExecuting(false);
+        return;
+      }
+
       // Topological sort to determine execution order
       const sortedNodes = topologicalSort(nodes, edges);
 
+      // Inject project_id into each node's input for nodes that need it (upload_file)
       const pipelineConfig = sortedNodes.map((node) => ({
         node_id: node.id,
         node_type: node.type as NodeType,
-        input: node.data.config || {},
+        input: {
+          ...(node.data.config || {}),
+          // Add project_id if available for nodes that save datasets
+          ...(currentProjectId && ["upload_file"].includes(node.type as string)
+            ? { project_id: parseInt(currentProjectId) }
+            : {}),
+        },
       }));
+
+      console.log("🚀 Executing pipeline with config:", pipelineConfig);
 
       const result = await executePipeline({
         pipeline: pipelineConfig,
         pipeline_name: "Playground Pipeline",
       });
+
+      console.log("✅ Pipeline execution result:", result);
 
       // Store results by node ID
       const nodeResults: Record<string, any> = {};
@@ -128,10 +193,16 @@ export default function PlayGround() {
         result.results.forEach((nodeResult: any, index: number) => {
           const nodeId = sortedNodes[index]?.id;
           if (nodeId) {
+            console.log(
+              `📦 Node ${nodeId} (${sortedNodes[index]?.type}) result:`,
+              nodeResult,
+            );
             nodeResults[nodeId] = nodeResult;
           }
         });
       }
+
+      console.log("📊 All node results:", nodeResults);
 
       setExecutionResult({
         success: result.success,
@@ -233,6 +304,59 @@ export default function PlayGround() {
       />
 
       <ViewNodeModal nodeId={viewNodeId} onClose={() => setViewNodeId(null)} />
+
+      {validationErrors.length > 0 && (
+        <ValidationDialog
+          errors={validationErrors}
+          onClose={() => {
+            setValidationErrors([]);
+            setIsExecuting(false);
+          }}
+          onProceed={
+            validationErrors.every((e) => e.type === "warning")
+              ? async () => {
+                  setValidationErrors([]);
+                  // Continue with execution
+                  try {
+                    const pipelineNodes = nodes.map((node) => ({
+                      id: node.id,
+                      type: node.type as NodeType,
+                      config: node.data.config || {},
+                    }));
+
+                    const pipelineEdges = edges.map((edge) => ({
+                      source: edge.source,
+                      target: edge.target,
+                    }));
+
+                    const result = await executePipeline(
+                      pipelineNodes,
+                      pipelineEdges,
+                    );
+
+                    setExecutionResult({
+                      success: true,
+                      nodeResults: result.results,
+                      timestamp: new Date().toISOString(),
+                    });
+
+                    console.log("✅ Execution completed:", result);
+                  } catch (error: any) {
+                    console.error("❌ Execution failed:", error);
+                    setExecutionResult({
+                      success: false,
+                      error: error.message || "Unknown error occurred",
+                      nodeResults: {},
+                      timestamp: new Date().toISOString(),
+                    });
+                  } finally {
+                    setIsExecuting(false);
+                  }
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }

@@ -19,9 +19,7 @@ const Hero: React.FC = () => {
               <h1 className="text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
                 Build ML workflows visually.
               </h1>
-              <div className="text-sm font-medium text-white bg-amber-700 inline-block px-3 py-1 rounded-full">
-                  We are very serious about it even if you can't do this it mens you are dumb
-              </div>
+              
               <p className="text-xl text-gray-600 leading-relaxed">
                 Create powerful machine learning pipelines without code.
                 Leverage GenAI assistance to build, validate, and deploy

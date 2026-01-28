@@ -15,8 +15,6 @@ interface ConfigModalProps {
 }
 
 export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
-  console.log("🎨 ConfigModal opened for nodeId:", nodeId);
-
   const {
     getNodeById,
     updateNodeConfig,
@@ -24,18 +22,28 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
     currentProjectId,
     edges,
   } = usePlaygroundStore();
+
   const node = nodeId ? getNodeById(nodeId) : null;
   const nodeDef = node ? getNodeByType(node.type) : null;
 
-  console.log("📦 Node:", node);
-  console.log("📋 Node definition:", nodeDef);
-  console.log("🆔 Current project ID:", currentProjectId);
-
-  const [config, setConfig] = useState<Record<string, unknown>>(
-    () => node?.data.config || {},
-  );
+  const [config, setConfig] = useState<Record<string, unknown>>({});
   const [userDatasets, setUserDatasets] = useState<DatasetMetadata[]>([]);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
+
+  // Reset config when nodeId changes to prevent config sharing between nodes
+  // ALWAYS load the latest config from the store (no caching)
+  useEffect(() => {
+    if (node) {
+      console.log(
+        "🔄 Loading LATEST config for node:",
+        node.id,
+        node.data.config,
+      );
+      setConfig({ ...node.data.config } || {});
+    } else {
+      setConfig({});
+    }
+  }, [nodeId, node?.data.config]);
 
   // Fetch user's datasets for select_dataset node
   useEffect(() => {
@@ -55,7 +63,41 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
     }
   }, [node?.type, currentProjectId]);
 
-  if (!node || !nodeDef) return null;
+  // Auto-fill dataset_id for view nodes when source is connected
+  useEffect(() => {
+    const isViewNode = [
+      "table_view",
+      "data_preview",
+      "statistics_view",
+      "column_info",
+      "chart_view",
+    ].includes(node?.type || "");
+
+    if (isViewNode && nodeId) {
+      const incomingEdge = edges.find((edge) => edge.target === nodeId);
+      if (incomingEdge) {
+        const sourceNode = getNodeById(incomingEdge.source);
+        if (sourceNode?.data.config?.dataset_id) {
+          console.log(
+            "🔗 Auto-filling dataset_id from connected source:",
+            sourceNode.data.config.dataset_id,
+          );
+          setConfig((prev) => ({
+            ...prev,
+            dataset_id: sourceNode.data.config.dataset_id,
+          }));
+        }
+      }
+    }
+  }, [node?.type, nodeId, edges, getNodeById]);
+
+  // Early return AFTER ALL hooks have been called
+  if (!nodeId || !node || !nodeDef) return null;
+
+  console.log("🎨 ConfigModal opened for nodeId:", nodeId);
+  console.log("📦 Node:", node);
+  console.log("📋 Node definition:", nodeDef);
+  console.log("🆔 Current project ID:", currentProjectId);
 
   // Get connected source node for view nodes
   const getConnectedSourceNode = () => {
@@ -227,6 +269,25 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
             ) : nodeDef.configFields && nodeDef.configFields.length > 0 ? (
               <div className="space-y-4">
                 {nodeDef.configFields.map((field) => {
+                  // Check conditional display
+                  if (field.conditionalDisplay) {
+                    const conditionValue = config[
+                      field.conditionalDisplay.field
+                    ] as string;
+                    if (
+                      field.conditionalDisplay.equals &&
+                      conditionValue !== field.conditionalDisplay.equals
+                    ) {
+                      return null;
+                    }
+                    if (
+                      field.conditionalDisplay.notEquals &&
+                      conditionValue === field.conditionalDisplay.notEquals
+                    ) {
+                      return null;
+                    }
+                  }
+
                   const autoFilledValue = field.autoFill
                     ? getAutoFilledValue(field.name)
                     : undefined;
@@ -387,7 +448,10 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                                 {field.autoFill &&
                                   node.type === "chart_view" &&
                                   (field.name === "x_column" ||
-                                    field.name === "y_column") &&
+                                    field.name === "y_column" ||
+                                    field.name === "y_columns" ||
+                                    field.name === "label_column" ||
+                                    field.name === "value_column") &&
                                   availableColumns.map((col: string) => (
                                     <option key={col} value={col}>
                                       {col}
@@ -426,9 +490,11 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                             multiple
                             value={
                               currentValue
-                                ? (currentValue as string)
-                                    .split(",")
-                                    .map((s) => s.trim())
+                                ? Array.isArray(currentValue)
+                                  ? currentValue
+                                  : (currentValue as string)
+                                      .split(",")
+                                      .map((s) => s.trim())
                                 : []
                             }
                             onChange={(e) => {
@@ -436,29 +502,31 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                                 e.target.selectedOptions,
                                 (option) => option.value,
                               );
-                              handleFieldChange(field.name, selected.join(","));
+                              // Send as array, not comma-separated string
+                              handleFieldChange(field.name, selected);
                             }}
                             className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             size={Math.min(availableColumns.length || 5, 8)}
                           >
-                            {availableColumns.length > 0 ? (
+                            {/* Show available columns from connected source for autoFill fields */}
+                            {field.autoFill && availableColumns.length > 0 ? (
                               availableColumns.map((col: string) => (
                                 <option key={col} value={col}>
                                   {col}
                                 </option>
                               ))
-                            ) : (
+                            ) : field.autoFill ? (
                               <option disabled>
                                 Connect a data source to see columns
                               </option>
-                            )}
+                            ) : null}
                           </select>
-                          {availableColumns.length > 0 && (
+                          {availableColumns.length > 0 && field.autoFill && (
                             <p className="text-xs text-gray-400 mt-1">
                               💡 Hold Ctrl/Cmd to select multiple columns
                             </p>
                           )}
-                          {!connectedSourceNode && (
+                          {!connectedSourceNode && field.autoFill && (
                             <p className="text-xs text-amber-400 mt-1">
                               ⚠ Connect a data source node first
                             </p>
