@@ -6,7 +6,6 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from app.ml.nodes.upload import UploadFileNode
 from app.ml.nodes.select import SelectDatasetNode
-from app.ml.nodes.load_url import LoadUrlNode
 from app.ml.nodes.clean import PreprocessNode
 from app.ml.nodes.split import SplitNode
 from app.ml.nodes.train import TrainNode
@@ -38,7 +37,6 @@ class MLPipelineEngine:
         self.nodes = {
             "upload_file": UploadFileNode,
             "select_dataset": SelectDatasetNode,
-            "load_url": LoadUrlNode,
             "preprocess": PreprocessNode,
             "split": SplitNode,
             "train": TrainNode,
@@ -128,7 +126,10 @@ class MLPipelineEngine:
             raise NodeExecutionError(node_type=node_type, reason=str(e), input_data=input_data)
 
     async def execute_pipeline(
-        self, pipeline: List[Dict[str, Any]], dry_run: bool = False
+        self,
+        pipeline: List[Dict[str, Any]],
+        dry_run: bool = False,
+        current_user: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Execute a complete pipeline of nodes.
@@ -136,6 +137,7 @@ class MLPipelineEngine:
         Args:
             pipeline: List of node configurations
             dry_run: If True, validate but don't execute
+            current_user: Current user context for authentication
 
         Returns:
             List of node outputs
@@ -149,22 +151,60 @@ class MLPipelineEngine:
                 {"node_type": "evaluate", "input": {...}},
             ]
         """
+        # Clear execution history to ensure fresh pipeline execution
+        self.execution_history.clear()
+
         logger.info(f"Executing pipeline with {len(pipeline)} nodes (dry_run={dry_run})")
 
         results = []
+        previous_output = {}  # Store output from previous node for data flow
+
+        # Extract user context for nodes that need it
+        user_context = {}
+        if current_user:
+            user_context["user_id"] = current_user.get("id")
+            user_context["project_id"] = current_user.get("project_id")  # May be None
 
         for i, node_config in enumerate(pipeline):
             node_type = node_config.get("node_type")
             input_data = node_config.get("input", {})
             node_id = node_config.get("node_id")
 
-            logger.info(f"Pipeline step {i+1}/{len(pipeline)}: {node_type}")
+            # View nodes should NOT inherit dataset_id from previous_output
+            # They should use their own configured dataset_id
+            view_node_types = [
+                "table_view",
+                "data_preview",
+                "statistics_view",
+                "column_info",
+                "chart_view",
+            ]
+
+            # For view nodes, prioritize their configured dataset_id
+            if node_type in view_node_types:
+                # Only merge user context, not previous_output
+                merged_input = {**user_context, **input_data}
+                logger.info(
+                    f"Pipeline step {i+1}/{len(pipeline)}: {node_type} (view node - using configured dataset_id: {input_data.get('dataset_id')})"
+                )
+            else:
+                # For non-view nodes, merge previous output (normal data flow)
+                # Previous output takes precedence to enable data flow between nodes
+                merged_input = {**input_data, **user_context, **previous_output}
+                logger.info(f"Pipeline step {i+1}/{len(pipeline)}: {node_type}")
 
             try:
                 result = await self.execute_node(
-                    node_type=node_type, input_data=input_data, node_id=node_id, dry_run=dry_run
+                    node_type=node_type, input_data=merged_input, node_id=node_id, dry_run=dry_run
                 )
                 results.append(result)
+
+                # Store output for next node (exclude metadata fields)
+                previous_output = {
+                    k: v
+                    for k, v in result.items()
+                    if k not in ["node_type", "execution_time_ms", "timestamp", "success", "error"]
+                }
 
             except NodeExecutionError as e:
                 logger.error(f"Pipeline failed at step {i+1}: {node_type}")
