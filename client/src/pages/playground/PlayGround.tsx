@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
-import { useParams } from "react-router";
+import { useParams, useNavigate } from "react-router";
+import { useQuery } from "@tanstack/react-query";
+import { getProjectById } from "../../lib/api/projectApi";
 import "@xyflow/react/dist/style.css";
 import { Sidebar } from "../../components/playground/Sidebar";
 import { Canvas } from "../../components/playground/Canvas";
@@ -18,6 +20,7 @@ import { validatePipeline, type ValidationError } from "../../utils/validation";
 
 export default function PlayGround() {
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [viewNodeId, setViewNodeId] = useState<string | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
@@ -68,6 +71,11 @@ export default function PlayGround() {
 
   // Load project state if projectId exists
   const { data: projectStateData } = useProjectState(projectId);
+  const { data: projectData } = useQuery({
+    queryKey: ["project", projectId],
+    queryFn: () => getProjectById(projectId!),
+    enabled: !!projectId,
+  });
   const saveProject = useSaveProject();
 
   // Set current project ID and load state
@@ -284,6 +292,8 @@ export default function PlayGround() {
         onLoad={handleLoad}
         onExport={handleExport}
         isExecuting={usePlaygroundStore.getState().isExecuting}
+        projectName={projectData?.name}
+        onBack={() => navigate("/dashboard")}
       />
 
       <div className="flex-1 flex overflow-hidden">

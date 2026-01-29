@@ -63,28 +63,34 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
     }
   }, [node?.type, currentProjectId]);
 
-  // Auto-fill dataset_id for view nodes when source is connected
+  // Auto-fill dataset_id for view and preprocessing nodes when source is connected
   useEffect(() => {
-    const isViewNode = [
+    const isAutoFillNode = [
       "table_view",
       "data_preview",
       "statistics_view",
       "column_info",
       "chart_view",
+      "missing_value_handler",
     ].includes(node?.type || "");
 
-    if (isViewNode && nodeId) {
+    if (isAutoFillNode && nodeId) {
       const incomingEdge = edges.find((edge) => edge.target === nodeId);
       if (incomingEdge) {
         const sourceNode = getNodeById(incomingEdge.source);
-        if (sourceNode?.data.config?.dataset_id) {
+        // For missing_value_handler, check for preprocessed_dataset_id first, then dataset_id
+        const datasetId = node?.type === "missing_value_handler" 
+          ? (sourceNode?.data.config?.preprocessed_dataset_id || sourceNode?.data.config?.dataset_id)
+          : sourceNode?.data.config?.dataset_id;
+        
+        if (datasetId) {
           console.log(
             "🔗 Auto-filling dataset_id from connected source:",
-            sourceNode.data.config.dataset_id,
+            datasetId,
           );
           setConfig((prev) => ({
             ...prev,
-            dataset_id: sourceNode.data.config.dataset_id,
+            dataset_id: datasetId,
           }));
         }
       }
@@ -294,7 +300,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                   const currentValue =
                     config[field.name] ?? autoFilledValue ?? field.defaultValue;
 
-                  // Check if this is a dataset_id field for view nodes (should be read-only)
+                  // Check if this is a dataset_id field for view/preprocessing nodes (should be read-only)
                   const isDatasetIdField =
                     field.name === "dataset_id" &&
                     [
@@ -303,6 +309,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                       "statistics_view",
                       "column_info",
                       "chart_view",
+                      "missing_value_handler",
                     ].includes(node.type);
 
                   return (

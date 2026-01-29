@@ -27,6 +27,7 @@ const nodeTypes: Record<string, React.ComponentType<any>> = {
   statistics_view: MLNode,
   column_info: MLNode,
   chart_view: MLNode,
+  missing_value_handler: MLNode,
   split: MLNode,
   preprocess: MLNode,
   feature_selection: MLNode,
@@ -122,7 +123,7 @@ export const Canvas = ({ onNodeClick }: CanvasProps) => {
           config: JSON.parse(JSON.stringify(nodeDef.defaultConfig)),
           isConfigured: false,
           color: nodeDef.color,
-          icon: nodeDef.icon.name,
+          icon: nodeDef.icon, // Store the icon component or string directly
         },
       };
 

@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Download,
   Settings,
+  ArrowLeft,
 } from "lucide-react";
 
 interface ToolbarProps {
@@ -14,6 +15,8 @@ interface ToolbarProps {
   onLoad: () => void;
   onExport: () => void;
   isExecuting: boolean;
+  projectName?: string;
+  onBack?: () => void;
 }
 
 export const Toolbar = ({
@@ -23,12 +26,23 @@ export const Toolbar = ({
   onLoad,
   onExport,
   isExecuting,
+  projectName,
+  onBack,
 }: ToolbarProps) => {
   return (
     <div className="h-14 bg-gray-900 border-b border-gray-700 flex items-center justify-between px-4">
       <div className="flex items-center gap-2">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="px-3 py-2 hover:bg-gray-800 text-gray-300 hover:text-white rounded-lg flex items-center gap-2 transition-colors"
+            title="Back to Projects"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+        )}
         <h1 className="text-xl font-bold text-white mr-4">
-          ML Pipeline Playground
+          {projectName || "ML Pipeline Playground"}
         </h1>
 
         <button

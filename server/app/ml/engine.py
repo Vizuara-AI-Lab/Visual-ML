@@ -7,6 +7,7 @@ from datetime import datetime
 from app.ml.nodes.upload import UploadFileNode
 from app.ml.nodes.select import SelectDatasetNode
 from app.ml.nodes.clean import PreprocessNode
+from app.ml.nodes.missing_value_handler import MissingValueHandlerNode
 from app.ml.nodes.split import SplitNode
 from app.ml.nodes.train import TrainNode
 from app.ml.nodes.evaluate import EvaluateNode
@@ -38,6 +39,7 @@ class MLPipelineEngine:
             "upload_file": UploadFileNode,
             "select_dataset": SelectDatasetNode,
             "preprocess": PreprocessNode,
+            "missing_value_handler": MissingValueHandlerNode,
             "split": SplitNode,
             "train": TrainNode,
             "evaluate": EvaluateNode,

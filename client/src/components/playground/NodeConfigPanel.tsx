@@ -539,6 +539,45 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
           </div>
         );
 
+      case "missing_value_handler":
+        return (
+          <div className="space-y-4">
+            <div className="p-4 bg-pink-50 border border-pink-200 rounded-lg">
+              <p className="text-sm text-pink-800 mb-3">
+                🔧 Handle missing values with column-wise control
+              </p>
+              <p className="text-xs text-pink-700">
+                Configure different strategies for each column
+              </p>
+            </div>
+            {renderField("dataset_id", "Dataset Source", "text")}
+            {renderField("default_strategy", "Default Strategy", "select", [
+              { value: "none", label: "No Action" },
+              { value: "drop", label: "Drop Rows" },
+              { value: "mean", label: "Fill with Mean" },
+              { value: "median", label: "Fill with Median" },
+              { value: "mode", label: "Fill with Mode" },
+              { value: "fill", label: "Fill with Value" },
+              { value: "forward_fill", label: "Forward Fill" },
+              { value: "backward_fill", label: "Backward Fill" },
+            ])}
+            {renderField("preview_mode", "Preview Mode", "checkbox")}
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs text-blue-800">
+                💡 <strong>Tip:</strong> Column-wise configuration will be
+                available after connecting to a dataset
+              </p>
+            </div>
+            {(config.dataset_id as string) && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm text-green-800">
+                  ✓ Ready to handle missing values on pipeline execution
+                </p>
+              </div>
+            )}
+          </div>
+        );
+
       case "preprocess":
         return (
           <>

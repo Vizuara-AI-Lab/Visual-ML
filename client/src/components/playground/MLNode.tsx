@@ -19,6 +19,7 @@ const MLNode = ({ data, id }: NodeProps<BaseNodeData>) => {
     "statistics_view",
     "column_info",
     "chart_view",
+    "missing_value_handler",
   ];
 
   const isViewNode = viewNodeTypes.includes(nodeData.type);
@@ -79,7 +80,13 @@ const MLNode = ({ data, id }: NodeProps<BaseNodeData>) => {
       {/* Node Content */}
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
-          <span className="text-xl">{nodeData.icon || "📦"}</span>
+          {typeof nodeData.icon === 'string' ? (
+            <span className="text-xl">{nodeData.icon || "📦"}</span>
+          ) : nodeData.icon ? (
+            <nodeData.icon className="w-5 h-5" style={{ color: nodeData.color }} />
+          ) : (
+            <span className="text-xl">📦</span>
+          )}
           <div className="flex-1">
             <div className="font-semibold text-sm text-gray-800">
               {nodeData.label}

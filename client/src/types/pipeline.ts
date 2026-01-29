@@ -12,6 +12,7 @@ export type NodeType =
   | "column_info"
   | "chart_view"
   | "preprocess"
+  | "missing_value_handler"
   | "split"
   | "feature_selection"
   | "scaling"
@@ -34,7 +35,7 @@ export interface BaseNodeData extends Record<string, unknown> {
   config: Record<string, any>;
   isConfigured: boolean;
   validationErrors?: string[];
-  icon?: string;
+  icon?: string | React.ComponentType<any>;
   color?: string;
 }
 

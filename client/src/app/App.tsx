@@ -4,16 +4,22 @@ import LandingPage from "../landingpage/LandingPage";
 import SignIn from "../pages/auth/SignIn";
 import SignUp from "../pages/auth/SignUp";
 import LoadingFallback from "../components/common/LoadingFallback";
+import NotFound from "../pages/common/NotFound";
 
 // Lazy load non-critical pages
 const OTPVerification = lazy(() => import("../pages/auth/OTPVerification"));
 const AdminLogin = lazy(() => import("../pages/auth/AdminLogin"));
-const StudentDashboard = lazy(() => import("../pages/dashboard/StudentDashboard"));
+const StudentDashboard = lazy(
+  () => import("../pages/dashboard/StudentDashboard"),
+);
 const AdminDashboard = lazy(() => import("../pages/dashboard/AdminDashboard"));
 const StudentDetail = lazy(() => import("../pages/dashboard/StudentDetail"));
 const PlaygroundPage = lazy(() => import("../pages/playground/PlayGround"));
 const Profile = lazy(() => import("../pages/auth/Profile"));
 const ForgotPassword = lazy(() => import("../pages/auth/ForgotPassword"));
+const ProtectedRoute = lazy(
+  () => import("../components/common/ProtectedRoute"),
+);
 
 const App = () => {
   return (
@@ -24,19 +30,64 @@ const App = () => {
           <Route path="/" element={<LandingPage />} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignUp />} />
-          
+
           {/* Lazy loaded routes */}
           <Route path="/verify-email" element={<OTPVerification />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/dashboard" element={<StudentDashboard />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/playground" element={<PlaygroundPage />} />
-          <Route path="/playground/:projectId" element={<PlaygroundPage />} />
-          
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <StudentDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/playground"
+            element={
+              <ProtectedRoute>
+                <PlaygroundPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/playground/:projectId"
+            element={
+              <ProtectedRoute>
+                <PlaygroundPage />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Admin Routes */}
           <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin/dashboard" element={<AdminDashboard />} />
-          <Route path="/admin/students/:id" element={<StudentDetail />} />
+          <Route
+            path="/admin/dashboard"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/students/:id"
+            element={
+              <ProtectedRoute requireAdmin>
+                <StudentDetail />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* 404 Catch-all route - must be last */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
     </BrowserRouter>

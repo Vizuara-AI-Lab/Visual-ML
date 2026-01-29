@@ -484,8 +484,16 @@ def initiate_password_reset(db: Session, email: str) -> str:
 
     logger.info(f"Password reset initiated for: {email}")
 
-    # In production, send email here
-    # For now, return token (remove in production!)
+    # Send password reset email
+    try:
+        email_service.send_password_reset_email(email, student.fullName, reset_token)
+        logger.info(f"Password reset email sent to {email}")
+    except Exception as e:
+        logger.error(f"Failed to send password reset email: {str(e)}")
+        # Don't fail the request if email fails
+
+    # In production, don't return token in response
+    # For development, return token for testing
     return reset_token
 
 

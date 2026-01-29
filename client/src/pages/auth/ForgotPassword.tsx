@@ -48,7 +48,7 @@ const ForgotPassword: React.FC = () => {
               <p className="text-sm">Reset Token: {resetToken}</p>
               <button
                 onClick={() =>
-                  navigate(`/auth/reset-password?token=${resetToken}`)
+                  navigate(`/reset-password?token=${resetToken}`)
                 }
                 className="mt-2 text-blue-600 underline"
               >
@@ -57,7 +57,7 @@ const ForgotPassword: React.FC = () => {
             </div>
           )}
           <button
-            onClick={() => navigate("/auth/signin")}
+            onClick={() => navigate("/signin")}
             className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
           >
             Back to Sign In
@@ -101,7 +101,7 @@ const ForgotPassword: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => navigate("/auth/signin")}
+            onClick={() => navigate("/signin")}
             className="w-full px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
           >
             Back to Sign In

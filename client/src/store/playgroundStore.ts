@@ -44,7 +44,7 @@ interface PlaygroundStore {
       | Node<BaseNodeData>[]
       | ((prev: Node<BaseNodeData>[]) => Node<BaseNodeData>[]),
   ) => void;
-  setEdges: (edges: Edge[]) => void;
+  setEdges: (edges: Edge[] | ((prev: Edge[]) => Edge[])) => void;
   addNode: (node: Node<BaseNodeData>) => void;
   updateNode: (nodeId: string, data: Partial<BaseNodeData>) => void;
   deleteNode: (nodeId: string) => void;
@@ -112,10 +112,16 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
       };
     }),
 
-  setEdges: (edges) =>
-    set(() => ({
-      edges,
-    })),
+  setEdges: (edgesOrUpdater) =>
+    set((state) => {
+      const newEdges =
+        typeof edgesOrUpdater === "function"
+          ? edgesOrUpdater(state.edges)
+          : edgesOrUpdater;
+      return {
+        edges: Array.isArray(newEdges) ? newEdges : [],
+      };
+    }),
 
   addNode: (node) =>
     set((state) => {
