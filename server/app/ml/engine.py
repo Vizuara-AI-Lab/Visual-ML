@@ -8,6 +8,10 @@ from app.ml.nodes.upload import UploadFileNode
 from app.ml.nodes.select import SelectDatasetNode
 from app.ml.nodes.clean import PreprocessNode
 from app.ml.nodes.missing_value_handler import MissingValueHandlerNode
+from app.ml.nodes.encoding import EncodingNode
+from app.ml.nodes.transformation import TransformationNode
+from app.ml.nodes.scaling import ScalingNode
+from app.ml.nodes.feature_selection import FeatureSelectionNode
 from app.ml.nodes.split import SplitNode
 from app.ml.nodes.train import TrainNode
 from app.ml.nodes.evaluate import EvaluateNode
@@ -40,6 +44,10 @@ class MLPipelineEngine:
             "select_dataset": SelectDatasetNode,
             "preprocess": PreprocessNode,
             "missing_value_handler": MissingValueHandlerNode,
+            "encoding": EncodingNode,
+            "transformation": TransformationNode,
+            "scaling": ScalingNode,
+            "feature_selection": FeatureSelectionNode,
             "split": SplitNode,
             "train": TrainNode,
             "evaluate": EvaluateNode,

@@ -28,6 +28,8 @@ const nodeTypes: Record<string, React.ComponentType<any>> = {
   column_info: MLNode,
   chart_view: MLNode,
   missing_value_handler: MLNode,
+  encoding: MLNode,
+  transformation: MLNode,
   split: MLNode,
   preprocess: MLNode,
   feature_selection: MLNode,

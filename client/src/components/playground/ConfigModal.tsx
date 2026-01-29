@@ -72,6 +72,10 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
       "column_info",
       "chart_view",
       "missing_value_handler",
+      "encoding",
+      "transformation",
+      "scaling",
+      "feature_selection",
     ].includes(node?.type || "");
 
     if (isAutoFillNode && nodeId) {
@@ -310,6 +314,10 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                       "column_info",
                       "chart_view",
                       "missing_value_handler",
+                      "encoding",
+                      "transformation",
+                      "scaling",
+                      "feature_selection",
                     ].includes(node.type);
 
                   return (

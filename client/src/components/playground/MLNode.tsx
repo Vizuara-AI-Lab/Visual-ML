@@ -20,6 +20,10 @@ const MLNode = ({ data, id }: NodeProps<BaseNodeData>) => {
     "column_info",
     "chart_view",
     "missing_value_handler",
+    "encoding",
+    "transformation",
+    "scaling",
+    "feature_selection",
   ];
 
   const isViewNode = viewNodeTypes.includes(nodeData.type);

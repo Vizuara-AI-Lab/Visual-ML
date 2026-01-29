@@ -1,0 +1,111 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+  workflow_run:
+    workflows: ["Build and Push Docker Images"]
+    types:
+      - completed
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy Application
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          BREVO_API_KEY=${{ secrets.BREVO_API_KEY }}
+          GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+          AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          S3_BUCKET=${{ secrets.S3_BUCKET }}
+          ENVIRONMENT=production
+          DEBUG=False
+          FRONTEND_URL=${{ secrets.FRONTEND_URL }}
+          EOF
+
+      - name: Copy files to server
+        run: |
+          scp .env ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/visual-ml/
+          scp docker-compose.prod.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/visual-ml/docker-compose.yml
+
+      - name: Deploy application
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
+            cd /opt/visual-ml
+            
+            # Pull latest images
+            docker-compose pull
+            
+            # Run database migrations
+            docker-compose run --rm backend alembic upgrade head
+            
+            # Deploy with zero-downtime
+            docker-compose up -d --no-deps --build backend frontend
+            docker-compose up -d --no-deps celery-worker celery-beat
+            
+            # Wait for health checks
+            sleep 30
+            
+            # Verify deployment
+            curl -f http://localhost/api/v1/ || exit 1
+            
+            # Clean up old images
+            docker image prune -af --filter "until=24h"
+          ENDSSH
+
+      - name: Health check
+        run: |
+          sleep 10
+          curl -f https://${{ secrets.FRONTEND_URL }}/api/v1/ || exit 1
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
+            cd /opt/visual-ml
+            docker-compose down
+            docker-compose up -d
+          ENDSSH
+
+      - name: Notify deployment status
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Deployment to ${{ github.event.inputs.environment || 'staging' }} ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        continue-on-error: true

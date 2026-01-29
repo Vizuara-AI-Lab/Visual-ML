@@ -13,6 +13,8 @@ export type NodeType =
   | "chart_view"
   | "preprocess"
   | "missing_value_handler"
+  | "encoding"
+  | "transformation"
   | "split"
   | "feature_selection"
   | "scaling"
