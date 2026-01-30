@@ -57,6 +57,11 @@ class GenAIBaseNode(BaseNode, ABC):
         "claude-3-opus": {"input": 0.015, "output": 0.075},
         "claude-3-sonnet": {"input": 0.003, "output": 0.015},
         "claude-3-haiku": {"input": 0.00025, "output": 0.00125},
+        "gemini-1.5-flash": {"input": 0.0, "output": 0.0},  # Free tier
+        "gemini-1.5-pro": {"input": 0.00125, "output": 0.005},
+        "gemini-pro": {"input": 0.0005, "output": 0.0015},
+        "grok-1": {"input": 0.005, "output": 0.015},
+        "grok-beta": {"input": 0.005, "output": 0.015},
         "text-embedding-ada-002": {"input": 0.0001, "output": 0.0},
         "dall-e-3": {"fixed": 0.04},  # per image
     }

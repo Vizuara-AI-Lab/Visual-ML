@@ -11,14 +11,8 @@ import {
   Droplet,
   Brain,
   Network,
-  Sparkles,
-  Bot,
-  MessageSquare,
-  Image,
-  FileText,
   Layers,
   Zap,
-  Cloud,
   Upload,
   Eye,
   Table,
@@ -26,7 +20,11 @@ import {
   LineChart,
   Info,
   Hash,
+  Split,
 } from "lucide-react";
+import { genaiCategory } from "./genaiNodes";
+import { deploymentCategory } from "./deploymentNodes";
+import { mlAlgorithmsCategory } from "./mlAlgorithms";
 
 export interface NodeCategory {
   id: string;
@@ -55,21 +53,31 @@ export interface ConfigField {
     | "select"
     | "multiselect"
     | "checkbox"
+    | "boolean"
+    | "password"
     | "file"
-    | "textarea";
+    | "textarea"
+    | "json"
+    | "array";
   required?: boolean;
   options?: Array<{ value: string; label: string }>;
   defaultValue?: unknown;
   description?: string;
+  placeholder?: string; // Placeholder text for inputs
   min?: number;
   max?: number;
   step?: number;
   autoFill?: boolean; // Auto-fill from dataset metadata
+  conditional?: {
+    field: string;
+    value?: any;
+  }; // Show field conditionally based on another field's value
   conditionalDisplay?: {
     field: string;
-    equals?: string;
-    notEquals?: string;
+    equals?: string | boolean;
+    notEquals?: string | boolean;
   }; // Show field conditionally based on another field's value
+  itemFields?: ConfigField[]; // For array type - fields for each array item
 }
 
 export const nodeCategories: NodeCategory[] = [
@@ -457,15 +465,14 @@ export const nodeCategories: NodeCategory[] = [
       {
         type: "encoding",
         label: "Encoding",
-        description: "Encode categorical variables",
+        description: "Encode categorical variables with per-column control",
         category: "feature-engineering",
         icon: Hash,
         color: "#F59E0B",
         defaultConfig: {
           dataset_id: "",
-          encoding_method: "onehot",
-          columns: [],
-          drop_first: false,
+          column_configs: {},
+          target_column: "",
         },
         configFields: [
           {
@@ -477,23 +484,27 @@ export const nodeCategories: NodeCategory[] = [
             description: "Connect to a data source node",
           },
           {
-            name: "encoding_method",
-            label: "Encoding Method",
-            type: "select",
-            options: [
-              { value: "onehot", label: "One-Hot Encoding" },
-              { value: "label", label: "Label Encoding" },
-              { value: "ordinal", label: "Ordinal Encoding" },
-              { value: "target", label: "Target Encoding" },
-            ],
-            defaultValue: "onehot",
+            name: "column_configs",
+            label: "Column Encoding Configuration",
+            type: "json",
+            description: "Per-column encoding configuration (JSON format)",
+            defaultValue: "{}",
+            placeholder: `{
+  "column_name": {
+    "column_name": "column_name",
+    "encoding_method": "onehot",
+    "handle_unknown": "error",
+    "handle_missing": "error",
+    "drop_first": false
+  }
+}`,
           },
           {
-            name: "drop_first",
-            label: "Drop First Category",
-            type: "checkbox",
-            defaultValue: false,
-            description: "Drop first category in one-hot encoding",
+            name: "target_column",
+            label: "Target Column",
+            type: "select",
+            autoFill: true,
+            description: "Required when using target encoding for any column",
           },
         ],
       },
@@ -539,6 +550,7 @@ export const nodeCategories: NodeCategory[] = [
             min: 2,
             max: 5,
             description: "Degree for polynomial features",
+            conditionalDisplay: { field: "transformation_type", equals: "polynomial" },
           },
         ],
       },
@@ -587,7 +599,14 @@ export const nodeCategories: NodeCategory[] = [
         defaultConfig: {
           dataset_id: "",
           method: "variance",
+          variance_threshold: 0.0,
+          correlation_mode: "",
+          correlation_threshold: 0.95,
           n_features: 10,
+          target_column: "",
+          task_type: "regression",
+          mi_threshold: null,
+          scoring_function: "",
         },
         configFields: [
           {
@@ -600,188 +619,247 @@ export const nodeCategories: NodeCategory[] = [
           },
           {
             name: "method",
-            label: "Selection Method",
+            label: "Feature Selection Strategy",
             type: "select",
             options: [
-              { value: "variance", label: "Variance Threshold" },
-              { value: "correlation", label: "Correlation" },
-              { value: "mutual_info", label: "Mutual Information" },
-              { value: "kbest", label: "SelectKBest" },
+              { value: "variance", label: "Variance Threshold (Filtering)" },
+              {
+                value: "correlation",
+                label: "Correlation (Filtering/Ranking)",
+              },
+              { value: "mutual_info", label: "Mutual Information (Ranking)" },
+              { value: "kbest", label: "SelectKBest (Ranking)" },
             ],
             defaultValue: "variance",
+            required: true,
+            description: "Choose your feature selection strategy",
+          },
+
+          // Variance Threshold fields
+          {
+            name: "variance_threshold",
+            label: "Variance Threshold",
+            type: "number",
+            min: 0,
+            step: 0.01,
+            defaultValue: 0.0,
+            description:
+              "Remove features with variance below this threshold. This is a filtering method.",
+            conditionalDisplay: { field: "method", equals: "variance" },
+          },
+
+          // Correlation fields
+          {
+            name: "correlation_mode",
+            label: "Correlation Mode",
+            type: "select",
+            options: [
+              {
+                value: "threshold",
+                label: "Threshold Mode (Remove by correlation)",
+              },
+              { value: "topk", label: "Top-K Mode (Keep K features)" },
+            ],
+            required: true,
+            description: "Choose how to select features based on correlation",
+            conditionalDisplay: { field: "method", equals: "correlation" },
+          },
+          {
+            name: "correlation_threshold",
+            label: "Correlation Threshold",
+            type: "number",
+            min: 0,
+            max: 1,
+            step: 0.05,
+            defaultValue: 0.95,
+            description:
+              "Remove features with absolute correlation above this value",
+            conditionalDisplay: { field: "method", equals: "correlation" },
           },
           {
             name: "n_features",
-            label: "Number of Features",
+            label: "Number of Features (K)",
             type: "number",
             min: 1,
             defaultValue: 10,
+            description:
+              "Number of features to keep after removing highly correlated ones",
+            conditionalDisplay: { field: "correlation_mode", equals: "topk" },
+          },
+
+          // Mutual Information fields
+          {
+            name: "target_column",
+            label: "Target Column",
+            type: "select",
+            required: true,
+            autoFill: true,
+            description:
+              "Features will be ranked by mutual information with this target",
+            conditionalDisplay: { field: "method", equals: "mutual_info" },
+          },
+          {
+            name: "task_type",
+            label: "Task Type",
+            type: "select",
+            options: [
+              { value: "regression", label: "Regression" },
+              { value: "classification", label: "Classification" },
+            ],
+            defaultValue: "regression",
+            description: "Type of machine learning task",
+            conditionalDisplay: { field: "method", equals: "mutual_info" },
+          },
+          {
+            name: "n_features",
+            label: "Number of Features (K)",
+            type: "number",
+            min: 1,
+            defaultValue: 10,
+            description: "Select top K features ranked by MI score",
+            conditionalDisplay: { field: "method", equals: "mutual_info" },
+          },
+
+          // SelectKBest fields
+          {
+            name: "target_column",
+            label: "Target Column",
+            type: "select",
+            required: true,
+            autoFill: true,
+            description:
+              "Features will be ranked using statistical tests against this target",
+            conditionalDisplay: { field: "method", equals: "kbest" },
+          },
+          {
+            name: "task_type",
+            label: "Task Type",
+            type: "select",
+            options: [
+              { value: "regression", label: "Regression" },
+              { value: "classification", label: "Classification" },
+            ],
+            defaultValue: "regression",
+            description: "Type of machine learning task",
+            conditionalDisplay: { field: "method", equals: "kbest" },
+          },
+          {
+            name: "scoring_function",
+            label: "Scoring Function",
+            type: "select",
+            options: [
+              { value: "f_test", label: "F-Test (ANOVA)" },
+              { value: "mutual_info", label: "Mutual Information" },
+              { value: "chi2", label: "Chi-Squared" },
+            ],
+            required: true,
+            description: "Statistical test to rank features",
+            conditionalDisplay: { field: "method", equals: "kbest" },
+          },
+          {
+            name: "n_features",
+            label: "Number of Features (K)",
+            type: "number",
+            min: 1,
+            defaultValue: 10,
+            description:
+              "Select K best features using the chosen scoring function",
+            conditionalDisplay: { field: "method", equals: "kbest" },
           },
         ],
       },
     ],
   },
   {
-    id: "ml-algorithms",
-    label: "ML Algorithms",
-    icon: Brain,
+    id: "target-split",
+    label: "Target & Split",
+    icon: Split,
     nodes: [
       {
-        type: "train",
-        label: "Linear Regression",
-        description: "Train linear regression model",
-        category: "ml-algorithms",
-        icon: Brain,
-        color: "#EF4444",
+        type: "split",
+        label: "Target & Split",
+        description: "Select target column and split into train/test sets",
+        category: "target-split",
+        icon: Split,
+        color: "#EC4899",
         defaultConfig: {
-          train_dataset_path: "",
+          dataset_id: "",
           target_column: "",
-          algorithm: "linear_regression",
-          task_type: "regression",
-          hyperparameters: {
-            fit_intercept: true,
-            copy_X: true,
-          },
-        },
-      },
-      {
-        type: "evaluate",
-        label: "Model Evaluation",
-        description: "Evaluate model performance",
-        category: "ml-algorithms",
-        icon: Network,
-        color: "#A855F7",
-        defaultConfig: {
-          model_path: "",
-          test_dataset_path: "",
-          target_column: "",
-          task_type: "regression",
-        },
-      },
-    ],
-  },
-  {
-    id: "genai",
-    label: "GenAI",
-    icon: Sparkles,
-    nodes: [
-      {
-        type: "llm_node",
-        label: "LLM Chat",
-        description: "Chat with Language Models (GPT, Claude, etc.)",
-        category: "genai",
-        icon: Bot,
-        color: "#8B5CF6",
-        defaultConfig: {
-          provider: "openai",
-          model: "gpt-4",
-          temperature: 0.7,
-          max_tokens: 1000,
+          train_ratio: 0.8,
+          test_ratio: 0.2,
+          split_type: "random",
+          random_seed: 42,
+          shuffle: true,
         },
         configFields: [
           {
-            name: "provider",
-            label: "Provider",
+            name: "dataset_id",
+            label: "Dataset Source",
+            type: "text",
+            required: true,
+            autoFill: true,
+            description: "Connect to a data source node",
+          },
+          {
+            name: "target_column",
+            label: "Target Column (y)",
+            type: "select",
+            required: true,
+            autoFill: true,
+            description: "Select the target column for prediction",
+          },
+          {
+            name: "train_ratio",
+            label: "Training Set Ratio",
+            type: "number",
+            defaultValue: 0.8,
+            min: 0.1,
+            max: 0.9,
+            step: 0.05,
+            description: "Proportion of data for training (0.1-0.9)",
+          },
+          {
+            name: "test_ratio",
+            label: "Test Set Ratio",
+            type: "number",
+            defaultValue: 0.2,
+            min: 0.1,
+            max: 0.9,
+            step: 0.05,
+            description: "Proportion of data for testing (0.1-0.9)",
+          },
+          {
+            name: "split_type",
+            label: "Split Type",
             type: "select",
             options: [
-              { value: "openai", label: "OpenAI" },
-              { value: "anthropic", label: "Anthropic" },
-              { value: "huggingface", label: "HuggingFace" },
+              { value: "random", label: "Random Split" },
+              { value: "stratified", label: "Stratified Split (for classification)" },
             ],
-            defaultValue: "openai",
+            defaultValue: "random",
+            description: "Stratified split maintains class distribution",
           },
           {
-            name: "model",
-            label: "Model",
-            type: "text",
-            defaultValue: "gpt-4",
-          },
-          {
-            name: "temperature",
-            label: "Temperature",
+            name: "random_seed",
+            label: "Random Seed",
             type: "number",
-            min: 0,
-            max: 2,
-            step: 0.1,
-            defaultValue: 0.7,
+            defaultValue: 42,
+            description: "Seed for reproducible splits",
           },
           {
-            name: "prompt",
-            label: "Prompt",
-            type: "textarea",
-            required: true,
+            name: "shuffle",
+            label: "Shuffle Data",
+            type: "checkbox",
+            defaultValue: true,
+            description: "Shuffle data before splitting",
           },
         ],
       },
-      {
-        type: "prompt_template",
-        label: "Prompt Template",
-        description: "Create reusable prompt templates",
-        category: "genai",
-        icon: MessageSquare,
-        color: "#6366F1",
-        defaultConfig: {
-          template: "",
-          variables: [],
-        },
-      },
-      {
-        type: "rag_node",
-        label: "RAG (Retrieval)",
-        description: "Retrieval-Augmented Generation",
-        category: "genai",
-        icon: FileText,
-        color: "#EC4899",
-        defaultConfig: {
-          vector_store: "faiss",
-          top_k: 5,
-        },
-      },
-      {
-        type: "image_generation",
-        label: "Image Generation",
-        description: "Generate images from text",
-        category: "genai",
-        icon: Image,
-        color: "#F59E0B",
-        defaultConfig: {
-          provider: "dall-e",
-          size: "1024x1024",
-        },
-      },
     ],
   },
-  {
-    id: "deployment",
-    label: "Deployment",
-    icon: Cloud,
-    nodes: [
-      {
-        type: "model_export",
-        label: "Export Model",
-        description: "Export trained model for deployment",
-        category: "deployment",
-        icon: Zap,
-        color: "#10B981",
-        defaultConfig: {
-          format: "pickle",
-          model_path: "",
-        },
-      },
-      {
-        type: "api_endpoint",
-        label: "Create API",
-        description: "Deploy model as REST API",
-        category: "deployment",
-        icon: Cloud,
-        color: "#06B6D4",
-        defaultConfig: {
-          endpoint_name: "",
-          model_path: "",
-        },
-      },
-    ],
-  },
+  mlAlgorithmsCategory,
+  genaiCategory,
+  deploymentCategory,
 ];
 
 export const getAllNodes = (): NodeDefinition[] => {

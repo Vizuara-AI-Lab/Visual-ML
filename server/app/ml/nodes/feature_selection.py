@@ -26,10 +26,24 @@ class FeatureSelectionInput(NodeInput):
 
     dataset_id: str = Field(..., description="Dataset ID to process")
     method: str = Field("variance", description="Selection method: variance, correlation, mutual_info, kbest")
-    n_features: int = Field(10, description="Number of features to select")
-    target_column: Optional[str] = Field(None, description="Target column (required for some methods)")
-    variance_threshold: float = Field(0.0, description="Variance threshold (for variance method)")
+    
+    # Common parameters
+    n_features: Optional[int] = Field(None, description="Number of features to select (K) - used by correlation (topk mode), mutual_info, and kbest")
+    target_column: Optional[str] = Field(None, description="Target column (required for mutual_info and kbest methods)")
     task_type: str = Field("regression", description="Task type: regression or classification")
+    
+    # Variance Threshold parameters
+    variance_threshold: float = Field(0.0, description="Variance threshold - features with variance below this are removed")
+    
+    # Correlation parameters
+    correlation_mode: Optional[str] = Field(None, description="Correlation mode: 'threshold' or 'topk'")
+    correlation_threshold: float = Field(0.95, description="Correlation threshold - remove features with absolute correlation above this")
+    
+    # Mutual Information parameters
+    mi_threshold: Optional[float] = Field(None, description="Optional MI threshold for advanced filtering")
+    
+    # SelectKBest parameters
+    scoring_function: Optional[str] = Field(None, description="Scoring function for SelectKBest: 'f_test', 'mutual_info', 'chi2'")
 
 
 class FeatureSelectionOutput(NodeOutput):
@@ -80,6 +94,9 @@ class FeatureSelectionNode(BaseNode):
             original_features = len(df.columns)
             feature_scores = {}
 
+            # Validate method-specific parameters
+            self._validate_parameters(input_data)
+
             # Apply feature selection
             if input_data.method == "variance":
                 df_selected, selected_features = self._variance_selection(
@@ -88,7 +105,7 @@ class FeatureSelectionNode(BaseNode):
                 
             elif input_data.method == "correlation":
                 df_selected, selected_features = self._correlation_selection(
-                    df, input_data.n_features
+                    df, input_data.correlation_mode, input_data.correlation_threshold, input_data.n_features
                 )
                 
             elif input_data.method == "mutual_info":
@@ -146,6 +163,77 @@ class FeatureSelectionNode(BaseNode):
                 input_data=input_data.model_dump()
             )
 
+    def _validate_parameters(self, input_data: FeatureSelectionInput) -> None:
+        """Validate that parameters are appropriate for the selected method."""
+        
+        if input_data.method == "variance":
+            # Variance Threshold: only uses threshold, not K
+            if input_data.n_features is not None:
+                raise ValueError(
+                    "Variance Threshold is a filtering method that uses 'variance_threshold' parameter, "
+                    "not 'number_of_features'. Features with variance below the threshold are removed."
+                )
+        
+        elif input_data.method == "correlation":
+            # Correlation: requires explicit mode selection
+            if not input_data.correlation_mode:
+                raise ValueError(
+                    "Correlation method requires you to select a mode: "
+                    "'threshold' (remove features with correlation > threshold) or "
+                    "'topk' (keep top K features after removing highly correlated ones). "
+                    "Please select a correlation mode."
+                )
+            
+            if input_data.correlation_mode not in ["threshold", "topk"]:
+                raise ValueError(
+                    f"Invalid correlation mode: {input_data.correlation_mode}. "
+                    "Must be 'threshold' or 'topk'."
+                )
+            
+            # Validate mode-specific parameters
+            if input_data.correlation_mode == "topk" and not input_data.n_features:
+                raise ValueError(
+                    "Correlation 'topk' mode requires 'number_of_features' (K) parameter. "
+                    "Specify how many features to keep."
+                )
+        
+        elif input_data.method == "mutual_info":
+            # Mutual Information: requires target column and K
+            if not input_data.target_column:
+                raise ValueError(
+                    "Mutual Information method requires 'target_column'. "
+                    "Features are ranked by their mutual information with the target."
+                )
+            
+            if not input_data.n_features:
+                raise ValueError(
+                    "Mutual Information is a ranking method that requires 'number_of_features' (K). "
+                    "Specify how many top-ranked features to select."
+                )
+        
+        elif input_data.method == "kbest":
+            # SelectKBest: requires target column, K, and scoring function
+            if not input_data.target_column:
+                raise ValueError(
+                    "SelectKBest method requires 'target_column'. "
+                    "Features are ranked using statistical tests against the target."
+                )
+            
+            if not input_data.n_features:
+                raise ValueError(
+                    "SelectKBest is a ranking method that requires 'number_of_features' (K). "
+                    "Specify how many top-ranked features to select."
+                )
+            
+            if not input_data.scoring_function:
+                raise ValueError(
+                    "SelectKBest requires a 'scoring_function' (e.g., 'f_test', 'mutual_info', 'chi2'). "
+                    "This determines how features are ranked."
+                )
+        
+        else:
+            raise ValueError(f"Unknown selection method: {input_data.method}")
+
     async def _load_dataset(self, dataset_id: str) -> Optional[pd.DataFrame]:
         """Load dataset from storage."""
         try:
@@ -196,20 +284,35 @@ class FeatureSelectionNode(BaseNode):
         return df[all_selected], selected_features
 
     def _correlation_selection(
-        self, df: pd.DataFrame, n_features: int
+        self, df: pd.DataFrame, mode: str, threshold: float, n_features: Optional[int]
     ) -> tuple[pd.DataFrame, List[str]]:
-        """Select features by removing highly correlated ones."""
+        """Select features by removing highly correlated ones.
+        
+        Two modes:
+        - threshold: Remove features with absolute correlation > threshold
+        - topk: Remove highly correlated features, then keep top K
+        """
         numeric_df = df.select_dtypes(include=[np.number])
         corr_matrix = numeric_df.corr().abs()
         
         # Select upper triangle of correlation matrix
         upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
         
-        # Find features with correlation greater than 0.95
-        to_drop = [column for column in upper.columns if any(upper[column] > 0.95)]
-        
-        selected_features = [col for col in numeric_df.columns if col not in to_drop]
-        selected_features = selected_features[:n_features]
+        if mode == "threshold":
+            # Threshold mode: Remove features with correlation > threshold
+            to_drop = [column for column in upper.columns if any(upper[column] > threshold)]
+            selected_features = [col for col in numeric_df.columns if col not in to_drop]
+            
+        elif mode == "topk":
+            # Top-K mode: Remove highly correlated features, then keep top K
+            # First remove features with very high correlation (> threshold)
+            to_drop = [column for column in upper.columns if any(upper[column] > threshold)]
+            remaining_features = [col for col in numeric_df.columns if col not in to_drop]
+            
+            # Then select top K features
+            selected_features = remaining_features[:n_features] if n_features else remaining_features
+        else:
+            raise ValueError(f"Invalid correlation mode: {mode}")
         
         non_numeric_cols = df.select_dtypes(exclude=[np.number]).columns.tolist()
         all_selected = non_numeric_cols + selected_features

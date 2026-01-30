@@ -13,11 +13,10 @@ from app.ml.nodes.genai import (
     LLMNode,
     SystemPromptNode,
     FewShotNode,
-    PromptTemplateNode,
-    RAGNode,
     MemoryNode,
-    ImageGenerationNode,
     OutputParserNode,
+    ChatbotNode,
+    ExampleNode,
 )
 from app.ml.nodes.genai.base import GenAIBaseNode, GenAINodeInput, GenAINodeOutput
 from app.core.logging import logger
@@ -53,11 +52,10 @@ class GenAIPipelineEngine:
         "llm": LLMNode,
         "system_prompt": SystemPromptNode,
         "few_shot": FewShotNode,
-        "prompt_template": PromptTemplateNode,
-        "rag": RAGNode,
         "memory": MemoryNode,
-        "image_generation": ImageGenerationNode,
         "output_parser": OutputParserNode,
+        "chatbot": ChatbotNode,
+        "example": ExampleNode,
     }
 
     def __init__(self):

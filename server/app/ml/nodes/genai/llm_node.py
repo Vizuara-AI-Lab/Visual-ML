@@ -44,11 +44,27 @@ class LLMNode(GenAIBaseNode):
 
     node_type = "llm"
 
+    # Default models for each provider
+    DEFAULT_MODELS = {
+        "gemini": "gemini-1.5-flash",
+        "openai": "gpt-3.5-turbo",
+        "anthropic": "claude-3-haiku-20240307",
+        "grok": "grok-beta",
+        "huggingface": "mistralai/Mistral-7B-Instruct-v0.2",
+    }
+
     def _parse_provider_config(self, config: Dict[str, Any]) -> ProviderConfig:
         """Parse LLM config."""
+        provider = config.get("provider", "gemini")
+        
+        # Auto-select default model if not specified or use default for provider
+        model = config.get("model")
+        if not model or model == "gemini-1.5-flash":  # If default or not set
+            model = self.DEFAULT_MODELS.get(provider, "gpt-3.5-turbo")
+        
         return ProviderConfig(
-            provider=config.get("provider", "openai"),
-            model=config.get("model", "gpt-3.5-turbo"),
+            provider=provider,
+            model=model,
             temperature=config.get("temperature", 0.7),
             maxTokens=config.get("maxTokens", 1000),
             topP=config.get("topP", 1.0),

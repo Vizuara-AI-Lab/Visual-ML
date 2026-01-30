@@ -37,9 +37,9 @@ const nodeTypes: Record<string, React.ComponentType<any>> = {
   train: MLNode,
   evaluate: MLNode,
   llm_node: MLNode,
-  prompt_template: MLNode,
-  rag_node: MLNode,
-  image_generation: MLNode,
+  system_prompt: MLNode,
+  chatbot_node: MLNode,
+  example_node: MLNode,
   model_export: MLNode,
   api_endpoint: MLNode,
 };

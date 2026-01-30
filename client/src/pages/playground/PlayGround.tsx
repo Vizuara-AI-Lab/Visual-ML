@@ -7,6 +7,7 @@ import "@xyflow/react/dist/style.css";
 import { Sidebar } from "../../components/playground/Sidebar";
 import { Canvas } from "../../components/playground/Canvas";
 import { ConfigModal } from "../../components/playground/ConfigModal";
+import { ChatbotModal } from "../../components/playground/ChatbotModal";
 import { ViewNodeModal } from "../../components/playground/ViewNodeModal";
 import { Toolbar } from "../../components/playground/Toolbar";
 import { ResultsPanel } from "../../components/playground/ResultsPanel";
@@ -23,6 +24,7 @@ export default function PlayGround() {
   const navigate = useNavigate();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [viewNodeId, setViewNodeId] = useState<string | null>(null);
+  const [chatbotNodeId, setChatbotNodeId] = useState<string | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>(
     [],
@@ -53,6 +55,12 @@ export default function PlayGround() {
       "column_info",
       "chart_view",
     ];
+
+    // If it's a chatbot node, show chat interface
+    if (node.data.type === "chatbot_node") {
+      setChatbotNodeId(nodeId);
+      return;
+    }
 
     // If it's a view node
     if (viewNodeTypes.includes(node.data.type)) {
@@ -314,6 +322,11 @@ export default function PlayGround() {
       />
 
       <ViewNodeModal nodeId={viewNodeId} onClose={() => setViewNodeId(null)} />
+
+      <ChatbotModal
+        nodeId={chatbotNodeId}
+        onClose={() => setChatbotNodeId(null)}
+      />
 
       {validationErrors.length > 0 && (
         <ValidationDialog

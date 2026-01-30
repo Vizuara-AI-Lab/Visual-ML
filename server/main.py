@@ -133,16 +133,15 @@ async def root():
 app.include_router(auth_student.router, prefix=settings.API_V1_PREFIX)
 app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
 app.include_router(datasets.router, prefix=settings.API_V1_PREFIX)
-
-# GenAI routes
 app.include_router(
-    genai_pipelines.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["GenAI Pipelines"]
+    model_training.router, prefix=settings.API_V1_PREFIX, tags=["Model Training"]
 )
 app.include_router(
-    knowledge_base.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["Knowledge Base"]
+    model_deployment.router, prefix=settings.API_V1_PREFIX, tags=["Model Deployment"]
 )
 app.include_router(secrets.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["API Secrets"])
 app.include_router(projects.router, prefix=settings.API_V1_PREFIX)
+app.include_router(genai.router, prefix=settings.API_V1_PREFIX)
 
 
 if __name__ == "__main__":

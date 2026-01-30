@@ -13,8 +13,12 @@ from app.ml.nodes.transformation import TransformationNode
 from app.ml.nodes.scaling import ScalingNode
 from app.ml.nodes.feature_selection import FeatureSelectionNode
 from app.ml.nodes.split import SplitNode
-from app.ml.nodes.train import TrainNode
 from app.ml.nodes.evaluate import EvaluateNode
+# Individual ML Algorithm Nodes
+from app.ml.nodes.linear_regression_node import LinearRegressionNode
+from app.ml.nodes.logistic_regression_node import LogisticRegressionNode
+from app.ml.nodes.decision_tree_node import DecisionTreeNode
+from app.ml.nodes.random_forest_node import RandomForestNode
 from app.ml.nodes.view import (
     TableViewNode,
     DataPreviewNode,
@@ -49,8 +53,13 @@ class MLPipelineEngine:
             "scaling": ScalingNode,
             "feature_selection": FeatureSelectionNode,
             "split": SplitNode,
-            "train": TrainNode,
             "evaluate": EvaluateNode,
+            # Individual ML Algorithm Nodes
+            "linear_regression": LinearRegressionNode,
+            "logistic_regression": LogisticRegressionNode,
+            "decision_tree": DecisionTreeNode,
+            "random_forest": RandomForestNode,
+            # View Nodes
             "table_view": TableViewNode,
             "data_preview": DataPreviewNode,
             "statistics_view": StatisticsViewNode,

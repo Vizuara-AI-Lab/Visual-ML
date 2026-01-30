@@ -327,6 +327,227 @@ class HuggingFaceProvider(BaseLLMProvider):
         return "\n\n".join(parts) + "\n\nAssistant:"
 
 
+class GeminiProvider(BaseLLMProvider):
+    """Google Gemini API provider."""
+
+    def _get_default_api_key(self) -> Optional[str]:
+        """Get Gemini API key from environment."""
+        return os.getenv("GEMINI_API_KEY")
+
+    async def generate(
+        self,
+        messages: List[Message],
+        model: str,
+        temperature: float = 0.7,
+        max_tokens: int = 1000,
+        **kwargs,
+    ) -> LLMResponse:
+        """Generate completion using Gemini."""
+        try:
+            import google.generativeai as genai
+        except ImportError:
+            raise ImportError("google-generativeai package not installed. Run: pip install google-generativeai")
+
+        genai.configure(api_key=self.api_key)
+        
+        # Create model instance
+        gemini_model = genai.GenerativeModel(model)
+        
+        # Convert messages to Gemini format
+        # Gemini uses a different format - system message is separate
+        system_instruction = None
+        conversation_parts = []
+        
+        for msg in messages:
+            if msg.role == "system":
+                system_instruction = msg.content
+            elif msg.role == "user":
+                conversation_parts.append({"role": "user", "parts": [msg.content]})
+            elif msg.role == "assistant":
+                conversation_parts.append({"role": "model", "parts": [msg.content]})
+        
+        # Build prompt from messages
+        if system_instruction:
+            prompt = f"{system_instruction}\n\n"
+        else:
+            prompt = ""
+        
+        for part in conversation_parts:
+            role = "User" if part["role"] == "user" else "Assistant"
+            prompt += f"{role}: {part['parts'][0]}\n\n"
+        
+        # Generate response
+        generation_config = genai.GenerationConfig(
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+            top_p=kwargs.get("top_p", 1.0),
+        )
+        
+        response = gemini_model.generate_content(
+            prompt,
+            generation_config=generation_config,
+        )
+        
+        # Estimate tokens (Gemini API may not always provide exact counts)
+        input_tokens = len(prompt) // 4
+        output_tokens = len(response.text) // 4
+        
+        return LLMResponse(
+            content=response.text,
+            tokensUsed=input_tokens + output_tokens,
+            inputTokens=input_tokens,
+            outputTokens=output_tokens,
+            finishReason=str(response.candidates[0].finish_reason) if response.candidates else None,
+            metadata={"model": model},
+        )
+
+    async def generate_stream(
+        self,
+        messages: List[Message],
+        model: str,
+        temperature: float = 0.7,
+        max_tokens: int = 1000,
+        **kwargs,
+    ) -> AsyncGenerator[str, None]:
+        """Generate streaming completion using Gemini."""
+        try:
+            import google.generativeai as genai
+        except ImportError:
+            raise ImportError("google-generativeai package not installed. Run: pip install google-generativeai")
+
+        genai.configure(api_key=self.api_key)
+        gemini_model = genai.GenerativeModel(model)
+        
+        # Build prompt
+        system_instruction = None
+        conversation_parts = []
+        
+        for msg in messages:
+            if msg.role == "system":
+                system_instruction = msg.content
+            elif msg.role == "user":
+                conversation_parts.append({"role": "user", "parts": [msg.content]})
+            elif msg.role == "assistant":
+                conversation_parts.append({"role": "model", "parts": [msg.content]})
+        
+        if system_instruction:
+            prompt = f"{system_instruction}\n\n"
+        else:
+            prompt = ""
+        
+        for part in conversation_parts:
+            role = "User" if part["role"] == "user" else "Assistant"
+            prompt += f"{role}: {part['parts'][0]}\n\n"
+        
+        generation_config = genai.GenerationConfig(
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+        )
+        
+        response = gemini_model.generate_content(
+            prompt,
+            generation_config=generation_config,
+            stream=True,
+        )
+        
+        for chunk in response:
+            if chunk.text:
+                yield chunk.text
+
+
+class GrokProvider(BaseLLMProvider):
+    """xAI Grok API provider."""
+
+    def _get_default_api_key(self) -> Optional[str]:
+        """Get Grok API key from environment."""
+        return os.getenv("GROK_API_KEY")
+
+    async def generate(
+        self,
+        messages: List[Message],
+        model: str,
+        temperature: float = 0.7,
+        max_tokens: int = 1000,
+        **kwargs,
+    ) -> LLMResponse:
+        """Generate completion using Grok."""
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            raise ImportError("openai package not installed. Run: pip install openai")
+
+        # Grok uses OpenAI-compatible API
+        client = AsyncOpenAI(
+            api_key=self.api_key,
+            base_url="https://api.x.ai/v1"
+        )
+
+        # Convert messages to OpenAI format
+        grok_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
+
+        # Call API
+        response = await client.chat.completions.create(
+            model=model,
+            messages=grok_messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=kwargs.get("top_p", 1.0),
+            frequency_penalty=kwargs.get("frequency_penalty", 0.0),
+            presence_penalty=kwargs.get("presence_penalty", 0.0),
+            stop=kwargs.get("stop_sequences"),
+        )
+
+        choice = response.choices[0]
+
+        return LLMResponse(
+            content=choice.message.content or "",
+            tokensUsed=response.usage.total_tokens,
+            inputTokens=response.usage.prompt_tokens,
+            outputTokens=response.usage.completion_tokens,
+            finishReason=choice.finish_reason,
+            metadata={
+                "model": response.model,
+                "id": response.id,
+            },
+        )
+
+    async def generate_stream(
+        self,
+        messages: List[Message],
+        model: str,
+        temperature: float = 0.7,
+        max_tokens: int = 1000,
+        **kwargs,
+    ) -> AsyncGenerator[str, None]:
+        """Generate streaming completion using Grok."""
+        try:
+            from openai import AsyncOpenAI
+        except ImportError:
+            raise ImportError("openai package not installed. Run: pip install openai")
+
+        client = AsyncOpenAI(
+            api_key=self.api_key,
+            base_url="https://api.x.ai/v1"
+        )
+
+        grok_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
+
+        stream = await client.chat.completions.create(
+            model=model,
+            messages=grok_messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=True,
+            top_p=kwargs.get("top_p", 1.0),
+            frequency_penalty=kwargs.get("frequency_penalty", 0.0),
+            presence_penalty=kwargs.get("presence_penalty", 0.0),
+        )
+
+        async for chunk in stream:
+            if chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+
+
 class ProviderFactory:
     """Factory for creating LLM providers."""
 
@@ -334,6 +555,8 @@ class ProviderFactory:
         "openai": OpenAIProvider,
         "anthropic": AnthropicProvider,
         "huggingface": HuggingFaceProvider,
+        "gemini": GeminiProvider,
+        "grok": GrokProvider,
     }
 
     @classmethod

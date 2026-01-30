@@ -83,10 +83,12 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
       if (incomingEdge) {
         const sourceNode = getNodeById(incomingEdge.source);
         // For missing_value_handler, check for preprocessed_dataset_id first, then dataset_id
-        const datasetId = node?.type === "missing_value_handler" 
-          ? (sourceNode?.data.config?.preprocessed_dataset_id || sourceNode?.data.config?.dataset_id)
-          : sourceNode?.data.config?.dataset_id;
-        
+        const datasetId =
+          node?.type === "missing_value_handler"
+            ? sourceNode?.data.config?.preprocessed_dataset_id ||
+              sourceNode?.data.config?.dataset_id
+            : sourceNode?.data.config?.dataset_id;
+
         if (datasetId) {
           console.log(
             "🔗 Auto-filling dataset_id from connected source:",
@@ -136,6 +138,31 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
   };
 
   const handleFieldChange = (fieldName: string, value: unknown) => {
+    // Special handling for split node train/test ratios
+    if (node.type === "split") {
+      if (fieldName === "train_ratio") {
+        const trainRatio = Number(value);
+        const testRatio = Math.max(0.1, Math.min(0.9, 1 - trainRatio));
+        setConfig((prev) => ({
+          ...prev,
+          train_ratio: trainRatio,
+          test_ratio: Number(testRatio.toFixed(2)),
+        }));
+        return;
+      }
+      if (fieldName === "test_ratio") {
+        const testRatio = Number(value);
+        const trainRatio = Math.max(0.1, Math.min(0.9, 1 - testRatio));
+        setConfig((prev) => ({
+          ...prev,
+          test_ratio: testRatio,
+          train_ratio: Number(trainRatio.toFixed(2)),
+        }));
+        return;
+      }
+    }
+
+    // Default behavior for all other fields
     setConfig((prev) => ({ ...prev, [fieldName]: value }));
   };
 
@@ -318,6 +345,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                       "transformation",
                       "scaling",
                       "feature_selection",
+                      "split",
                     ].includes(node.type);
 
                   return (
@@ -499,6 +527,33 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                         />
                       )}
 
+                      {field.type === "json" && (
+                        <div>
+                          <textarea
+                            value={
+                              typeof currentValue === "string"
+                                ? currentValue
+                                : JSON.stringify(currentValue || {}, null, 2)
+                            }
+                            onChange={(e) => {
+                              try {
+                                const parsed = JSON.parse(e.target.value);
+                                handleFieldChange(field.name, parsed);
+                              } catch {
+                                // Allow invalid JSON while typing
+                                handleFieldChange(field.name, e.target.value);
+                              }
+                            }}
+                            rows={8}
+                            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder={field.placeholder || field.description}
+                          />
+                          <p className="text-xs text-gray-400 mt-1">
+                            💡 Enter valid JSON configuration
+                          </p>
+                        </div>
+                      )}
+
                       {field.type === "multiselect" && (
                         <div>
                           <select
@@ -547,6 +602,18 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                             </p>
                           )}
                         </div>
+                      )}
+
+                      {field.type === "password" && (
+                        <input
+                          type="password"
+                          value={(currentValue as string) || ""}
+                          onChange={(e) =>
+                            handleFieldChange(field.name, e.target.value)
+                          }
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder={field.placeholder || field.description}
+                        />
                       )}
 
                       {field.type === "checkbox" && (
