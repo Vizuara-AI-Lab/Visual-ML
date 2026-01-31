@@ -45,34 +45,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add request size limit
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request as StarletteRequest
-from starlette.responses import Response
-
-class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
-    """Middleware to limit request body size."""
-    def __init__(self, app, max_upload_size: int = 100 * 1024 * 1024):
-        super().__init__(app)
-        self.max_upload_size = max_upload_size
-
-    async def dispatch(self, request: StarletteRequest, call_next):
-        if request.method in ["POST", "PUT", "PATCH"]:
-            content_length = request.headers.get("content-length")
-            if content_length and int(content_length) > self.max_upload_size:
-                return Response(
-                    content=f"Request body too large. Maximum size: {self.max_upload_size / (1024 * 1024)}MB",
-                    status_code=413,
-                    media_type="text/plain"
-                )
-        return await call_next(request)
-
-# Add middleware
-app.add_middleware(
-    RequestSizeLimitMiddleware,
-    max_upload_size=settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
-)
-
 origins = ["http://localhost:5173", "http://127.0.0.1:5173", "https://visual-ml-fdxt.vercel.app/"]
 app.add_middleware(
     CORSMiddleware,
