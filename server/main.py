@@ -11,10 +11,8 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.logging import logger
 from app.core.exceptions import BaseMLException
-from app.api.v1 import pipelines, genai_pipelines, knowledge_base, secrets, projects, datasets
+from app.api.v1 import pipelines, genai_pipelines, knowledge_base, secrets, projects, datasets, auth_student, genai
 from pathlib import Path
-
-from app.api.v1 import auth_student
 
 
 @asynccontextmanager
@@ -45,6 +43,34 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description="Production-ready ML platform for Linear & Logistic Regression",
     lifespan=lifespan,
+)
+
+# Add request size limit
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
+from starlette.responses import Response
+
+class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    """Middleware to limit request body size."""
+    def __init__(self, app, max_upload_size: int = 100 * 1024 * 1024):
+        super().__init__(app)
+        self.max_upload_size = max_upload_size
+
+    async def dispatch(self, request: StarletteRequest, call_next):
+        if request.method in ["POST", "PUT", "PATCH"]:
+            content_length = request.headers.get("content-length")
+            if content_length and int(content_length) > self.max_upload_size:
+                return Response(
+                    content=f"Request body too large. Maximum size: {self.max_upload_size / (1024 * 1024)}MB",
+                    status_code=413,
+                    media_type="text/plain"
+                )
+        return await call_next(request)
+
+# Add middleware
+app.add_middleware(
+    RequestSizeLimitMiddleware,
+    max_upload_size=settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 )
 
 origins = ["http://localhost:5173", "http://127.0.0.1:5173", "https://visual-ml-fdxt.vercel.app/"]
@@ -133,15 +159,17 @@ async def root():
 app.include_router(auth_student.router, prefix=settings.API_V1_PREFIX)
 app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
 app.include_router(datasets.router, prefix=settings.API_V1_PREFIX)
+
+# GenAI routes
 app.include_router(
-    model_training.router, prefix=settings.API_V1_PREFIX, tags=["Model Training"]
+    genai_pipelines.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["GenAI Pipelines"]
 )
 app.include_router(
-    model_deployment.router, prefix=settings.API_V1_PREFIX, tags=["Model Deployment"]
+    knowledge_base.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["Knowledge Base"]
 )
 app.include_router(secrets.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["API Secrets"])
-app.include_router(projects.router, prefix=settings.API_V1_PREFIX)
 app.include_router(genai.router, prefix=settings.API_V1_PREFIX)
+app.include_router(projects.router, prefix=settings.API_V1_PREFIX)
 
 
 if __name__ == "__main__":

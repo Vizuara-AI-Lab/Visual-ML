@@ -5,7 +5,8 @@ Handles upload, download, presigned URLs, and lifecycle management.
 
 import boto3
 from botocore.exceptions import ClientError, BotoCoreError
-from typing import Optional
+from boto3.s3.transfer import TransferConfig
+from typing import Optional, BinaryIO
 from datetime import datetime, timedelta
 import io
 from app.core.config import settings
@@ -89,6 +90,74 @@ class S3Service:
             raise Exception(f"S3 connection error: {str(e)}")
         except Exception as e:
             logger.error(f"Unexpected S3 upload error: {str(e)}")
+            raise
+
+    async def upload_file_stream(
+        self,
+        file_obj: BinaryIO,
+        s3_key: str,
+        content_type: str = "application/octet-stream",
+        metadata: Optional[dict] = None,
+    ) -> str:
+        """
+        Upload file to S3 using streaming (no memory buffering).
+        Prevents buffer allocation errors for large files.
+
+        Args:
+            file_obj: File-like object to upload (e.g., UploadFile.file)
+            s3_key: S3 object key (path within bucket)
+            content_type: MIME type
+            metadata: Optional metadata dict
+
+        Returns:
+            S3 URL (s3://bucket/key)
+
+        Raises:
+            Exception: If upload fails
+        """
+        if not self.enabled:
+            raise Exception("S3 service is not enabled. Check configuration.")
+
+        try:
+            # Configure multipart upload for large files
+            config = TransferConfig(
+                multipart_threshold=10 * 1024 * 1024,  # 10MB
+                max_concurrency=10,
+                multipart_chunksize=10 * 1024 * 1024,  # 10MB chunks
+                use_threads=True
+            )
+
+            # Prepare extra args
+            extra_args = {
+                "ContentType": content_type,
+            }
+
+            # Add metadata if provided
+            if metadata:
+                extra_args["Metadata"] = {k: str(v) for k, v in metadata.items()}
+
+            # Upload using streaming (no memory buffering)
+            self.s3_client.upload_fileobj(
+                file_obj,
+                self.bucket,
+                s3_key,
+                ExtraArgs=extra_args,
+                Config=config
+            )
+
+            s3_url = f"s3://{self.bucket}/{s3_key}"
+            logger.info(f"Successfully streamed upload to S3: {s3_url}")
+            return s3_url
+
+        except ClientError as e:
+            error_code = e.response.get("Error", {}).get("Code", "Unknown")
+            logger.error(f"S3 streaming upload failed [{error_code}]: {str(e)}")
+            raise Exception(f"Failed to upload to S3: {error_code}")
+        except BotoCoreError as e:
+            logger.error(f"S3 BotoCore error: {str(e)}")
+            raise Exception(f"S3 connection error: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected S3 streaming upload error: {str(e)}")
             raise
 
     async def get_presigned_url(
