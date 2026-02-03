@@ -3,7 +3,7 @@ import { env } from "./env";
 
 const axiosInstance = axios.create({
   baseURL: env.API_URL,
-  withCredentials: true, // ✅ CRITICAL: Send cookies with every request
+  withCredentials: true, 
   headers: {
     "Content-Type": "application/json",
   },
@@ -12,8 +12,6 @@ const axiosInstance = axios.create({
 // Request interceptor for logging
 axiosInstance.interceptors.request.use(
   (config) => {
-    console.log("🌐 [AXIOS REQUEST]", config.method?.toUpperCase(), config.url);
-    console.log("📍 Full URL:", config.baseURL + config.url);
     if (config.data instanceof FormData) {
       console.log("📦 Data: FormData (file upload)");
     } else {
@@ -27,8 +25,7 @@ axiosInstance.interceptors.request.use(
   },
 );
 
-// ❌ REMOVED: Authorization header interceptor (cookies are sent automatically)
-// No need to manually add tokens to headers
+
 
 // Response interceptor to handle token refresh
 axiosInstance.interceptors.response.use(

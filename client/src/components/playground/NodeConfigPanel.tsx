@@ -11,6 +11,7 @@ import {
   listAllUserDatasets,
   type DatasetMetadata,
 } from "../../lib/api/datasetApi";
+import { FeatureEngineeringConfigPanel } from "./FeatureEngineeringConfigPanel";
 
 interface NodeConfigPanelProps {
   node: Node<BaseNodeData>;
@@ -32,10 +33,67 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
   const currentProjectId = usePlaygroundStore(
     (state) => state.currentProjectId,
   );
+  const edges = usePlaygroundStore((state) => state.edges);
+  const nodes = usePlaygroundStore((state) => state.nodes);
 
   console.log("🆔 Current project ID:", currentProjectId);
 
   const nodeData = node.data as BaseNodeData;
+
+  // Get connected source node for column information
+  const getConnectedSourceNode = () => {
+    const incomingEdge = edges.find((edge) => edge.target === node.id);
+    if (incomingEdge) {
+      return nodes.find((n) => n.id === incomingEdge.source);
+    }
+    return null;
+  };
+
+  const connectedSourceNode = getConnectedSourceNode();
+
+  // Extract columns from various possible sources
+  const getAvailableColumns = (): string[] => {
+    if (!connectedSourceNode) return [];
+
+    const config = connectedSourceNode.data.config;
+
+    // Try to get columns from config.columns (for dataset nodes)
+    if (config?.columns && Array.isArray(config.columns)) {
+      return config.columns as string[];
+    }
+
+    // Try to get from execution results (for processing nodes)
+    const result = connectedSourceNode.data.result as
+      | Record<string, unknown>
+      | undefined;
+    if (result?.columns && Array.isArray(result.columns)) {
+      return result.columns as string[];
+    }
+
+    return [];
+  };
+
+  const availableColumns = getAvailableColumns();
+
+  console.log(
+    "🔍 NodeConfigPanel - Connected source node:",
+    connectedSourceNode?.data.type,
+  );
+  console.log("🔍 NodeConfigPanel - Available columns:", availableColumns);
+  console.log(
+    "🔍 NodeConfigPanel - Source config:",
+    connectedSourceNode?.data.config,
+  );
+  console.log(
+    "🔍 NodeConfigPanel - Source result:",
+    connectedSourceNode?.data.result,
+  );
+
+  // Re-render when nodes change (e.g., when parent node config updates)
+  const [, forceUpdate] = useState({});
+  useEffect(() => {
+    forceUpdate({});
+  }, [nodes, edges]);
 
   // Load user datasets for select_dataset node
   useEffect(() => {
@@ -60,6 +118,7 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
   }, [nodeData.type]);
 
   const updateField = (field: string, value: unknown) => {
+    console.log(`📝 Updating field "${field}" with value:`, value);
     setConfig((prev) => ({ ...prev, [field]: value }));
     // Clear error when user starts typing
     if (errors[field]) {
@@ -141,6 +200,8 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
   };
 
   const handleSave = () => {
+    console.log("💾 Saving config for node:", node.id, node.data.type);
+    console.log("💾 Config being saved:", config);
     if (validateConfig()) {
       onUpdate(node.id, config);
       onClose();
@@ -170,6 +231,7 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
               error ? "border-red-500" : "border-gray-300"
             }`}
           >
+            <option value="">-- Select {label} --</option>
             {Array.isArray(options) &&
               options.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -286,14 +348,17 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
                       datasetData,
                     );
                     // Auto-fill dataset metadata
-                    setConfig({
+                    const newConfig = {
                       dataset_id: datasetData.dataset_id,
                       filename: datasetData.filename,
                       n_rows: datasetData.n_rows,
                       n_columns: datasetData.n_columns,
                       columns: datasetData.columns,
                       dtypes: datasetData.dtypes,
-                    });
+                    };
+                    setConfig(newConfig);
+                    // Immediately update node so downstream nodes can access columns
+                    onUpdate(node.id, newConfig);
                   }}
                 />
               ) : (
@@ -349,14 +414,17 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
                         (ds) => ds.dataset_id === e.target.value,
                       );
                       if (selectedDataset) {
-                        setConfig({
+                        const newConfig = {
                           dataset_id: selectedDataset.dataset_id,
                           filename: selectedDataset.filename,
                           n_rows: selectedDataset.n_rows,
                           n_columns: selectedDataset.n_columns,
                           columns: selectedDataset.columns,
                           dtypes: selectedDataset.dtypes,
-                        });
+                        };
+                        setConfig(newConfig);
+                        // Immediately update node so downstream nodes can access columns
+                        onUpdate(node.id, newConfig);
                       }
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -508,7 +576,13 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
           </div>
         );
 
-      case "chart_view":
+      case "chart_view": {
+        // Filter y_column options to exclude x_column
+        const xColumn = config.x_column as string;
+        const yColumnOptions = availableColumns
+          .filter((col) => col !== xColumn)
+          .map((col) => ({ value: col, label: col }));
+
         return (
           <div className="space-y-4">
             <div className="p-4 bg-pink-50 border border-pink-200 rounded-lg">
@@ -527,8 +601,32 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
               { value: "histogram", label: "Histogram" },
               { value: "pie", label: "Pie Chart" },
             ])}
-            {renderField("x_column", "X-Axis Column", "text")}
-            {renderField("y_column", "Y-Axis Column", "text")}
+            {availableColumns.length > 0 ? (
+              <>
+                {renderField(
+                  "x_column",
+                  "X-Axis Column",
+                  "select",
+                  availableColumns.map((col) => ({ value: col, label: col })),
+                )}
+                {xColumn && (
+                  <div className="p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                    ℹ️ Y-axis will exclude "{xColumn}" from available options
+                  </div>
+                )}
+                {renderField(
+                  "y_column",
+                  "Y-Axis Column",
+                  "select",
+                  yColumnOptions,
+                )}
+              </>
+            ) : (
+              <>
+                {renderField("x_column", "X-Axis Column", "text")}
+                {renderField("y_column", "Y-Axis Column", "text")}
+              </>
+            )}
             {(config.dataset_id as string) && (
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <p className="text-sm text-blue-800">
@@ -538,44 +636,22 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
             )}
           </div>
         );
+      }
 
       case "missing_value_handler":
+      case "encoding":
+      case "transformation":
+      case "scaling":
+      case "feature_selection":
         return (
-          <div className="space-y-4">
-            <div className="p-4 bg-pink-50 border border-pink-200 rounded-lg">
-              <p className="text-sm text-pink-800 mb-3">
-                🔧 Handle missing values with column-wise control
-              </p>
-              <p className="text-xs text-pink-700">
-                Configure different strategies for each column
-              </p>
-            </div>
-            {renderField("dataset_id", "Dataset Source", "text")}
-            {renderField("default_strategy", "Default Strategy", "select", [
-              { value: "none", label: "No Action" },
-              { value: "drop", label: "Drop Rows" },
-              { value: "mean", label: "Fill with Mean" },
-              { value: "median", label: "Fill with Median" },
-              { value: "mode", label: "Fill with Mode" },
-              { value: "fill", label: "Fill with Value" },
-              { value: "forward_fill", label: "Forward Fill" },
-              { value: "backward_fill", label: "Backward Fill" },
-            ])}
-            {renderField("preview_mode", "Preview Mode", "checkbox")}
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-xs text-blue-800">
-                💡 <strong>Tip:</strong> Column-wise configuration will be
-                available after connecting to a dataset
-              </p>
-            </div>
-            {(config.dataset_id as string) && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-sm text-green-800">
-                  ✓ Ready to handle missing values on pipeline execution
-                </p>
-              </div>
-            )}
-          </div>
+          <FeatureEngineeringConfigPanel
+            node={node}
+            config={config}
+            availableColumns={availableColumns}
+            updateField={updateField}
+            setConfig={setConfig}
+            renderField={renderField}
+          />
         );
 
       case "preprocess":

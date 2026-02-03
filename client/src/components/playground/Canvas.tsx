@@ -129,11 +129,8 @@ export const Canvas = ({ onNodeClick }: CanvasProps) => {
         },
       };
 
-      console.log("✅ Adding node:", newNode);
-      console.log("📍 Position:", position);
       console.log("📊 Current nodes count:", nodes.length);
       addNode(newNode);
-      console.log("✅ Node added successfully");
     },
     [addNode, screenToFlowPosition, nodes.length],
   );

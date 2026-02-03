@@ -14,6 +14,7 @@ from app.ml.nodes.scaling import ScalingNode
 from app.ml.nodes.feature_selection import FeatureSelectionNode
 from app.ml.nodes.split import SplitNode
 from app.ml.nodes.evaluate import EvaluateNode
+
 # Individual ML Algorithm Nodes
 from app.ml.nodes.linear_regression_node import LinearRegressionNode
 from app.ml.nodes.logistic_regression_node import LogisticRegressionNode
@@ -208,8 +209,8 @@ class MLPipelineEngine:
                 )
             else:
                 # For non-view nodes, merge previous output (normal data flow)
-                # Previous output takes precedence to enable data flow between nodes
-                merged_input = {**input_data, **user_context, **previous_output}
+                # Input data takes precedence over previous_output to respect user configuration
+                merged_input = {**previous_output, **user_context, **input_data}
                 logger.info(f"Pipeline step {i+1}/{len(pipeline)}: {node_type}")
 
             try:
@@ -224,6 +225,23 @@ class MLPipelineEngine:
                     for k, v in result.items()
                     if k not in ["node_type", "execution_time_ms", "timestamp", "success", "error"]
                 }
+
+                # Normalize dataset ID field names for data flow between nodes
+                # All preprocessing nodes output different field names but next nodes expect 'dataset_id'
+                dataset_id_mappings = {
+                    "preprocessed_dataset_id": "dataset_id",  # missing_value_handler, clean
+                    "encoded_dataset_id": "dataset_id",  # encoding
+                    "transformed_dataset_id": "dataset_id",  # transformation
+                    "scaled_dataset_id": "dataset_id",  # scaling
+                    "selected_dataset_id": "dataset_id",  # feature_selection
+                }
+
+                for old_key, new_key in dataset_id_mappings.items():
+                    if old_key in previous_output and new_key not in previous_output:
+                        previous_output[new_key] = previous_output[old_key]
+                        logger.debug(
+                            f"Mapped {old_key} -> {new_key} for next node: {previous_output[new_key]}"
+                        )
 
             except NodeExecutionError as e:
                 logger.error(f"Pipeline failed at step {i+1}: {node_type}")

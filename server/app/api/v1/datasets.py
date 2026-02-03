@@ -416,3 +416,50 @@ async def list_all_datasets(
         "limit": limit,
         "offset": offset,
     }
+
+
+@router.get("/file/{file_id}/download")
+async def download_file_from_uploads(
+    file_id: str,
+    student: Student = Depends(get_current_student),
+):
+    """
+    Download a file directly from the uploads folder.
+
+    This endpoint is used for downloading processed datasets (scaled, encoded, etc.)
+    that are saved in the uploads folder but not tracked in the database.
+
+    **Student Authentication Required**
+    """
+    from fastapi.responses import FileResponse
+    from pathlib import Path
+
+    try:
+        # Construct file path - check both with and without .csv extension
+        file_path = Path(settings.UPLOAD_DIR) / f"{file_id}.csv"
+
+        if not file_path.exists():
+            # Try without extension
+            file_path = Path(settings.UPLOAD_DIR) / file_id
+            if not file_path.exists():
+                logger.error(f"File not found: {file_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail=f"File not found: {file_id}"
+                )
+
+        # Security check - ensure file is within uploads directory
+        if not str(file_path.resolve()).startswith(str(Path(settings.UPLOAD_DIR).resolve())):
+            logger.error(f"Security violation: Attempted path traversal for {file_id}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+        logger.info(f"Downloading file from uploads: {file_path}")
+
+        return FileResponse(path=str(file_path), filename=f"{file_id}.csv", media_type="text/csv")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading file {file_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to download file"
+        )

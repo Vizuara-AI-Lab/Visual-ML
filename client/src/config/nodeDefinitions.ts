@@ -483,22 +483,7 @@ export const nodeCategories: NodeCategory[] = [
             autoFill: true,
             description: "Connect to a data source node",
           },
-          {
-            name: "column_configs",
-            label: "Column Encoding Configuration",
-            type: "json",
-            description: "Per-column encoding configuration (JSON format)",
-            defaultValue: "{}",
-            placeholder: `{
-  "column_name": {
-    "column_name": "column_name",
-    "encoding_method": "onehot",
-    "handle_unknown": "error",
-    "handle_missing": "error",
-    "drop_first": false
-  }
-}`,
-          },
+          // column_configs handled by custom UI in FeatureEngineeringConfigPanel
           {
             name: "target_column",
             label: "Target Column",
@@ -550,7 +535,10 @@ export const nodeCategories: NodeCategory[] = [
             min: 2,
             max: 5,
             description: "Degree for polynomial features",
-            conditionalDisplay: { field: "transformation_type", equals: "polynomial" },
+            conditionalDisplay: {
+              field: "transformation_type",
+              equals: "polynomial",
+            },
           },
         ],
       },
@@ -600,7 +588,7 @@ export const nodeCategories: NodeCategory[] = [
           dataset_id: "",
           method: "variance",
           variance_threshold: 0.0,
-          correlation_mode: "",
+          correlation_mode: "threshold",
           correlation_threshold: 0.95,
           n_features: 10,
           target_column: "",
@@ -834,7 +822,10 @@ export const nodeCategories: NodeCategory[] = [
             type: "select",
             options: [
               { value: "random", label: "Random Split" },
-              { value: "stratified", label: "Stratified Split (for classification)" },
+              {
+                value: "stratified",
+                label: "Stratified Split (for classification)",
+              },
             ],
             defaultValue: "random",
             description: "Stratified split maintains class distribution",

@@ -25,7 +25,9 @@ class TransformationInput(NodeInput):
     """Input schema for Transformation node."""
 
     dataset_id: str = Field(..., description="Dataset ID to process")
-    transformation_type: str = Field("log", description="Transformation type: log, sqrt, power, polynomial")
+    transformation_type: str = Field(
+        "log", description="Transformation type: log, sqrt, power, polynomial"
+    )
     columns: List[str] = Field(default_factory=list, description="Columns to transform")
     degree: int = Field(2, description="Polynomial degree (for polynomial transformation)")
     include_bias: bool = Field(False, description="Include bias term in polynomial features")
@@ -36,7 +38,7 @@ class TransformationOutput(NodeOutput):
 
     transformed_dataset_id: str = Field(..., description="ID of transformed dataset")
     transformed_path: str = Field(..., description="Path to transformed dataset")
-    
+
     original_columns: int = Field(..., description="Columns before transformation")
     final_columns: int = Field(..., description="Columns after transformation")
     transformed_columns: List[str] = Field(..., description="Columns that were transformed")
@@ -47,7 +49,7 @@ class TransformationOutput(NodeOutput):
 class TransformationNode(BaseNode):
     """
     Transformation Node - Apply mathematical transformations.
-    
+
     Supports:
     - Log Transform: log(x + 1) to handle zeros
     - Square Root: sqrt(x)
@@ -67,39 +69,107 @@ class TransformationNode(BaseNode):
         """Execute transformation."""
         try:
             logger.info(f"Starting transformation for dataset: {input_data.dataset_id}")
+            logger.info(f"Transformation type: {input_data.transformation_type}")
+            logger.info(f"Columns selected for transformation: {input_data.columns}")
+            logger.info(f"Total columns to transform: {len(input_data.columns)}")
 
             # Load dataset
             df = await self._load_dataset(input_data.dataset_id)
             if df is None or df.empty:
                 raise InvalidDatasetError(
                     reason=f"Dataset {input_data.dataset_id} not found or empty",
-                    expected_format="Valid dataset ID"
+                    expected_format="Valid dataset ID",
                 )
+
+            logger.info(f"Dataset loaded successfully. Shape: {df.shape}")
+            logger.info(f"Available columns in dataset: {df.columns.tolist()}")
 
             original_columns = len(df.columns)
             df_transformed = df.copy()
             transformation_summary = {}
             new_columns_list = []
 
+            # Validate and convert columns to numeric
+            non_numeric_cols = []
+            numeric_cols = []
+            conversion_warnings = []
+
+            for column in input_data.columns:
+                if column not in df.columns:
+                    logger.warning(f"Column {column} not found in dataset")
+                    continue
+
+                # Check if already numeric
+                if pd.api.types.is_numeric_dtype(df_transformed[column]):
+                    numeric_cols.append(column)
+                    continue
+
+                # Try to convert to numeric
+                logger.info(
+                    f"Column '{column}' is type {df_transformed[column].dtype}, attempting conversion to numeric..."
+                )
+
+                # Show sample values for debugging
+                sample_values = df_transformed[column].head(5).tolist()
+                logger.info(f"Sample values from '{column}': {sample_values}")
+
+                # Convert to numeric, coercing errors to NaN
+                original_count = len(df_transformed)
+                df_transformed[column] = pd.to_numeric(df_transformed[column], errors="coerce")
+
+                # Check how many values were converted to NaN
+                nan_count = df_transformed[column].isna().sum()
+
+                if nan_count == original_count:
+                    # All values failed conversion
+                    non_numeric_values = df[column].dropna().unique()[:5].tolist()
+                    non_numeric_cols.append(
+                        f"{column} (contains non-numeric values: {non_numeric_values})"
+                    )
+                elif nan_count > 0:
+                    # Some values failed conversion
+                    conversion_warnings.append(
+                        f"{column}: {nan_count} non-numeric values converted to NaN"
+                    )
+                    numeric_cols.append(column)
+                    logger.warning(
+                        f"Column '{column}' converted to numeric with {nan_count} NaN values"
+                    )
+                else:
+                    # Successful conversion
+                    numeric_cols.append(column)
+                    logger.info(f"Column '{column}' successfully converted to numeric")
+
+            if non_numeric_cols:
+                raise NodeExecutionError(
+                    node_type=self.node_type,
+                    reason=f"Cannot apply {input_data.transformation_type} transformation to non-numeric columns: {', '.join(non_numeric_cols)}. These columns contain text values that cannot be converted to numbers. Please select only numeric columns or handle missing values first.",
+                    input_data=input_data.model_dump(),
+                )
+
+            if not numeric_cols:
+                raise NodeExecutionError(
+                    node_type=self.node_type,
+                    reason="No valid numeric columns found for transformation",
+                    input_data=input_data.model_dump(),
+                )
+
             # Apply transformation
             if input_data.transformation_type == "polynomial":
                 # Polynomial features create new columns
                 df_transformed, new_cols = self._polynomial_transform(
-                    df_transformed, input_data.columns, input_data.degree, input_data.include_bias
+                    df_transformed, numeric_cols, input_data.degree, input_data.include_bias
                 )
                 new_columns_list = new_cols
                 transformation_summary["polynomial"] = {
                     "degree": input_data.degree,
-                    "input_columns": input_data.columns,
-                    "output_columns": len(new_cols)
+                    "input_columns": numeric_cols,
+                    "output_columns": len(new_cols),
+                    "conversion_warnings": conversion_warnings,
                 }
             else:
                 # Other transformations modify columns in-place
-                for column in input_data.columns:
-                    if column not in df.columns:
-                        logger.warning(f"Column {column} not found in dataset")
-                        continue
-
+                for column in numeric_cols:
                     if input_data.transformation_type == "log":
                         df_transformed[column] = self._log_transform(df_transformed[column])
                         transformation_summary[column] = {"method": "log"}
@@ -111,6 +181,10 @@ class TransformationNode(BaseNode):
                     elif input_data.transformation_type == "power":
                         df_transformed[column] = self._power_transform(df_transformed[column])
                         transformation_summary[column] = {"method": "box-cox"}
+
+            # Add conversion warnings to summary
+            if conversion_warnings:
+                transformation_summary["warnings"] = conversion_warnings
 
             final_columns = len(df_transformed.columns)
 
@@ -132,7 +206,7 @@ class TransformationNode(BaseNode):
                 transformed_path=str(transformed_path),
                 original_columns=original_columns,
                 final_columns=final_columns,
-                transformed_columns=input_data.columns,
+                transformed_columns=numeric_cols,
                 new_columns=new_columns_list,
                 transformation_summary=transformation_summary,
             )
@@ -140,9 +214,7 @@ class TransformationNode(BaseNode):
         except Exception as e:
             logger.error(f"Transformation failed: {str(e)}", exc_info=True)
             raise NodeExecutionError(
-                node_type=self.node_type,
-                reason=str(e),
-                input_data=input_data.model_dump()
+                node_type=self.node_type, reason=str(e), input_data=input_data.model_dump()
             )
 
     async def _load_dataset(self, dataset_id: str) -> Optional[pd.DataFrame]:
@@ -198,8 +270,8 @@ class TransformationNode(BaseNode):
         if (series <= 0).any():
             logger.warning("Non-positive values found, adding offset")
             series = series - series.min() + 1
-        
-        pt = PowerTransformer(method='box-cox')
+
+        pt = PowerTransformer(method="box-cox")
         transformed = pt.fit_transform(series.values.reshape(-1, 1))
         return pd.Series(transformed.flatten(), index=series.index)
 
@@ -209,17 +281,17 @@ class TransformationNode(BaseNode):
         """Create polynomial features."""
         # Extract specified columns
         X = df[columns].values
-        
+
         # Create polynomial features
         poly = PolynomialFeatures(degree=degree, include_bias=include_bias)
         X_poly = poly.fit_transform(X)
-        
+
         # Generate column names
         feature_names = poly.get_feature_names_out(columns)
-        
+
         # Drop original columns and add polynomial features
         df = df.drop(columns=columns)
         poly_df = pd.DataFrame(X_poly, columns=feature_names, index=df.index)
         df = pd.concat([df, poly_df], axis=1)
-        
+
         return df, feature_names.tolist()

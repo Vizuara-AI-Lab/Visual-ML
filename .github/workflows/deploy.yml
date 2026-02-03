@@ -1,27 +1,22 @@
 name: Deploy to Production
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main  # Only deploy from main branch
+  workflow_dispatch:  # Allow manual deployment
     inputs:
-      environment:
-        description: 'Deployment environment'
+      confirm:
+        description: 'Type "deploy" to confirm production deployment'
         required: true
-        default: 'staging'
-        type: choice
-        options:
-          - staging
-          - production
-  workflow_run:
-    workflows: ["Build and Push Docker Images"]
-    types:
-      - completed
-    branches: [main]
+        default: ''
 
 jobs:
   deploy:
-    name: Deploy Application
+    name: Deploy to Production
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'staging' }}
+    environment: production  # Always deploy to production
+    if: github.ref == 'refs/heads/main'  # Double-check main branch
     
     steps:
       - name: Checkout code

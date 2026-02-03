@@ -118,6 +118,78 @@ export const deleteDataset = async (
 };
 
 /**
+ * Download dataset as CSV
+ */
+export const downloadDataset = async (datasetId: string): Promise<void> => {
+  try {
+    const response = await axios.get(`/datasets/${datasetId}/download`, {
+      responseType: "blob",
+    });
+
+    // Create blob link to download
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement("a");
+    link.href = url;
+
+    // Get filename from content-disposition header or use default
+    const contentDisposition = response.headers["content-disposition"];
+    let filename = `${datasetId}.csv`;
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+      if (filenameMatch) {
+        filename = filenameMatch[1];
+      }
+    }
+
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Download failed:", error);
+    throw error;
+  }
+};
+
+/**
+ * Download file from uploads folder (for processed datasets like scaled, encoded, etc.)
+ */
+export const downloadFileFromUploads = async (
+  fileId: string,
+): Promise<void> => {
+  try {
+    const response = await axios.get(`/datasets/file/${fileId}/download`, {
+      responseType: "blob",
+    });
+
+    // Create blob link to download
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement("a");
+    link.href = url;
+
+    // Get filename from content-disposition header or use file ID
+    const contentDisposition = response.headers["content-disposition"];
+    let filename = `${fileId}.csv`;
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+      if (filenameMatch) {
+        filename = filenameMatch[1];
+      }
+    }
+
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Download from uploads failed:", error);
+    throw error;
+  }
+};
+
+/**
  * List all datasets for the current user
  */
 export const listAllUserDatasets = async (

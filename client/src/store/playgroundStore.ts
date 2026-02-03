@@ -195,7 +195,11 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
       .nodes.find((node: Node<BaseNodeData>) => node.id === nodeId);
   },
 
-  updateNodeConfig: (nodeId, config) =>
+  updateNodeConfig: (nodeId, config) => {
+    console.log("🏪 Store - updateNodeConfig called for node:", nodeId);
+    console.log("🏪 Store - Config received:", config);
+    console.log("🏪 Store - target_column in config:", config.target_column);
+    
     set((state) => ({
       nodes: state.nodes.map((node) =>
         node.id === nodeId
@@ -215,7 +219,8 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
               : {},
           }
         : null,
-    })),
+    }));
+  },
 
   clearAll: () =>
     set({

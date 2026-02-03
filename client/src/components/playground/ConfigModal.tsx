@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { getNodeByType } from "../../config/nodeDefinitions";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 import { UploadDatasetButton } from "./UploadDatasetButton";
+import { FeatureEngineeringConfigPanel } from "./FeatureEngineeringConfigPanel";
 import {
   listProjectDatasets,
   type DatasetMetadata,
@@ -51,7 +52,6 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
       setLoadingDatasets(true);
       listProjectDatasets(parseInt(currentProjectId))
         .then((datasets) => {
-          console.log("📊 Loaded datasets:", datasets);
           setUserDatasets(datasets);
         })
         .catch((error) => {
@@ -106,11 +106,6 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
   // Early return AFTER ALL hooks have been called
   if (!nodeId || !node || !nodeDef) return null;
 
-  console.log("🎨 ConfigModal opened for nodeId:", nodeId);
-  console.log("📦 Node:", node);
-  console.log("📋 Node definition:", nodeDef);
-  console.log("🆔 Current project ID:", currentProjectId);
-
   // Get connected source node for view nodes
   const getConnectedSourceNode = () => {
     const incomingEdge = edges.find((edge) => edge.target === nodeId);
@@ -123,21 +118,100 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
 
   const connectedSourceNode = getConnectedSourceNode();
 
-  // Get available columns from connected source node
+  // Recursively get available columns from connected source node or its parents
   const getAvailableColumns = (): string[] => {
     if (!connectedSourceNode) return [];
-    const sourceConfig = connectedSourceNode.data.config;
-    return (sourceConfig?.columns as string[]) || [];
+
+    // Helper function to recursively search for columns
+    const searchForColumns = (
+      node: typeof connectedSourceNode,
+      visited = new Set<string>(),
+    ): string[] => {
+      if (!node || visited.has(node.id)) return [];
+      visited.add(node.id);
+
+      const sourceConfig = node.data.config;
+      const sourceResult = node.data.result as
+        | Record<string, unknown>
+        | undefined;
+
+      // Priority 1: Check config.columns (for dataset nodes like upload_file, select_dataset)
+      if (sourceConfig?.columns && Array.isArray(sourceConfig.columns)) {
+        return sourceConfig.columns as string[];
+      }
+
+      // Priority 2: Check result.columns (for executed nodes like preprocessing, view nodes)
+      if (sourceResult?.columns && Array.isArray(sourceResult.columns)) {
+        return sourceResult.columns as string[];
+      }
+
+      // Priority 3: Check for preprocessed_dataset columns (for preprocessing nodes)
+      if (
+        sourceConfig?.preprocessed_columns &&
+        Array.isArray(sourceConfig.preprocessed_columns)
+      ) {
+        return sourceConfig.preprocessed_columns as string[];
+      }
+
+      // Priority 4: Check result.encoded_columns (for encoding nodes)
+      if (
+        sourceResult?.encoded_columns &&
+        Array.isArray(sourceResult.encoded_columns)
+      ) {
+        return sourceResult.encoded_columns as string[];
+      }
+
+      // Priority 5: Check result.final_columns (for transformation/scaling nodes)
+      if (
+        sourceResult?.final_columns &&
+        Array.isArray(sourceResult.final_columns)
+      ) {
+        return sourceResult.final_columns as string[];
+      }
+
+      // Priority 6: If this is a view/processing node without columns, trace back to its source
+      const nodeTypes = [
+        "table_view",
+        "data_preview",
+        "statistics_view",
+        "column_info",
+        "chart_view",
+        "missing_value_handler",
+        "encoding",
+        "transformation",
+        "scaling",
+        "feature_selection",
+      ];
+      if (nodeTypes.includes(node.type || "")) {
+        // Find the parent node of this view/processing node
+        const parentEdge = edges.find((edge) => edge.target === node.id);
+        if (parentEdge) {
+          const parentNode = getNodeById(parentEdge.source);
+          if (parentNode) {
+            return searchForColumns(parentNode, visited);
+          }
+        }
+      }
+
+      return [];
+    };
+
+    return searchForColumns(connectedSourceNode);
   };
 
   const availableColumns = getAvailableColumns();
 
   const handleSave = () => {
+    console.log("💾 ConfigModal - Saving config for node:", node.id);
+    console.log("💾 ConfigModal - Config being saved:", config);
+    console.log("💾 ConfigModal - target_column value:", config.target_column);
     updateNodeConfig(node.id, config);
     onClose();
   };
 
   const handleFieldChange = (fieldName: string, value: unknown) => {
+    console.log(`📝 ConfigModal - Field "${fieldName}" changed to:`, value);
+    
     // Special handling for split node train/test ratios
     if (node.type === "split") {
       if (fieldName === "train_ratio") {
@@ -244,8 +318,120 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
 
           {/* Body */}
           <div className="p-6 overflow-y-auto max-h-[calc(80vh-180px)]">
-            {/* Special handling for upload_file node */}
-            {node.type === "upload_file" ? (
+            {/* Special handling for feature engineering nodes */}
+            {node?.type &&
+            [
+              "missing_value_handler",
+              "encoding",
+              "transformation",
+              "scaling",
+              "feature_selection",
+            ].includes(node.type) ? (
+              <FeatureEngineeringConfigPanel
+                node={node}
+                config={config}
+                availableColumns={availableColumns}
+                updateField={handleFieldChange}
+                setConfig={setConfig}
+                renderField={(field, label, type = "text", options) => {
+                  const currentValue = config[field];
+
+                  if (type === "select") {
+                    return (
+                      <div key={field} className="mb-4">
+                        <label className="block text-sm font-medium text-gray-200 mb-2">
+                          {label}
+                        </label>
+                        <select
+                          value={(currentValue as string) || ""}
+                          onChange={(e) =>
+                            handleFieldChange(field, e.target.value)
+                          }
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">-- Select {label} --</option>
+                          {Array.isArray(options) &&
+                            options.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    );
+                  }
+
+                  if (type === "checkbox") {
+                    return (
+                      <div key={field} className="mb-4">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={(currentValue as boolean) || false}
+                            onChange={(e) =>
+                              handleFieldChange(field, e.target.checked)
+                            }
+                            className="rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-gray-800"
+                          />
+                          <span className="text-sm font-medium text-gray-200">
+                            {label}
+                          </span>
+                        </label>
+                      </div>
+                    );
+                  }
+
+                  if (type === "number") {
+                    const numOptions =
+                      options && !Array.isArray(options) ? options : {};
+                    return (
+                      <div key={field} className="mb-4">
+                        <label className="block text-sm font-medium text-gray-200 mb-2">
+                          {label}
+                        </label>
+                        <input
+                          type="number"
+                          value={(currentValue as number) ?? ""}
+                          onChange={(e) =>
+                            handleFieldChange(
+                              field,
+                              parseFloat(e.target.value) || 0,
+                            )
+                          }
+                          step={numOptions.step || 0.01}
+                          min={numOptions.min}
+                          max={numOptions.max}
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    );
+                  }
+
+                  // Default text input
+                  return (
+                    <div key={field} className="mb-4">
+                      <label className="block text-sm font-medium text-gray-200 mb-2">
+                        {label}
+                      </label>
+                      <input
+                        type="text"
+                        value={(currentValue as string) || ""}
+                        onChange={(e) =>
+                          handleFieldChange(field, e.target.value)
+                        }
+                        readOnly={field === "dataset_id"}
+                        className={`w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${field === "dataset_id" ? "cursor-not-allowed opacity-75" : ""}`}
+                      />
+                      {field === "dataset_id" && connectedSourceNode && (
+                        <p className="text-xs text-green-400 mt-1">
+                          ✓ Connected to: {connectedSourceNode.data.label}
+                        </p>
+                      )}
+                    </div>
+                  );
+                }}
+              />
+            ) : node.type === "upload_file" ? (
               <div className="space-y-4">
                 <div className="p-4 bg-blue-900/20 border border-blue-700 rounded-lg">
                   <p className="text-sm text-blue-200 mb-3">
@@ -253,6 +439,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                   </p>
                   {currentProjectId ? (
                     <UploadDatasetButton
+                      nodeId={node.id}
                       projectId={parseInt(currentProjectId)}
                       onUploadComplete={(datasetData) => {
                         console.log(

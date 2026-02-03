@@ -196,6 +196,31 @@ export default function PlayGround() {
 
       console.log("🚀 Executing pipeline with config:", pipelineConfig);
 
+      // Debug: Log each node's config
+      pipelineConfig.forEach((nodeConfig, index) => {
+        console.log(`📋 Node ${index + 1} (${nodeConfig.node_type}):`, {
+          node_id: nodeConfig.node_id,
+          input: nodeConfig.input,
+        });
+        if (nodeConfig.node_type === "transformation") {
+          console.log("  ⚠️ Transformation columns:", nodeConfig.input.columns);
+        }
+        if (nodeConfig.node_type === "feature_selection") {
+          console.log(
+            "  🎯 Feature Selection - target_column:",
+            nodeConfig.input.target_column,
+          );
+          console.log(
+            "  🎯 Feature Selection - scoring_function:",
+            nodeConfig.input.scoring_function,
+          );
+          console.log(
+            "  🎯 Feature Selection - method:",
+            nodeConfig.input.method,
+          );
+        }
+      });
+
       const result = await executePipeline({
         pipeline: pipelineConfig,
         pipeline_name: "Playground Pipeline",
@@ -227,10 +252,49 @@ export default function PlayGround() {
       });
     } catch (error) {
       console.error("Pipeline execution failed:", error);
+
+      // Format user-friendly error message
+      let userFriendlyError = "Pipeline execution failed";
+
+      if (error && typeof error === "object" && "response" in error) {
+        const responseError = (error as any).response?.data;
+
+        if (responseError?.message) {
+          // Extract the actual error message
+          const errorMsg = responseError.message;
+
+          // Handle specific error types with user-friendly messages
+          if (errorMsg.includes("Missing values found")) {
+            const columnMatch = errorMsg.match(/column '([^']+)'/);
+            const column = columnMatch ? columnMatch[1] : "a column";
+            userFriendlyError = `⚠️ Missing values detected in "${column}". Please handle missing values before encoding.`;
+          } else if (errorMsg.includes("column_configs")) {
+            userFriendlyError =
+              "⚠️ Please configure encoding settings for at least one column.";
+          } else if (errorMsg.includes("Target column required")) {
+            userFriendlyError =
+              "⚠️ Target column is required when using target encoding.";
+          } else if (
+            errorMsg.includes("Dataset") &&
+            errorMsg.includes("not found")
+          ) {
+            userFriendlyError =
+              "⚠️ Dataset not found. Please ensure the data source is properly connected.";
+          } else {
+            // Extract just the reason part if it exists
+            const reasonMatch = errorMsg.match(/\[.*?\]: (.+)/);
+            userFriendlyError = reasonMatch ? reasonMatch[1] : errorMsg;
+          }
+        } else if (responseError?.error) {
+          userFriendlyError = responseError.error;
+        }
+      } else if (error instanceof Error) {
+        userFriendlyError = error.message;
+      }
+
       setExecutionResult({
         success: false,
-        error:
-          error instanceof Error ? error.message : "Unknown error occurred",
+        error: userFriendlyError,
         timestamp: new Date().toISOString(),
       });
     } finally {

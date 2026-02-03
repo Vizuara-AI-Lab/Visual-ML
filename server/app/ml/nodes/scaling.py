@@ -26,8 +26,12 @@ class ScalingInput(NodeInput):
     """Input schema for Scaling node."""
 
     dataset_id: str = Field(..., description="Dataset ID to process")
-    method: str = Field("standard", description="Scaling method: standard, minmax, robust, normalize")
-    columns: List[str] = Field(default_factory=list, description="Columns to scale (empty = all numeric)")
+    method: str = Field(
+        "standard", description="Scaling method: standard, minmax, robust, normalize"
+    )
+    columns: List[str] = Field(
+        default_factory=list, description="Columns to scale (empty = all numeric)"
+    )
 
 
 class ScalingOutput(NodeOutput):
@@ -36,7 +40,7 @@ class ScalingOutput(NodeOutput):
     scaled_dataset_id: str = Field(..., description="ID of scaled dataset")
     scaled_path: str = Field(..., description="Path to scaled dataset")
     artifacts_path: Optional[str] = Field(None, description="Path to scaler artifact")
-    
+
     scaled_columns: List[str] = Field(..., description="Columns that were scaled")
     scaling_method: str = Field(..., description="Scaling method used")
     scaling_summary: Dict[str, Any] = Field(..., description="Summary of scaling operations")
@@ -45,7 +49,7 @@ class ScalingOutput(NodeOutput):
 class ScalingNode(BaseNode):
     """
     Scaling Node - Scale and normalize features.
-    
+
     Supports:
     - Standard Scaler: (x - mean) / std
     - MinMax Scaler: (x - min) / (max - min)
@@ -71,24 +75,55 @@ class ScalingNode(BaseNode):
             if df is None or df.empty:
                 raise InvalidDatasetError(
                     reason=f"Dataset {input_data.dataset_id} not found or empty",
-                    expected_format="Valid dataset ID"
+                    expected_format="Valid dataset ID",
                 )
 
             df_scaled = df.copy()
-            
+
             # Determine columns to scale
-            if input_data.columns:
+            if input_data.columns is not None and len(input_data.columns) > 0:
                 columns_to_scale = input_data.columns
+                logger.info(f"Scaling selected columns: {columns_to_scale}")
             else:
                 # Scale all numeric columns
                 columns_to_scale = df.select_dtypes(include=[np.number]).columns.tolist()
+                logger.info(
+                    f"No columns specified, auto-detecting numeric columns: {columns_to_scale}"
+                )
 
-            # Validate columns exist and are numeric
+            # ONLY validate and process the selected columns
             for col in columns_to_scale:
                 if col not in df.columns:
                     raise ValueError(f"Column {col} not found in dataset")
-                if not pd.api.types.is_numeric_dtype(df[col]):
-                    raise ValueError(f"Column {col} is not numeric")
+
+                # Try to convert to numeric if not already numeric
+                if not pd.api.types.is_numeric_dtype(df_scaled[col]):
+                    logger.warning(f"Column {col} is not numeric, attempting conversion")
+                    try:
+                        # Convert to numeric, coercing errors to NaN
+                        df_scaled[col] = pd.to_numeric(df_scaled[col], errors="coerce")
+
+                        # Check if we have any valid numeric values
+                        if df_scaled[col].isna().all():
+                            raise ValueError(
+                                f"Column {col} has no valid numeric values after conversion"
+                            )
+
+                        # Drop rows with NaN in this column
+                        rows_before = len(df_scaled)
+                        df_scaled = df_scaled.dropna(subset=[col])
+                        rows_dropped = rows_before - len(df_scaled)
+
+                        if rows_dropped > 0:
+                            logger.info(
+                                f"Dropped {rows_dropped} rows with non-numeric values in column {col}"
+                            )
+
+                    except Exception as e:
+                        raise ValueError(
+                            f"Column {col} is not numeric and could not be converted. "
+                            f"Please clean the data or use encoding for categorical columns. Error: {str(e)}"
+                        )
 
             # Select scaler
             if input_data.method == "standard":
@@ -102,8 +137,9 @@ class ScalingNode(BaseNode):
             else:
                 raise ValueError(f"Unknown scaling method: {input_data.method}")
 
-            # Apply scaling
-            df_scaled[columns_to_scale] = scaler.fit_transform(df[columns_to_scale])
+            # Apply scaling ONLY to the selected columns from the cleaned dataframe
+            logger.info(f"Applying {input_data.method} scaling to columns: {columns_to_scale}")
+            df_scaled[columns_to_scale] = scaler.fit_transform(df_scaled[columns_to_scale])
 
             # Save scaler artifact
             artifacts_id = generate_id("scaler")
@@ -121,7 +157,10 @@ class ScalingNode(BaseNode):
             scaling_summary = {
                 "method": input_data.method,
                 "columns_scaled": len(columns_to_scale),
-                "scaler_params": scaler.get_params() if hasattr(scaler, 'get_params') else {}
+                "columns_list": columns_to_scale,
+                "original_rows": len(df),
+                "final_rows": len(df_scaled),
+                "scaler_params": scaler.get_params() if hasattr(scaler, "get_params") else {},
             }
 
             logger.info(
@@ -144,9 +183,7 @@ class ScalingNode(BaseNode):
         except Exception as e:
             logger.error(f"Scaling failed: {str(e)}", exc_info=True)
             raise NodeExecutionError(
-                node_type=self.node_type,
-                reason=str(e),
-                input_data=input_data.model_dump()
+                node_type=self.node_type, reason=str(e), input_data=input_data.model_dump()
             )
 
     async def _load_dataset(self, dataset_id: str) -> Optional[pd.DataFrame]:

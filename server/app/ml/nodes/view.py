@@ -511,7 +511,12 @@ class ChartViewNode(BaseViewNode):
                     }
                 )
 
-        return {"labels": df_limited[x_col].astype(str).tolist(), "datasets": datasets}
+        return {
+            "labels": df_limited[x_col].astype(str).tolist(),
+            "datasets": datasets,
+            "x_column": x_col,
+            "y_columns": y_cols,
+        }
 
     def _generate_line_chart_data(
         self, df: pd.DataFrame, input_data: ChartViewInput
@@ -543,7 +548,12 @@ class ChartViewNode(BaseViewNode):
                     }
                 )
 
-        return {"labels": df_limited[x_col].astype(str).tolist(), "datasets": datasets}
+        return {
+            "labels": df_limited[x_col].astype(str).tolist(),
+            "datasets": datasets,
+            "x_column": x_col,
+            "y_columns": y_cols,
+        }
 
     def _generate_scatter_chart_data(
         self, df: pd.DataFrame, input_data: ChartViewInput
@@ -582,7 +592,11 @@ class ChartViewNode(BaseViewNode):
                     }
                 )
 
-        return {"datasets": datasets}
+        return {
+            "datasets": datasets,
+            "x_column": x_col,
+            "y_columns": y_cols,
+        }
 
     def _generate_histogram_data(
         self, df: pd.DataFrame, input_data: ChartViewInput
@@ -629,6 +643,8 @@ class ChartViewNode(BaseViewNode):
                     "data": hist_data.tolist(),
                 }
             ],
+            "x_column": "Bins",
+            "y_columns": [col],
         }
 
     def _generate_pie_chart_data(
@@ -647,13 +663,26 @@ class ChartViewNode(BaseViewNode):
 
         # Count values and get top 10 categories
         value_counts = df[col].value_counts().head(10)
+        total = value_counts.sum()
+
+        # Calculate percentages
+        percentages = [(count / total * 100) for count in value_counts]
+
+        # Create enhanced labels with counts and percentages
+        enhanced_labels = [
+            f"{label} ({count} - {pct:.1f}%)"
+            for label, count, pct in zip(value_counts.index.astype(str), value_counts, percentages)
+        ]
 
         return {
-            "labels": value_counts.index.astype(str).tolist(),
+            "labels": enhanced_labels,
             "datasets": [
                 {
                     "label": col,
                     "data": value_counts.tolist(),
                 }
             ],
+            "column_name": col,
+            "total_count": int(total),
+            "categories_shown": len(value_counts),
         }
