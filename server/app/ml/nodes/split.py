@@ -18,6 +18,7 @@ from app.utils.ids import generate_id
 from app.db.session import SessionLocal
 from app.models.dataset import Dataset
 from app.services.s3_service import s3_service
+from typing import List, Any
 
 
 class SplitInput(NodeInput):
@@ -65,6 +66,10 @@ class SplitOutput(NodeOutput):
     train_size: int = Field(..., description="Number of samples in training set")
     test_size: int = Field(..., description="Number of samples in test set")
 
+    target_column: str = Field(..., description="Target column name")
+    columns: List[str] = Field(..., description="All column names in the dataset")
+    feature_columns: List[str] = Field(..., description="Feature column names (excluding target)")
+
     split_summary: Dict[str, Any] = Field(..., description="Summary of split operation")
 
 
@@ -99,11 +104,14 @@ class SplitNode(BaseNode):
     async def _load_dataset(self, dataset_id: str) -> Optional[pd.DataFrame]:
         """Load dataset from storage (uploads folder first, then database)."""
         try:
+            # Recognize common missing value indicators: ?, NA, N/A, null, empty strings
+            missing_values = ["?", "NA", "N/A", "null", "NULL", "", " ", "NaN", "nan"]
+
             # FIRST: Try to load from uploads folder (for preprocessed/engineered datasets)
             upload_path = Path(settings.UPLOAD_DIR) / f"{dataset_id}.csv"
             if upload_path.exists():
                 logger.info(f"Loading dataset from uploads folder: {upload_path}")
-                df = pd.read_csv(upload_path)
+                df = pd.read_csv(upload_path, na_values=missing_values, keep_default_na=True)
                 return df
 
             # SECOND: Try to load from database (for original datasets)
@@ -122,10 +130,12 @@ class SplitNode(BaseNode):
             if dataset.storage_backend == "s3" and dataset.s3_key:
                 logger.info(f"Loading dataset from S3: {dataset.s3_key}")
                 file_content = await s3_service.download_file(dataset.s3_key)
-                df = pd.read_csv(io.BytesIO(file_content))
+                df = pd.read_csv(
+                    io.BytesIO(file_content), na_values=missing_values, keep_default_na=True
+                )
             elif dataset.local_path:
                 logger.info(f"Loading dataset from local: {dataset.local_path}")
-                df = pd.read_csv(dataset.local_path)
+                df = pd.read_csv(dataset.local_path, na_values=missing_values, keep_default_na=True)
             else:
                 logger.error(f"No storage path found for dataset: {dataset_id}")
                 db.close()
@@ -212,6 +222,9 @@ class SplitNode(BaseNode):
                 test_path=str(test_path),
                 train_size=len(train_df),
                 test_size=len(test_df),
+                target_column=input_data.target_column,
+                columns=train_df.columns.tolist(),
+                feature_columns=X.columns.tolist(),
                 split_summary={
                     "total_samples": len(df),
                     "target_column": input_data.target_column,

@@ -86,6 +86,9 @@ class RandomForestNode(BaseNode):
     async def _load_dataset(self, dataset_id: str) -> Optional[pd.DataFrame]:
         """Load dataset from storage."""
         try:
+            # Recognize common missing value indicators: ?, NA, N/A, null, empty strings
+            missing_values = ["?", "NA", "N/A", "null", "NULL", "", " ", "NaN", "nan"]
+
             db = SessionLocal()
             dataset = (
                 db.query(Dataset)
@@ -101,10 +104,12 @@ class RandomForestNode(BaseNode):
             if dataset.storage_backend == "s3" and dataset.s3_key:
                 logger.info(f"Loading dataset from S3: {dataset.s3_key}")
                 file_content = await s3_service.download_file(dataset.s3_key)
-                df = pd.read_csv(io.BytesIO(file_content))
+                df = pd.read_csv(
+                    io.BytesIO(file_content), na_values=missing_values, keep_default_na=True
+                )
             elif dataset.local_path:
                 logger.info(f"Loading dataset from local: {dataset.local_path}")
-                df = pd.read_csv(dataset.local_path)
+                df = pd.read_csv(dataset.local_path, na_values=missing_values, keep_default_na=True)
             else:
                 logger.error(f"No storage path found for dataset: {dataset_id}")
                 db.close()

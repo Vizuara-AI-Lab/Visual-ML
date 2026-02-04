@@ -81,6 +81,17 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
       "logistic_regression",
       "decision_tree",
       "random_forest",
+      "r2_score",
+      "mse_score",
+      "rmse_score",
+      "mae_score",
+      "confusion_matrix",
+      "classification_report",
+      "accuracy_score",
+      "roc_curve",
+      "feature_importance",
+      "residual_plot",
+      "prediction_table",
     ].includes(node?.type || "");
 
     if (isAutoFillNode && nodeId) {
@@ -92,28 +103,96 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
           | undefined;
         const sourceConfig = sourceNode?.data.config;
 
-        // Priority 1: Check result for specific dataset IDs from preprocessing nodes
-        let datasetId =
-          sourceResult?.preprocessed_dataset_id ||
-          sourceResult?.encoded_dataset_id ||
-          sourceResult?.transformed_dataset_id ||
-          sourceResult?.scaled_dataset_id ||
-          sourceResult?.selected_dataset_id;
+        // Check if this is a result/metrics node (needs model_output_id from ML algorithm)
+        const isResultNode = [
+          "r2_score",
+          "mse_score",
+          "rmse_score",
+          "mae_score",
+          "confusion_matrix",
+          "classification_report",
+          "accuracy_score",
+          "roc_curve",
+          "feature_importance",
+          "residual_plot",
+          "prediction_table",
+        ].includes(node?.type || "");
 
-        // Priority 2: Check config for dataset_id (for upload/select nodes)
-        if (!datasetId) {
-          datasetId = sourceConfig?.dataset_id;
-        }
+        // Check if source is an ML algorithm node
+        const isMLAlgorithmNode = [
+          "linear_regression",
+          "logistic_regression",
+          "decision_tree",
+          "random_forest",
+        ].includes(sourceNode?.type || "");
 
-        if (datasetId) {
-          console.log(
-            "🔗 Auto-filling dataset_id from connected source:",
-            datasetId,
-          );
-          setConfig((prev) => ({
-            ...prev,
-            dataset_id: datasetId,
-          }));
+        if (isResultNode && isMLAlgorithmNode) {
+          // Result nodes get model_output_id from ML algorithm node
+          const modelId = sourceResult?.model_id;
+
+          console.log("📊 Auto-filling result node from ML algorithm:");
+          console.log("  - Source node type:", sourceNode?.type);
+          console.log("  - Model ID:", modelId);
+
+          if (modelId) {
+            setConfig((prev) => ({
+              ...prev,
+              model_output_id: modelId,
+            }));
+          }
+        } else {
+          // Check if this is an ML node (needs train_dataset_id from split)
+          const isMLNode = [
+            "linear_regression",
+            "logistic_regression",
+            "decision_tree",
+            "random_forest",
+          ].includes(node?.type || "");
+
+          if (isMLNode && sourceNode?.type === "split") {
+            // ML nodes get train_dataset_id and target_column from split node
+            const trainDatasetId = sourceResult?.train_dataset_id;
+            const targetColumn = sourceResult?.target_column;
+
+            console.log("🎯 Auto-filling ML node from split:");
+            console.log("  - Source node type:", sourceNode?.type);
+            console.log("  - Source node data:", sourceNode?.data);
+            console.log("  - Source result:", sourceResult);
+            console.log("  - Train dataset ID:", trainDatasetId);
+            console.log("  - Target column:", targetColumn);
+            console.log("  - Columns in result:", sourceResult?.columns);
+
+            setConfig((prev) => ({
+              ...prev,
+              train_dataset_id: trainDatasetId || prev.train_dataset_id,
+              target_column: targetColumn || prev.target_column,
+            }));
+          } else {
+            // For other nodes, use regular dataset_id auto-fill
+            // Priority 1: Check result for specific dataset IDs from preprocessing nodes
+            let datasetId =
+              sourceResult?.preprocessed_dataset_id ||
+              sourceResult?.encoded_dataset_id ||
+              sourceResult?.transformed_dataset_id ||
+              sourceResult?.scaled_dataset_id ||
+              sourceResult?.selected_dataset_id;
+
+            // Priority 2: Check config for dataset_id (for upload/select nodes)
+            if (!datasetId) {
+              datasetId = sourceConfig?.dataset_id;
+            }
+
+            if (datasetId) {
+              console.log(
+                "🔗 Auto-filling dataset_id from connected source:",
+                datasetId,
+              );
+              setConfig((prev) => ({
+                ...prev,
+                dataset_id: datasetId,
+              }));
+            }
+          }
         }
       }
     }
@@ -231,6 +310,34 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
         return sourceResult.selected_feature_names as string[];
       }
 
+      // Priority 6.5: Check split node columns (for ML nodes)
+      if (
+        node.type === "split" &&
+        sourceResult?.columns &&
+        Array.isArray(sourceResult.columns)
+      ) {
+        console.log(
+          "  ✅ Found columns from split node:",
+          sourceResult.columns,
+        );
+        return sourceResult.columns as string[];
+      }
+
+      // Priority 6.6: Check split node feature_columns (for ML nodes - excludes target)
+      if (
+        node.type === "split" &&
+        sourceResult?.feature_columns &&
+        Array.isArray(sourceResult.feature_columns)
+      ) {
+        // Include target column too
+        const targetCol = sourceResult?.target_column;
+        const allColumns = targetCol
+          ? [...(sourceResult.feature_columns as string[]), targetCol as string]
+          : (sourceResult.feature_columns as string[]);
+        console.log("  ✅ Found feature_columns from split node:", allColumns);
+        return allColumns;
+      }
+
       // Priority 7: If this is a view/processing node without columns, trace back to its source
       const nodeTypes = [
         "table_view",
@@ -292,6 +399,25 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
 
   // Auto-fill logic based on dataset metadata
   const getAutoFilledValue = (fieldName: string): unknown => {
+    // For result nodes, auto-fill model_output_id from connected ML algorithm node
+    if (fieldName === "model_output_id" && connectedSourceNode) {
+      const sourceResult = connectedSourceNode.data.result as
+        | Record<string, unknown>
+        | undefined;
+
+      // Check if source is an ML algorithm node and has model_id
+      const isMLAlgorithmNode = [
+        "linear_regression",
+        "logistic_regression",
+        "decision_tree",
+        "random_forest",
+      ].includes(connectedSourceNode.type);
+
+      if (isMLAlgorithmNode && sourceResult?.model_id) {
+        return sourceResult.model_id;
+      }
+    }
+
     // For view nodes, auto-fill dataset_id from connected source node
     if (fieldName === "dataset_id" && connectedSourceNode) {
       const sourceResult = connectedSourceNode.data.result as
@@ -601,6 +727,23 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                       "random_forest",
                     ].includes(node.type);
 
+                  // Check if this is a model_output_id field for result nodes (should be read-only)
+                  const isModelOutputIdField =
+                    field.name === "model_output_id" &&
+                    [
+                      "r2_score",
+                      "mse_score",
+                      "rmse_score",
+                      "mae_score",
+                      "confusion_matrix",
+                      "classification_report",
+                      "accuracy_score",
+                      "roc_curve",
+                      "feature_importance",
+                      "residual_plot",
+                      "prediction_table",
+                    ].includes(node.type);
+
                   return (
                     <div key={field.name}>
                       <label className="block text-sm font-medium text-gray-200 mb-2">
@@ -618,14 +761,21 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                             onChange={(e) =>
                               handleFieldChange(field.name, e.target.value)
                             }
-                            readOnly={isDatasetIdField || isTrainDatasetIdField}
+                            readOnly={
+                              isDatasetIdField ||
+                              isTrainDatasetIdField ||
+                              isModelOutputIdField
+                            }
                             className={`w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                              isDatasetIdField || isTrainDatasetIdField
+                              isDatasetIdField ||
+                              isTrainDatasetIdField ||
+                              isModelOutputIdField
                                 ? "cursor-not-allowed opacity-75"
                                 : ""
                             }`}
                             placeholder={
-                              (isDatasetIdField || isTrainDatasetIdField) && !currentValue
+                              (isDatasetIdField || isTrainDatasetIdField) &&
+                              !currentValue
                                 ? "Connect a data source node"
                                 : field.description
                             }
@@ -645,9 +795,37 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                               ✓ Connected to: {connectedSourceNode.data.label}
                             </p>
                           )}
+                          {isTrainDatasetIdField &&
+                            connectedSourceNode &&
+                            !currentValue && (
+                              <p className="text-xs text-amber-400 mt-1">
+                                ⚠ Please execute the split node first to
+                                generate training dataset
+                              </p>
+                            )}
                           {isTrainDatasetIdField && !connectedSourceNode && (
                             <p className="text-xs text-amber-400 mt-1">
-                              ⚠ Connect a split node to auto-fill training dataset
+                              ⚠ Connect a split node to auto-fill training
+                              dataset
+                            </p>
+                          )}
+                          {isModelOutputIdField && connectedSourceNode && (
+                            <p className="text-xs text-green-400 mt-1">
+                              ✓ Connected to: {connectedSourceNode.data.label}
+                            </p>
+                          )}
+                          {isModelOutputIdField &&
+                            connectedSourceNode &&
+                            !currentValue && (
+                              <p className="text-xs text-amber-400 mt-1">
+                                ⚠ Please execute the ML algorithm node first to
+                                generate model
+                              </p>
+                            )}
+                          {isModelOutputIdField && !connectedSourceNode && (
+                            <p className="text-xs text-amber-400 mt-1">
+                              ⚠ Connect an ML algorithm node to auto-fill model
+                              output
                             </p>
                           )}
                         </div>
@@ -815,6 +993,16 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                             config.dataset_id && (
                               <p className="text-xs text-green-400 mt-1">
                                 ✓ Selected: {config.filename as string}
+                              </p>
+                            )}
+
+                          {/* Show warning for target_column if no columns available */}
+                          {field.name === "target_column" &&
+                            availableColumns.length === 0 &&
+                            connectedSourceNode && (
+                              <p className="text-xs text-amber-400 mt-1">
+                                ⚠ Execute the split node first to load available
+                                columns
                               </p>
                             )}
                         </div>

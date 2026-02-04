@@ -20,6 +20,10 @@ from app.ml.nodes.linear_regression_node import LinearRegressionNode
 from app.ml.nodes.logistic_regression_node import LogisticRegressionNode
 from app.ml.nodes.decision_tree_node import DecisionTreeNode
 from app.ml.nodes.random_forest_node import RandomForestNode
+
+# Result/Metrics Nodes
+from app.ml.nodes.r2_score_node import R2ScoreNode
+
 from app.ml.nodes.view import (
     TableViewNode,
     DataPreviewNode,
@@ -60,6 +64,8 @@ class MLPipelineEngine:
             "logistic_regression": LogisticRegressionNode,
             "decision_tree": DecisionTreeNode,
             "random_forest": RandomForestNode,
+            # Result/Metrics Nodes
+            "r2_score": R2ScoreNode,
             # View Nodes
             "table_view": TableViewNode,
             "data_preview": DataPreviewNode,

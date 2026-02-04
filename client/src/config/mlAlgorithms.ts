@@ -18,7 +18,7 @@ export const mlAlgorithmsCategory: NodeCategory = {
       description: "Train linear regression model for continuous predictions",
       category: "ml-algorithms",
       icon: Brain,
-      color: "#3B82F6", 
+      color: "#3B82F6",
       defaultConfig: {
         train_dataset_id: "",
         target_column: "",
@@ -50,12 +50,13 @@ export const mlAlgorithmsCategory: NodeCategory = {
         },
       ],
     },
-    
+
     // Classification Algorithms
     {
       type: "logistic_regression",
       label: "Logistic Regression",
-      description: "Train logistic regression for binary/multi-class classification",
+      description:
+        "Train logistic regression for binary/multi-class classification",
       category: "ml-algorithms",
       icon: Brain,
       color: "#8B5CF6",
@@ -93,7 +94,8 @@ export const mlAlgorithmsCategory: NodeCategory = {
           min: 0.001,
           max: 100,
           step: 0.1,
-          description: "Inverse of regularization strength (smaller = stronger regularization)",
+          description:
+            "Inverse of regularization strength (smaller = stronger regularization)",
         },
         {
           name: "penalty",
@@ -138,7 +140,7 @@ export const mlAlgorithmsCategory: NodeCategory = {
         },
       ],
     },
-    
+
     {
       type: "decision_tree",
       label: "Decision Tree",
@@ -219,11 +221,12 @@ export const mlAlgorithmsCategory: NodeCategory = {
         },
       ],
     },
-    
+
     {
       type: "random_forest",
       label: "Random Forest",
-      description: "Train random forest ensemble for classification or regression",
+      description:
+        "Train random forest ensemble for classification or regression",
       category: "ml-algorithms",
       icon: Brain,
       color: "#F59E0B",
@@ -310,7 +313,7 @@ export const mlAlgorithmsCategory: NodeCategory = {
         },
       ],
     },
-    
+
     // Model Evaluation
     {
       type: "evaluate",

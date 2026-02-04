@@ -24,6 +24,18 @@ const MLNode = ({ data, id }: NodeProps<BaseNodeData>) => {
     "transformation",
     "scaling",
     "feature_selection",
+    // Result/Metrics Nodes
+    "r2_score",
+    "mse_score",
+    "rmse_score",
+    "mae_score",
+    "confusion_matrix",
+    "classification_report",
+    "accuracy_score",
+    "roc_curve",
+    "feature_importance",
+    "residual_plot",
+    "prediction_table",
   ];
 
   const isViewNode = viewNodeTypes.includes(nodeData.type);
@@ -84,10 +96,13 @@ const MLNode = ({ data, id }: NodeProps<BaseNodeData>) => {
       {/* Node Content */}
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
-          {typeof nodeData.icon === 'string' ? (
+          {typeof nodeData.icon === "string" ? (
             <span className="text-xl">{nodeData.icon || "📦"}</span>
           ) : nodeData.icon ? (
-            <nodeData.icon className="w-5 h-5" style={{ color: nodeData.color }} />
+            <nodeData.icon
+              className="w-5 h-5"
+              style={{ color: nodeData.color }}
+            />
           ) : (
             <span className="text-xl">📦</span>
           )}

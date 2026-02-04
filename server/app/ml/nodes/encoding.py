@@ -323,11 +323,14 @@ class EncodingNode(BaseNode):
     async def _load_dataset(self, dataset_id: str) -> Optional[pd.DataFrame]:
         """Load dataset from storage (uploads folder first, then database)."""
         try:
+            # Recognize common missing value indicators: ?, NA, N/A, null, empty strings
+            missing_values = ["?", "NA", "N/A", "null", "NULL", "", " ", "NaN", "nan"]
+
             # FIRST: Try to load from uploads folder (for preprocessed datasets)
             upload_path = Path(settings.UPLOAD_DIR) / f"{dataset_id}.csv"
             if upload_path.exists():
                 logger.info(f"Loading dataset from uploads folder: {upload_path}")
-                df = pd.read_csv(upload_path)
+                df = pd.read_csv(upload_path, na_values=missing_values, keep_default_na=True)
                 return df
 
             # SECOND: Try to load from database (for original datasets)
@@ -346,10 +349,12 @@ class EncodingNode(BaseNode):
             if dataset.storage_backend == "s3" and dataset.s3_key:
                 logger.info(f"Loading dataset from S3: {dataset.s3_key}")
                 file_content = await s3_service.download_file(dataset.s3_key)
-                df = pd.read_csv(io.BytesIO(file_content))
+                df = pd.read_csv(
+                    io.BytesIO(file_content), na_values=missing_values, keep_default_na=True
+                )
             elif dataset.local_path:
                 logger.info(f"Loading dataset from local: {dataset.local_path}")
-                df = pd.read_csv(dataset.local_path)
+                df = pd.read_csv(dataset.local_path, na_values=missing_values, keep_default_na=True)
             else:
                 logger.error(f"No storage path found for dataset: {dataset_id}")
                 db.close()

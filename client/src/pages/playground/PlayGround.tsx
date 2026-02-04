@@ -14,6 +14,7 @@ import { ResultsPanel } from "../../components/playground/ResultsPanel";
 import { ValidationDialog } from "../../components/playground/ValidationDialog";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 import { executePipeline } from "../../features/playground/api";
+import taskApi from "../../features/playground/taskApi";
 import type { NodeType, BaseNodeData } from "../../types/pipeline";
 import { useProjectState } from "../../hooks/queries/useProjectState";
 import { useSaveProject } from "../../hooks/mutations/useSaveProject";
@@ -29,6 +30,12 @@ export default function PlayGround() {
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>(
     [],
   );
+  const [executionProgress, setExecutionProgress] = useState<{
+    status: string;
+    percent: number;
+    current_node?: number;
+    total_nodes?: number;
+  } | null>(null);
 
   const {
     nodes,
@@ -41,6 +48,7 @@ export default function PlayGround() {
     getProjectState,
     executionResult,
     currentProjectId,
+    updateNode,
   } = usePlaygroundStore();
 
   // Handle node click - show view data modal for view nodes, config for others
@@ -245,13 +253,27 @@ export default function PlayGround() {
 
       console.log("📊 All node results:", nodeResults);
 
+      // Update each node with its execution result
+      sortedNodes.forEach((node, index) => {
+        const nodeResult = result.results?.[index];
+        if (nodeResult && node.id) {
+          updateNode(node.id, {
+            result: nodeResult,
+          });
+        }
+      });
+
       setExecutionResult({
         success: result.success,
         nodeResults,
         timestamp: new Date().toISOString(),
       });
+
+      setExecutionProgress(null);
     } catch (error) {
       console.error("Pipeline execution failed:", error);
+
+      setExecutionProgress(null);
 
       // Format user-friendly error message
       let userFriendlyError = "Pipeline execution failed";
@@ -364,6 +386,7 @@ export default function PlayGround() {
         onLoad={handleLoad}
         onExport={handleExport}
         isExecuting={usePlaygroundStore.getState().isExecuting}
+        executionProgress={executionProgress}
         projectName={projectData?.name}
         onBack={() => navigate("/dashboard")}
       />
