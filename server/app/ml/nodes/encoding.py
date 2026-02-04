@@ -62,6 +62,7 @@ class EncodingOutput(NodeOutput):
 
     original_columns: int = Field(..., description="Columns before encoding")
     final_columns: int = Field(..., description="Columns after encoding")
+    columns: List[str] = Field(..., description="All column names in encoded dataset")
     encoded_columns: List[str] = Field(..., description="Columns that were encoded")
     new_columns: List[str] = Field(..., description="New columns created")
     encoding_summary: Dict[str, Any] = Field(..., description="Summary of encoding operations")
@@ -220,6 +221,7 @@ class EncodingNode(BaseNode):
                 artifacts_path=artifacts_path,
                 original_columns=original_columns,
                 final_columns=final_columns,
+                columns=df_encoded.columns.tolist(),
                 encoded_columns=list(input_data.column_configs.keys()),
                 new_columns=new_columns_list,
                 encoding_summary=encoding_summary,

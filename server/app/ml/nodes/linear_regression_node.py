@@ -28,7 +28,6 @@ class LinearRegressionInput(NodeInput):
 
     # Hyperparameters
     fit_intercept: bool = Field(True, description="Calculate intercept for the model")
-    random_state: int = Field(42, description="Random seed for reproducibility")
 
 
 class LinearRegressionOutput(NodeOutput):
@@ -80,8 +79,16 @@ class LinearRegressionNode(BaseNode):
         return LinearRegressionOutput
 
     async def _load_dataset(self, dataset_id: str) -> Optional[pd.DataFrame]:
-        """Load dataset from storage."""
+        """Load dataset from storage (uploads folder first, then database)."""
         try:
+            # FIRST: Try to load from uploads folder (for train/test datasets from split node)
+            upload_path = Path(settings.UPLOAD_DIR) / f"{dataset_id}.csv"
+            if upload_path.exists():
+                logger.info(f"Loading dataset from uploads folder: {upload_path}")
+                df = pd.read_csv(upload_path)
+                return df
+
+            # SECOND: Try to load from database (for original datasets)
             db = SessionLocal()
             dataset = (
                 db.query(Dataset)
@@ -90,7 +97,7 @@ class LinearRegressionNode(BaseNode):
             )
 
             if not dataset:
-                logger.error(f"Dataset not found: {dataset_id}")
+                logger.error(f"Dataset not found in uploads or database: {dataset_id}")
                 db.close()
                 return None
 
