@@ -6,23 +6,17 @@ import type { NodeMetadata } from "../types/pipeline";
 
 export const nodeDefinitions: NodeMetadata[] = [
   {
-    type: "preprocess",
-    label: "Preprocess Data",
-    description: "Clean data and handle missing values",
-    color: "#8B5CF6", // purple
-    icon: "🧹",
+    type: "missing_value_handler",
+    label: "Missing Value Handler",
+    description: "Handle missing values with column-wise control",
+    color: "#EC4899", // pink
+    icon: "🔧",
     category: "preprocessing",
     defaultConfig: {
-      dataset_path: "",
-      target_column: "",
-      handle_missing: true,
-      missing_strategy: "drop",
-      text_columns: [],
-      numeric_columns: [],
-      lowercase: true,
-      remove_stopwords: false,
-      max_features: 1000,
-      scale_features: false,
+      dataset_id: "",
+      column_configs: {},
+      default_strategy: "none",
+      preview_mode: false,
     },
   },
   {

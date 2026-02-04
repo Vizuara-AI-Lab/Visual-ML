@@ -2,7 +2,7 @@
  * Node Palette - Draggable nodes for the pipeline builder
  */
 
-import { nodeDefinitions } from "../../lib/nodeDefinitions";
+import { getAllNodes } from "../../config/nodeDefinitions";
 
 const NodePalette = () => {
   const onDragStart = (event: React.DragEvent, nodeType: string) => {
@@ -10,11 +10,19 @@ const NodePalette = () => {
     event.dataTransfer.effectAllowed = "move";
   };
 
+  // Get all nodes and organize by category
+  const allNodes = getAllNodes();
+
   const categories = [
-    { id: "input", label: "Data Input" },
-    { id: "preprocessing", label: "Preprocessing" },
-    { id: "model", label: "Model Training" },
-    { id: "output", label: "Results" },
+    { id: "data-sources", label: "Data Sources" },
+    { id: "view", label: "View Data" },
+    { id: "preprocessing", label: "Preprocess Data" },
+    { id: "feature-engineering", label: "Feature Engineering" },
+    { id: "target-split", label: "Target & Split" },
+    { id: "ml-algorithms", label: "Model Training" },
+    { id: "result", label: "Results & Metrics" },
+    { id: "genai", label: "GenAI" },
+    { id: "deployment", label: "Deployment" },
   ];
 
   return (
@@ -22,9 +30,7 @@ const NodePalette = () => {
       <h2 className="text-lg font-bold text-gray-800 mb-4">ML Nodes</h2>
 
       {categories.map((category) => {
-        const nodes = nodeDefinitions.filter(
-          (node) => node.category === category.id,
-        );
+        const nodes = allNodes.filter((node) => node.category === category.id);
         if (nodes.length === 0) return null;
 
         return (
@@ -45,7 +51,11 @@ const NodePalette = () => {
                   }}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">{node.icon}</span>
+                    {typeof node.icon === "string" ? (
+                      <span className="text-lg">{node.icon}</span>
+                    ) : (
+                      <node.icon className="w-5 h-5" />
+                    )}
                     <div className="flex-1">
                       <div className="text-sm font-medium text-gray-800">
                         {node.label}

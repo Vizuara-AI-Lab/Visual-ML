@@ -12,15 +12,36 @@ export type NodeType =
   | "column_info"
   | "chart_view"
   | "preprocess"
+  | "missing_value_handler"
+  | "encoding"
+  | "transformation"
   | "split"
   | "feature_selection"
   | "scaling"
+  | "linear_regression"
+  | "logistic_regression"
+  | "decision_tree"
+  | "random_forest"
   | "train"
   | "evaluate"
+  // Result & Metrics nodes
+  | "r2_score"
+  | "mse_score"
+  | "rmse_score"
+  | "mae_score"
+  | "confusion_matrix"
+  | "classification_report"
+  | "accuracy_score"
+  | "roc_curve"
+  | "feature_importance"
+  | "residual_plot"
+  | "prediction_table"
+  // GenAI nodes
   | "llm_node"
-  | "prompt_template"
-  | "rag_node"
-  | "image_generation"
+  | "system_prompt"
+  | "chatbot_node"
+  | "example_node"
+  // Deployment nodes
   | "model_export"
   | "api_endpoint";
 
@@ -34,7 +55,7 @@ export interface BaseNodeData extends Record<string, unknown> {
   config: Record<string, any>;
   isConfigured: boolean;
   validationErrors?: string[];
-  icon?: string;
+  icon?: string | React.ComponentType<any>;
   color?: string;
 }
 

@@ -30,23 +30,32 @@ ChartJS.register(
 );
 
 interface ChartViewerProps {
-  chartType: string;
-  chartData: any;
+  result?: any;
+  chartType?: string;
+  chartData?: any;
 }
 
-export const ChartViewer = ({ chartType, chartData }: ChartViewerProps) => {
+export const ChartViewer = ({
+  result,
+  chartType,
+  chartData,
+}: ChartViewerProps) => {
+  // Extract from result if provided (for view modal)
+  const actualChartType = result?.chart_type || chartType;
+  const actualChartData = result?.chart_data || chartData;
+
   // Handle error in chart data
-  if (chartData.error) {
+  if (actualChartData?.error) {
     return (
       <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
         <p className="text-yellow-800 font-semibold">Configuration needed:</p>
-        <p className="text-yellow-600 text-sm mt-2">{chartData.error}</p>
+        <p className="text-yellow-600 text-sm mt-2">{actualChartData.error}</p>
       </div>
     );
   }
 
   // Check if we have valid data
-  if (!chartData.datasets && !chartData.labels) {
+  if (!actualChartData?.datasets && !actualChartData?.labels) {
     return (
       <div className="text-center py-8 text-gray-500">
         No data available for visualization
@@ -83,20 +92,20 @@ export const ChartViewer = ({ chartType, chartData }: ChartViewerProps) => {
 
   // Prepare data based on chart type
   const prepareChartData = () => {
-    if (chartType === "pie") {
+    if (actualChartType === "pie") {
       return {
-        ...chartData,
-        datasets: chartData.datasets.map((dataset: any, idx: number) => ({
+        ...actualChartData,
+        datasets: actualChartData.datasets.map((dataset: any, idx: number) => ({
           ...dataset,
           backgroundColor: colorPalette,
           borderColor: borderColorPalette,
           borderWidth: 1,
         })),
       };
-    } else if (chartType === "scatter") {
+    } else if (actualChartType === "scatter") {
       return {
-        ...chartData,
-        datasets: chartData.datasets.map((dataset: any, idx: number) => ({
+        ...actualChartData,
+        datasets: actualChartData.datasets.map((dataset: any, idx: number) => ({
           ...dataset,
           backgroundColor: colorPalette[idx % colorPalette.length],
           borderColor: borderColorPalette[idx % borderColorPalette.length],
@@ -107,8 +116,8 @@ export const ChartViewer = ({ chartType, chartData }: ChartViewerProps) => {
     } else {
       // Bar, Line, Histogram
       return {
-        ...chartData,
-        datasets: chartData.datasets.map((dataset: any, idx: number) => ({
+        ...actualChartData,
+        datasets: actualChartData.datasets.map((dataset: any, idx: number) => ({
           ...dataset,
           backgroundColor: colorPalette[idx % colorPalette.length],
           borderColor: borderColorPalette[idx % borderColorPalette.length],
@@ -120,6 +129,11 @@ export const ChartViewer = ({ chartType, chartData }: ChartViewerProps) => {
 
   // Chart options
   const getChartOptions = () => {
+    // Get column names from chart data
+    const xColumnName =
+      actualChartData?.x_column || actualChartData?.column_name || "Category";
+    const yColumnName = actualChartData?.y_columns?.[0] || "Value";
+
     const baseOptions = {
       responsive: true,
       maintainAspectRatio: true,
@@ -134,7 +148,7 @@ export const ChartViewer = ({ chartType, chartData }: ChartViewerProps) => {
         },
         title: {
           display: true,
-          text: `${chartType.charAt(0).toUpperCase() + chartType.slice(1)} Chart`,
+          text: `${actualChartType.charAt(0).toUpperCase() + actualChartType.slice(1)} Chart`,
           font: {
             size: 16,
             weight: "bold",
@@ -143,7 +157,7 @@ export const ChartViewer = ({ chartType, chartData }: ChartViewerProps) => {
       },
     };
 
-    if (chartType === "scatter") {
+    if (actualChartType === "scatter") {
       return {
         ...baseOptions,
         scales: {
@@ -152,21 +166,42 @@ export const ChartViewer = ({ chartType, chartData }: ChartViewerProps) => {
             position: "bottom" as const,
             title: {
               display: true,
-              text: "X Axis",
+              text: xColumnName,
             },
           },
           y: {
             title: {
               display: true,
-              text: "Y Axis",
+              text: yColumnName,
             },
           },
         },
       };
     }
 
-    if (chartType === "pie") {
-      return baseOptions;
+    if (actualChartType === "pie") {
+      return {
+        ...baseOptions,
+        plugins: {
+          ...baseOptions.plugins,
+          legend: {
+            position: "right" as const,
+            labels: {
+              font: {
+                size: 11,
+              },
+              boxWidth: 15,
+            },
+          },
+          tooltip: {
+            callbacks: {
+              label: function (context: any) {
+                return context.label || "";
+              },
+            },
+          },
+        },
+      };
     }
 
     // For bar, line, histogram
@@ -177,13 +212,13 @@ export const ChartViewer = ({ chartType, chartData }: ChartViewerProps) => {
           beginAtZero: true,
           title: {
             display: true,
-            text: "Value",
+            text: yColumnName,
           },
         },
         x: {
           title: {
             display: true,
-            text: "Category",
+            text: xColumnName,
           },
         },
       },
@@ -195,18 +230,55 @@ export const ChartViewer = ({ chartType, chartData }: ChartViewerProps) => {
 
   return (
     <div className="w-full h-full flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl" style={{ height: "500px" }}>
-        {chartType === "bar" && <Bar data={data} options={options} />}
-        {chartType === "line" && <Line data={data} options={options} />}
-        {chartType === "scatter" && <Scatter data={data} options={options} />}
-        {chartType === "histogram" && <Bar data={data} options={options} />}
-        {chartType === "pie" && (
-          <div className="flex items-center justify-center h-full">
-            <div style={{ width: "400px", height: "400px" }}>
-              <Pie data={data} options={options} />
+      <div className="w-full max-w-4xl space-y-4">
+        {/* Pie chart info banner */}
+        {actualChartType === "pie" && actualChartData?.column_name && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-center justify-between text-sm">
+              <div>
+                <span className="font-semibold text-blue-900">Column: </span>
+                <span className="text-blue-700">
+                  {actualChartData.column_name}
+                </span>
+              </div>
+              <div>
+                <span className="font-semibold text-blue-900">
+                  Total Count:{" "}
+                </span>
+                <span className="text-blue-700">
+                  {actualChartData.total_count?.toLocaleString()}
+                </span>
+              </div>
+              <div>
+                <span className="font-semibold text-blue-900">
+                  Categories:{" "}
+                </span>
+                <span className="text-blue-700">
+                  {actualChartData.categories_shown}
+                </span>
+              </div>
             </div>
           </div>
         )}
+
+        {/* Chart container */}
+        <div style={{ height: "500px" }}>
+          {actualChartType === "bar" && <Bar data={data} options={options} />}
+          {actualChartType === "line" && <Line data={data} options={options} />}
+          {actualChartType === "scatter" && (
+            <Scatter data={data} options={options} />
+          )}
+          {actualChartType === "histogram" && (
+            <Bar data={data} options={options} />
+          )}
+          {actualChartType === "pie" && (
+            <div className="flex items-center justify-center h-full">
+              <div style={{ width: "450px", height: "450px" }}>
+                <Pie data={data} options={options} />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

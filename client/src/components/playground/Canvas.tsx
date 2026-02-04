@@ -27,16 +27,38 @@ const nodeTypes: Record<string, React.ComponentType<any>> = {
   statistics_view: MLNode,
   column_info: MLNode,
   chart_view: MLNode,
+  missing_value_handler: MLNode,
+  encoding: MLNode,
+  transformation: MLNode,
   split: MLNode,
   preprocess: MLNode,
   feature_selection: MLNode,
   scaling: MLNode,
   train: MLNode,
   evaluate: MLNode,
+  // ML Algorithm Nodes
+  linear_regression: MLNode,
+  logistic_regression: MLNode,
+  decision_tree: MLNode,
+  random_forest: MLNode,
+  // Result & Metrics Nodes
+  r2_score: MLNode,
+  mse_score: MLNode,
+  rmse_score: MLNode,
+  mae_score: MLNode,
+  confusion_matrix: MLNode,
+  classification_report: MLNode,
+  accuracy_score: MLNode,
+  roc_curve: MLNode,
+  feature_importance: MLNode,
+  residual_plot: MLNode,
+  prediction_table: MLNode,
+  // GenAI Nodes
   llm_node: MLNode,
-  prompt_template: MLNode,
-  rag_node: MLNode,
-  image_generation: MLNode,
+  system_prompt: MLNode,
+  chatbot_node: MLNode,
+  example_node: MLNode,
+  // Deployment Nodes
   model_export: MLNode,
   api_endpoint: MLNode,
 };
@@ -122,15 +144,12 @@ export const Canvas = ({ onNodeClick }: CanvasProps) => {
           config: JSON.parse(JSON.stringify(nodeDef.defaultConfig)),
           isConfigured: false,
           color: nodeDef.color,
-          icon: nodeDef.icon.name,
+          icon: nodeDef.icon, // Store the icon component or string directly
         },
       };
 
-      console.log("✅ Adding node:", newNode);
-      console.log("📍 Position:", position);
       console.log("📊 Current nodes count:", nodes.length);
       addNode(newNode);
-      console.log("✅ Node added successfully");
     },
     [addNode, screenToFlowPosition, nodes.length],
   );

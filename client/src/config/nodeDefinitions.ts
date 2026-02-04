@@ -6,27 +6,27 @@ import type { NodeType } from "../types/pipeline";
 import type { LucideIcon } from "lucide-react";
 import {
   Database,
-  Split,
   Filter,
   Scale,
   Droplet,
   Brain,
   Network,
-  Sparkles,
-  Bot,
-  MessageSquare,
-  Image,
-  FileText,
   Layers,
   Zap,
-  Cloud,
   Upload,
   Eye,
   Table,
   BarChart3,
   LineChart,
   Info,
+  Hash,
+  Split,
+  TrendingUp,
 } from "lucide-react";
+import { genaiCategory } from "./genaiNodes";
+import { deploymentCategory } from "./deploymentNodes";
+import { mlAlgorithmsCategory } from "./mlAlgorithms";
+import { resultNodes } from "./resultNodes";
 
 export interface NodeCategory {
   id: string;
@@ -52,24 +52,35 @@ export interface ConfigField {
   type:
     | "text"
     | "number"
+    | "range"
     | "select"
     | "multiselect"
     | "checkbox"
+    | "boolean"
+    | "password"
     | "file"
-    | "textarea";
+    | "textarea"
+    | "json"
+    | "array";
   required?: boolean;
   options?: Array<{ value: string; label: string }>;
   defaultValue?: unknown;
   description?: string;
+  placeholder?: string; // Placeholder text for inputs
   min?: number;
   max?: number;
   step?: number;
   autoFill?: boolean; // Auto-fill from dataset metadata
+  conditional?: {
+    field: string;
+    value?: any;
+  }; // Show field conditionally based on another field's value
   conditionalDisplay?: {
     field: string;
-    equals?: string;
-    notEquals?: string;
+    equals?: string | boolean;
+    notEquals?: string | boolean;
   }; // Show field conditionally based on another field's value
+  itemFields?: ConfigField[]; // For array type - fields for each array item
 }
 
 export const nodeCategories: NodeCategory[] = [
@@ -385,165 +396,138 @@ export const nodeCategories: NodeCategory[] = [
     ],
   },
   {
-    id: "feature-engineering",
-    label: "Feature Engineering",
-    icon: Layers,
+    id: "preprocessing",
+    label: "Preprocess Data",
+    icon: Droplet,
     nodes: [
       {
-        type: "split",
-        label: "Train/Test Split",
-        description: "Split dataset into training and testing sets",
-        category: "feature-engineering",
-        icon: Split,
-        color: "#F59E0B",
-        defaultConfig: {
-          dataset_path: "",
-          target_column: "",
-          train_ratio: 0.7,
-          val_ratio: 0.15,
-          test_ratio: 0.15,
-          random_seed: 42,
-          shuffle: true,
-          stratify: false,
-        },
-        configFields: [
-          {
-            name: "dataset_path",
-            label: "Dataset Path",
-            type: "text",
-            required: true,
-            autoFill: true,
-          },
-          {
-            name: "target_column",
-            label: "Target Column",
-            type: "select",
-            required: true,
-            autoFill: true,
-            description: "Column to predict",
-          },
-          {
-            name: "train_ratio",
-            label: "Training Ratio",
-            type: "number",
-            min: 0.1,
-            max: 0.9,
-            step: 0.05,
-            defaultValue: 0.7,
-          },
-          {
-            name: "val_ratio",
-            label: "Validation Ratio",
-            type: "number",
-            min: 0,
-            max: 0.5,
-            step: 0.05,
-            defaultValue: 0.15,
-          },
-          {
-            name: "test_ratio",
-            label: "Test Ratio",
-            type: "number",
-            min: 0.1,
-            max: 0.5,
-            step: 0.05,
-            defaultValue: 0.15,
-          },
-          {
-            name: "shuffle",
-            label: "Shuffle Data",
-            type: "checkbox",
-            defaultValue: true,
-          },
-          {
-            name: "stratify",
-            label: "Stratified Split",
-            type: "checkbox",
-            defaultValue: false,
-            description: "Maintain class distribution (for classification)",
-          },
-        ],
-      },
-      {
-        type: "preprocess",
-        label: "Missing Value Handling",
-        description: "Handle missing values and clean data",
-        category: "feature-engineering",
+        type: "missing_value_handler",
+        label: "Missing Value Handler",
+        description: "Handle missing values with column-wise control",
+        category: "preprocessing",
         icon: Droplet,
-        color: "#EC4899",
+        color: "#A855F7",
         defaultConfig: {
-          dataset_path: "",
-          target_column: "",
-          handle_missing: true,
-          missing_strategy: "drop",
-          scale_features: false,
+          dataset_id: "",
+          column_configs: {},
+          default_strategy: "none",
+          preview_rows: 10,
+          preview_mode: false,
         },
         configFields: [
           {
-            name: "dataset_path",
-            label: "Dataset Path",
+            name: "dataset_id",
+            label: "Dataset Source",
             type: "text",
             required: true,
             autoFill: true,
+            description: "Connect to a data source node",
           },
           {
-            name: "target_column",
-            label: "Target Column",
-            type: "select",
-            required: true,
-            autoFill: true,
-          },
-          {
-            name: "missing_strategy",
-            label: "Missing Value Strategy",
+            name: "default_strategy",
+            label: "Default Strategy",
             type: "select",
             options: [
+              { value: "none", label: "No Action" },
               { value: "drop", label: "Drop Rows" },
               { value: "mean", label: "Fill with Mean" },
               { value: "median", label: "Fill with Median" },
               { value: "mode", label: "Fill with Mode" },
               { value: "fill", label: "Fill with Value" },
+              { value: "forward_fill", label: "Forward Fill" },
+              { value: "backward_fill", label: "Backward Fill" },
             ],
-            defaultValue: "drop",
+            defaultValue: "none",
+            description: "Default strategy for all columns",
           },
           {
-            name: "scale_features",
-            label: "Scale Features",
+            name: "preview_rows",
+            label: "Preview Rows",
+            type: "number",
+            defaultValue: 10,
+            min: 5,
+            max: 100,
+            description: "Number of rows to show in preview",
+          },
+          {
+            name: "preview_mode",
+            label: "Preview Mode",
             type: "checkbox",
             defaultValue: false,
-            description: "Apply StandardScaler to numeric features",
+            description: "Preview changes before applying",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "feature-engineering",
+    label: "Feature Engineering",
+    icon: Layers,
+    nodes: [
+      {
+        type: "encoding",
+        label: "Encoding",
+        description: "Encode categorical variables with per-column control",
+        category: "feature-engineering",
+        icon: Hash,
+        color: "#F59E0B",
+        defaultConfig: {
+          dataset_id: "",
+          column_configs: {},
+          target_column: "",
+        },
+        configFields: [
+          {
+            name: "dataset_id",
+            label: "Dataset Source",
+            type: "text",
+            required: true,
+            autoFill: true,
+            description: "Connect to a data source node",
+          },
+          // column_configs handled by custom UI in FeatureEngineeringConfigPanel
+          {
+            name: "target_column",
+            label: "Target Column",
+            type: "select",
+            autoFill: true,
+            description: "Required when using target encoding for any column",
           },
         ],
       },
       {
-        type: "feature_selection",
-        label: "Feature Selection",
-        description: "Select most important features",
+        type: "transformation",
+        label: "Transformation",
+        description: "Apply mathematical transformations",
         category: "feature-engineering",
-        icon: Filter,
-        color: "#06B6D4",
+        icon: Zap,
+        color: "#8B5CF6",
         defaultConfig: {
-          method: "variance",
-          n_features: 10,
+          dataset_id: "",
+          transformation_type: "log",
+          columns: [],
+          degree: 2,
         },
         configFields: [
           {
-            name: "method",
-            label: "Selection Method",
-            type: "select",
-            options: [
-              { value: "variance", label: "Variance Threshold" },
-              { value: "correlation", label: "Correlation" },
-              { value: "mutual_info", label: "Mutual Information" },
-            ],
-            defaultValue: "variance",
+            name: "dataset_id",
+            label: "Dataset Source",
+            type: "text",
+            required: true,
+            autoFill: true,
+            description: "Connect to a data source node",
           },
           {
-            name: "n_features",
-            label: "Number of Features",
-            type: "number",
-            min: 1,
-            defaultValue: 10,
+            name: "transformation_type",
+            label: "Transformation Type",
+            type: "select",
+            options: [
+              { value: "log", label: "Log Transform" },
+              { value: "sqrt", label: "Square Root" },
+              { value: "power", label: "Power Transform (Box-Cox)" },
+            ],
+            defaultValue: "log",
           },
         ],
       },
@@ -555,10 +539,19 @@ export const nodeCategories: NodeCategory[] = [
         icon: Scale,
         color: "#14B8A6",
         defaultConfig: {
+          dataset_id: "",
           method: "standard",
           columns: [],
         },
         configFields: [
+          {
+            name: "dataset_id",
+            label: "Dataset Source",
+            type: "text",
+            required: true,
+            autoFill: true,
+            description: "Connect to a data source node",
+          },
           {
             name: "method",
             label: "Scaling Method",
@@ -573,169 +566,190 @@ export const nodeCategories: NodeCategory[] = [
           },
         ],
       },
-    ],
-  },
-  {
-    id: "ml-algorithms",
-    label: "ML Algorithms",
-    icon: Brain,
-    nodes: [
       {
-        type: "train",
-        label: "Linear Regression",
-        description: "Train linear regression model",
-        category: "ml-algorithms",
-        icon: Brain,
-        color: "#EF4444",
+        type: "feature_selection",
+        label: "Feature Selection",
+        description: "Select most important features",
+        category: "feature-engineering",
+        icon: Filter,
+        color: "#06B6D4",
         defaultConfig: {
-          train_dataset_path: "",
-          target_column: "",
-          algorithm: "linear_regression",
-          task_type: "regression",
-          hyperparameters: {
-            fit_intercept: true,
-            copy_X: true,
-          },
-        },
-      },
-      {
-        type: "evaluate",
-        label: "Model Evaluation",
-        description: "Evaluate model performance",
-        category: "ml-algorithms",
-        icon: Network,
-        color: "#A855F7",
-        defaultConfig: {
-          model_path: "",
-          test_dataset_path: "",
-          target_column: "",
-          task_type: "regression",
-        },
-      },
-    ],
-  },
-  {
-    id: "genai",
-    label: "GenAI",
-    icon: Sparkles,
-    nodes: [
-      {
-        type: "llm_node",
-        label: "LLM Chat",
-        description: "Chat with Language Models (GPT, Claude, etc.)",
-        category: "genai",
-        icon: Bot,
-        color: "#8B5CF6",
-        defaultConfig: {
-          provider: "openai",
-          model: "gpt-4",
-          temperature: 0.7,
-          max_tokens: 1000,
+          dataset_id: "",
+          method: "variance",
+          variance_threshold: 0.0,
+          correlation_mode: "threshold",
+          correlation_threshold: 0.95,
+          n_features: 10,
         },
         configFields: [
           {
-            name: "provider",
-            label: "Provider",
+            name: "dataset_id",
+            label: "Dataset Source",
+            type: "text",
+            required: true,
+            autoFill: true,
+            description: "Connect to a data source node",
+          },
+          {
+            name: "method",
+            label: "Feature Selection Strategy",
             type: "select",
             options: [
-              { value: "openai", label: "OpenAI" },
-              { value: "anthropic", label: "Anthropic" },
-              { value: "huggingface", label: "HuggingFace" },
+              { value: "variance", label: "Variance Threshold (Filtering)" },
+              {
+                value: "correlation",
+                label: "Correlation (Filtering/Ranking)",
+              },
             ],
-            defaultValue: "openai",
+            defaultValue: "variance",
+            required: true,
+            description: "Choose your feature selection strategy",
           },
+
+          // Variance Threshold fields
           {
-            name: "model",
-            label: "Model",
-            type: "text",
-            defaultValue: "gpt-4",
-          },
-          {
-            name: "temperature",
-            label: "Temperature",
+            name: "variance_threshold",
+            label: "Variance Threshold",
             type: "number",
             min: 0,
-            max: 2,
-            step: 0.1,
-            defaultValue: 0.7,
+            step: 0.01,
+            defaultValue: 0.0,
+            description:
+              "Remove features with variance below this threshold. This is a filtering method.",
+            conditionalDisplay: { field: "method", equals: "variance" },
+          },
+
+          // Correlation fields
+          {
+            name: "correlation_mode",
+            label: "Correlation Mode",
+            type: "select",
+            options: [
+              {
+                value: "threshold",
+                label: "Threshold Mode (Remove by correlation)",
+              },
+              { value: "topk", label: "Top-K Mode (Keep K features)" },
+            ],
+            required: true,
+            description: "Choose how to select features based on correlation",
+            conditionalDisplay: { field: "method", equals: "correlation" },
           },
           {
-            name: "prompt",
-            label: "Prompt",
-            type: "textarea",
-            required: true,
+            name: "correlation_threshold",
+            label: "Correlation Threshold",
+            type: "number",
+            min: 0,
+            max: 1,
+            step: 0.05,
+            defaultValue: 0.95,
+            description:
+              "Remove features with absolute correlation above this value",
+            conditionalDisplay: { field: "method", equals: "correlation" },
+          },
+          {
+            name: "n_features",
+            label: "Number of Features (K)",
+            type: "number",
+            min: 1,
+            defaultValue: 10,
+            description:
+              "Number of features to keep after removing highly correlated ones",
+            conditionalDisplay: { field: "correlation_mode", equals: "topk" },
           },
         ],
-      },
-      {
-        type: "prompt_template",
-        label: "Prompt Template",
-        description: "Create reusable prompt templates",
-        category: "genai",
-        icon: MessageSquare,
-        color: "#6366F1",
-        defaultConfig: {
-          template: "",
-          variables: [],
-        },
-      },
-      {
-        type: "rag_node",
-        label: "RAG (Retrieval)",
-        description: "Retrieval-Augmented Generation",
-        category: "genai",
-        icon: FileText,
-        color: "#EC4899",
-        defaultConfig: {
-          vector_store: "faiss",
-          top_k: 5,
-        },
-      },
-      {
-        type: "image_generation",
-        label: "Image Generation",
-        description: "Generate images from text",
-        category: "genai",
-        icon: Image,
-        color: "#F59E0B",
-        defaultConfig: {
-          provider: "dall-e",
-          size: "1024x1024",
-        },
       },
     ],
   },
   {
-    id: "deployment",
-    label: "Deployment",
-    icon: Cloud,
+    id: "target-split",
+    label: "Target & Split",
+    icon: Split,
     nodes: [
       {
-        type: "model_export",
-        label: "Export Model",
-        description: "Export trained model for deployment",
-        category: "deployment",
-        icon: Zap,
-        color: "#10B981",
+        type: "split",
+        label: "Target & Split",
+        description: "Select target column and split into train/test sets",
+        category: "target-split",
+        icon: Split,
+        color: "#EC4899",
         defaultConfig: {
-          format: "pickle",
-          model_path: "",
+          dataset_id: "",
+          target_column: "",
+          train_ratio: 0.8,
+          test_ratio: 0.2,
+          split_type: "random",
+          random_seed: 42,
+          shuffle: true,
         },
-      },
-      {
-        type: "api_endpoint",
-        label: "Create API",
-        description: "Deploy model as REST API",
-        category: "deployment",
-        icon: Cloud,
-        color: "#06B6D4",
-        defaultConfig: {
-          endpoint_name: "",
-          model_path: "",
-        },
+        configFields: [
+          {
+            name: "dataset_id",
+            label: "Dataset Source",
+            type: "text",
+            required: true,
+            autoFill: true,
+            description: "Connect to a data source node",
+          },
+          {
+            name: "target_column",
+            label: "Target Column (y)",
+            type: "select",
+            required: true,
+            autoFill: true,
+            description: "Select the target column for prediction",
+          },
+          {
+            name: "train_ratio",
+            label: "Train/Test Split",
+            type: "range",
+            defaultValue: 0.8,
+            min: 0.1,
+            max: 0.9,
+            step: 0.05,
+            description: "Training set proportion (test set = 1 - train)",
+          },
+          {
+            name: "split_type",
+            label: "Split Type",
+            type: "select",
+            options: [
+              { value: "random", label: "Random Split" },
+              {
+                value: "stratified",
+                label: "Stratified Split (for classification)",
+              },
+            ],
+            defaultValue: "random",
+            description: "Stratified split maintains class distribution",
+          },
+          {
+            name: "random_seed",
+            label: "Random Seed",
+            type: "number",
+            defaultValue: 42,
+            description: "Seed for reproducible splits",
+          },
+          {
+            name: "shuffle",
+            label: "Shuffle Data",
+            type: "checkbox",
+            defaultValue: true,
+            description: "Shuffle data before splitting",
+          },
+        ],
       },
     ],
   },
+  mlAlgorithmsCategory,
+  {
+    id: "result",
+    label: "Results & Metrics",
+    icon: TrendingUp,
+    nodes: resultNodes,
+  },
+  genaiCategory,
+  deploymentCategory,
 ];
 
 export const getAllNodes = (): NodeDefinition[] => {

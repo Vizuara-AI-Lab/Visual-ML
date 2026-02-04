@@ -14,13 +14,13 @@
 Because training inside API request = your server dies.
 
 
-# Terminal 1: Redis
+## Terminal 1: Redis
 redis-server
-# Terminal 2: Celery Worker
+## Terminal 2: Celery Worker
 celery -A app.core.celery_app worker --loglevel=info
-# Terminal 3: Celery Beat (for scheduled tasks)
+## Terminal 3: Celery Beat (for scheduled tasks)
 celery -A app.core.celery_app beat --loglevel=info
-# Terminal 4: FastAPI
+## Terminal 4: FastAPI
 uvicorn main:app --reload
 
 
@@ -79,3 +79,16 @@ project = (
 **Impact:** Reduces **30 queries → 1 query** = **90% faster**.
 
 ---
+
+
+[1] Data Source
+   ↓
+[2] View / Inspect
+   ↓
+[3] Preprocessing
+   ↓
+[4] Feature Engineering
+   ↓
+[5] Target & Split
+   ↓
+[6] Linear Regression Model

@@ -295,6 +295,86 @@ class EmailService:
             logger.error(f"Failed to send survey email to {email}")
         return result
 
+    def send_password_reset_email(self, email: str, name: str, reset_token: str) -> bool:
+        """
+        Send password reset email with reset link.
+        
+        Args:
+            email: User email
+            name: User name
+            reset_token: Password reset token
+            
+        Returns:
+            bool: True if sent successfully
+        """
+        logger.info(f"Sending password reset email to {email}")
+        
+        # Create reset link
+        reset_link = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+        
+        subject = "Reset your Visual ML password"
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                           color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
+                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }}
+                .reset-box {{ background: white; border: 2px solid #667eea; padding: 20px; 
+                             text-align: center; margin: 20px 0; border-radius: 8px; }}
+                .cta-button {{ display: inline-block; background: #667eea; color: white; 
+                              padding: 15px 30px; text-decoration: none; border-radius: 8px; 
+                              margin: 20px 0; font-weight: bold; }}
+                .footer {{ text-align: center; margin-top: 20px; color: #666; font-size: 12px; }}
+                .warning {{ background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; 
+                           margin: 20px 0; border-radius: 4px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Password Reset Request</h1>
+                </div>
+                <div class="content">
+                    <p>Hi {name},</p>
+                    <p>We received a request to reset your Visual ML password. Click the button below to create a new password:</p>
+                    
+                    <div class="reset-box">
+                        <a href="{reset_link}" class="cta-button">
+                            Reset Password
+                        </a>
+                    </div>
+                    
+                    <p><strong>This link will expire in {settings.RESET_TOKEN_EXPIRE_MINUTES} minutes.</strong></p>
+                    
+                    <div class="warning">
+                        <strong>⚠️ Security Notice:</strong><br>
+                        If you didn't request this password reset, please ignore this email. Your password will remain unchanged.
+                    </div>
+                    
+                    <p style="font-size: 12px; color: #666; margin-top: 20px;">
+                        If the button doesn't work, copy and paste this link into your browser:<br>
+                        <a href="{reset_link}" style="color: #667eea; word-break: break-all;">{reset_link}</a>
+                    </p>
+                </div>
+                <div class="footer">
+                    <p>&copy; 2026 Visual ML. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        result = self._send_email(email, name, subject, html_content)
+        if result:
+            logger.info(f"Password reset email sent successfully to {email}")
+        else:
+            logger.error(f"Failed to send password reset email to {email}")
+        return result
+
     def send_marketing_email(
         self,
         email: str,

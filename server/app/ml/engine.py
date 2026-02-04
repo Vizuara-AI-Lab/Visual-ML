@@ -7,9 +7,23 @@ from datetime import datetime
 from app.ml.nodes.upload import UploadFileNode
 from app.ml.nodes.select import SelectDatasetNode
 from app.ml.nodes.clean import PreprocessNode
+from app.ml.nodes.missing_value_handler import MissingValueHandlerNode
+from app.ml.nodes.encoding import EncodingNode
+from app.ml.nodes.transformation import TransformationNode
+from app.ml.nodes.scaling import ScalingNode
+from app.ml.nodes.feature_selection import FeatureSelectionNode
 from app.ml.nodes.split import SplitNode
-from app.ml.nodes.train import TrainNode
 from app.ml.nodes.evaluate import EvaluateNode
+
+# Individual ML Algorithm Nodes
+from app.ml.nodes.linear_regression_node import LinearRegressionNode
+from app.ml.nodes.logistic_regression_node import LogisticRegressionNode
+from app.ml.nodes.decision_tree_node import DecisionTreeNode
+from app.ml.nodes.random_forest_node import RandomForestNode
+
+# Result/Metrics Nodes
+from app.ml.nodes.r2_score_node import R2ScoreNode
+
 from app.ml.nodes.view import (
     TableViewNode,
     DataPreviewNode,
@@ -38,9 +52,21 @@ class MLPipelineEngine:
             "upload_file": UploadFileNode,
             "select_dataset": SelectDatasetNode,
             "preprocess": PreprocessNode,
+            "missing_value_handler": MissingValueHandlerNode,
+            "encoding": EncodingNode,
+            "transformation": TransformationNode,
+            "scaling": ScalingNode,
+            "feature_selection": FeatureSelectionNode,
             "split": SplitNode,
-            "train": TrainNode,
             "evaluate": EvaluateNode,
+            # Individual ML Algorithm Nodes
+            "linear_regression": LinearRegressionNode,
+            "logistic_regression": LogisticRegressionNode,
+            "decision_tree": DecisionTreeNode,
+            "random_forest": RandomForestNode,
+            # Result/Metrics Nodes
+            "r2_score": R2ScoreNode,
+            # View Nodes
             "table_view": TableViewNode,
             "data_preview": DataPreviewNode,
             "statistics_view": StatisticsViewNode,
@@ -189,9 +215,18 @@ class MLPipelineEngine:
                 )
             else:
                 # For non-view nodes, merge previous output (normal data flow)
-                # Previous output takes precedence to enable data flow between nodes
-                merged_input = {**input_data, **user_context, **previous_output}
-                logger.info(f"Pipeline step {i+1}/{len(pipeline)}: {node_type}")
+                # previous_output takes precedence for dataset_id to enable proper data flow
+                # This allows preprocessing nodes (missing_value_handler, encoding, etc.) to pass their output to the next node
+                merged_input = {**user_context, **input_data, **previous_output}
+
+                # Log which dataset is being used
+                if "dataset_id" in previous_output and previous_output["dataset_id"]:
+                    logger.info(
+                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
+                        f"(using dataset from previous node: {previous_output['dataset_id']})"
+                    )
+                else:
+                    logger.info(f"Pipeline step {i+1}/{len(pipeline)}: {node_type}")
 
             try:
                 result = await self.execute_node(
@@ -205,6 +240,23 @@ class MLPipelineEngine:
                     for k, v in result.items()
                     if k not in ["node_type", "execution_time_ms", "timestamp", "success", "error"]
                 }
+
+                # Normalize dataset ID field names for data flow between nodes
+                # All preprocessing nodes output different field names but next nodes expect 'dataset_id'
+                dataset_id_mappings = {
+                    "preprocessed_dataset_id": "dataset_id",  # missing_value_handler, clean
+                    "encoded_dataset_id": "dataset_id",  # encoding
+                    "transformed_dataset_id": "dataset_id",  # transformation
+                    "scaled_dataset_id": "dataset_id",  # scaling
+                    "selected_dataset_id": "dataset_id",  # feature_selection
+                }
+
+                for old_key, new_key in dataset_id_mappings.items():
+                    if old_key in previous_output and new_key not in previous_output:
+                        previous_output[new_key] = previous_output[old_key]
+                        logger.debug(
+                            f"Mapped {old_key} -> {new_key} for next node: {previous_output[new_key]}"
+                        )
 
             except NodeExecutionError as e:
                 logger.error(f"Pipeline failed at step {i+1}: {node_type}")

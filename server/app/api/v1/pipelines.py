@@ -399,3 +399,167 @@ async def reload_model(
     except Exception as e:
         logger.error(f"Failed to reload model: {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+# ========== ASYNC EXECUTION ENDPOINTS (with Celery) ==========
+
+
+@router.post("/pipeline/run-async")
+async def execute_pipeline_async(
+    request: PipelineExecuteRequest, current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Execute a complete ML pipeline asynchronously using Celery.
+
+    **Authentication Required**
+
+    This endpoint immediately returns a task_id that can be used to poll
+    for progress and results. Ideal for long-running pipelines.
+
+    **Advantages over synchronous endpoint:**
+    - Non-blocking: Returns immediately
+    - Progress tracking: Real-time progress updates
+    - No timeout: Can run for hours if needed
+    - Resumable: Can check status later
+
+    **Workflow:**
+    1. POST /ml/pipeline/run-async → Get task_id
+    2. GET /api/v1/tasks/{task_id}/status → Check progress
+    3. GET /api/v1/tasks/{task_id}/result → Get final results
+
+    Example request:
+    ```json
+    {
+        "pipeline": [
+            {"node_type": "upload_file", "input": {...}},
+            {"node_type": "encoding", "input": {...}},
+            {"node_type": "split", "input": {...}},
+            {"node_type": "linear_regression", "input": {...}}
+        ],
+        "pipeline_name": "My ML Pipeline"
+    }
+    ```
+
+    Example response:
+    ```json
+    {
+        "success": true,
+        "task_id": "abc-123-def-456",
+        "message": "Pipeline execution started",
+        "status_url": "/api/v1/tasks/abc-123-def-456/status",
+        "result_url": "/api/v1/tasks/abc-123-def-456/result"
+    }
+    ```
+    """
+    request_id = generate_request_id()
+    set_request_id(request_id)
+
+    try:
+        logger.info(f"🚀 Async pipeline execution request: {len(request.pipeline)} nodes")
+
+        # Convert to dict format
+        pipeline_config = [node.model_dump() for node in request.pipeline]
+
+        # Import Celery task
+        from app.tasks.pipeline_tasks import execute_pipeline_task
+
+        # Start async task
+        task = execute_pipeline_task.delay(
+            pipeline=pipeline_config,
+            pipeline_name=request.pipeline_name or "Pipeline",
+            dry_run=request.dry_run,
+            current_user=current_user,
+        )
+
+        logger.info(f"✅ Pipeline task created: {task.id}")
+
+        return {
+            "success": True,
+            "task_id": task.id,
+            "message": "Pipeline execution started",
+            "status_url": f"/api/v1/tasks/{task.id}/status",
+            "result_url": f"/api/v1/tasks/{task.id}/result",
+            "cancel_url": f"/api/v1/tasks/{task.id}",
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to start async pipeline execution: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start pipeline execution: {str(e)}",
+        )
+
+
+@router.post("/nodes/run-async")
+async def execute_node_async(
+    request: NodeExecuteRequest, current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Execute a single ML node asynchronously using Celery.
+
+    **Authentication Required**
+
+    Similar to pipeline async execution, but for individual nodes.
+    Useful for expensive operations like:
+    - Large dataset uploads
+    - Complex feature engineering
+    - Model training
+
+    Example request:
+    ```json
+    {
+        "node_type": "linear_regression",
+        "input_data": {
+            "train_dataset_id": "dataset_123",
+            "target_column": "price",
+            "fit_intercept": true
+        }
+    }
+    ```
+
+    Example response:
+    ```json
+    {
+        "success": true,
+        "task_id": "xyz-789",
+        "message": "Node execution started",
+        "node_type": "linear_regression",
+        "status_url": "/api/v1/tasks/xyz-789/status"
+    }
+    ```
+    """
+    request_id = generate_request_id()
+    set_request_id(request_id)
+
+    try:
+        logger.info(f"🔧 Async node execution request: {request.node_type}")
+
+        # Import Celery task
+        from app.tasks.pipeline_tasks import execute_node_task
+
+        # Start async task
+        task = execute_node_task.delay(
+            node_type=request.node_type,
+            input_data=request.input_data,
+            dry_run=request.dry_run,
+            current_user=current_user,
+        )
+
+        logger.info(f"✅ Node task created: {task.id}")
+
+        return {
+            "success": True,
+            "task_id": task.id,
+            "message": f"{request.node_type} execution started",
+            "node_type": request.node_type,
+            "status_url": f"/api/v1/tasks/{task.id}/status",
+            "result_url": f"/api/v1/tasks/{task.id}/result",
+            "cancel_url": f"/api/v1/tasks/{task.id}",
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to start async node execution: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start node execution: {str(e)}",
+        )

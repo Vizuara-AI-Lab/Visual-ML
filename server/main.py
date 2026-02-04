@@ -11,10 +11,18 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.logging import logger
 from app.core.exceptions import BaseMLException
-from app.api.v1 import pipelines, genai_pipelines, knowledge_base, secrets, projects, datasets
+from app.api.v1 import (
+    pipelines,
+    genai_pipelines,
+    knowledge_base,
+    secrets,
+    projects,
+    datasets,
+    auth_student,
+    genai,
+    tasks,
+)
 from pathlib import Path
-
-from app.api.v1 import auth_student
 
 
 @asynccontextmanager
@@ -133,6 +141,7 @@ async def root():
 app.include_router(auth_student.router, prefix=settings.API_V1_PREFIX)
 app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
 app.include_router(datasets.router, prefix=settings.API_V1_PREFIX)
+app.include_router(tasks.router, prefix=settings.API_V1_PREFIX)  # Task status/management
 
 # GenAI routes
 app.include_router(
@@ -142,6 +151,7 @@ app.include_router(
     knowledge_base.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["Knowledge Base"]
 )
 app.include_router(secrets.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["API Secrets"])
+app.include_router(genai.router, prefix=settings.API_V1_PREFIX)
 app.include_router(projects.router, prefix=settings.API_V1_PREFIX)
 
 

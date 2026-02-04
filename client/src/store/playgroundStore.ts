@@ -44,7 +44,7 @@ interface PlaygroundStore {
       | Node<BaseNodeData>[]
       | ((prev: Node<BaseNodeData>[]) => Node<BaseNodeData>[]),
   ) => void;
-  setEdges: (edges: Edge[]) => void;
+  setEdges: (edges: Edge[] | ((prev: Edge[]) => Edge[])) => void;
   addNode: (node: Node<BaseNodeData>) => void;
   updateNode: (nodeId: string, data: Partial<BaseNodeData>) => void;
   deleteNode: (nodeId: string) => void;
@@ -112,10 +112,16 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
       };
     }),
 
-  setEdges: (edges) =>
-    set(() => ({
-      edges,
-    })),
+  setEdges: (edgesOrUpdater) =>
+    set((state) => {
+      const newEdges =
+        typeof edgesOrUpdater === "function"
+          ? edgesOrUpdater(state.edges)
+          : edgesOrUpdater;
+      return {
+        edges: Array.isArray(newEdges) ? newEdges : [],
+      };
+    }),
 
   addNode: (node) =>
     set((state) => {
@@ -189,7 +195,11 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
       .nodes.find((node: Node<BaseNodeData>) => node.id === nodeId);
   },
 
-  updateNodeConfig: (nodeId, config) =>
+  updateNodeConfig: (nodeId, config) => {
+    console.log("🏪 Store - updateNodeConfig called for node:", nodeId);
+    console.log("🏪 Store - Config received:", config);
+    console.log("🏪 Store - target_column in config:", config.target_column);
+    
     set((state) => ({
       nodes: state.nodes.map((node) =>
         node.id === nodeId
@@ -209,7 +219,8 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
               : {},
           }
         : null,
-    })),
+    }));
+  },
 
   clearAll: () =>
     set({

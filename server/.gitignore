@@ -9,3 +9,5 @@ migrations/
 .DS_Store
 coverage
 .vercel
+
+uploads/
