@@ -523,22 +523,8 @@ export const nodeCategories: NodeCategory[] = [
               { value: "log", label: "Log Transform" },
               { value: "sqrt", label: "Square Root" },
               { value: "power", label: "Power Transform (Box-Cox)" },
-              { value: "polynomial", label: "Polynomial Features" },
             ],
             defaultValue: "log",
-          },
-          {
-            name: "degree",
-            label: "Polynomial Degree",
-            type: "number",
-            defaultValue: 2,
-            min: 2,
-            max: 5,
-            description: "Degree for polynomial features",
-            conditionalDisplay: {
-              field: "transformation_type",
-              equals: "polynomial",
-            },
           },
         ],
       },
@@ -591,10 +577,6 @@ export const nodeCategories: NodeCategory[] = [
           correlation_mode: "threshold",
           correlation_threshold: 0.95,
           n_features: 10,
-          target_column: "",
-          task_type: "regression",
-          mi_threshold: null,
-          scoring_function: "",
         },
         configFields: [
           {
@@ -615,8 +597,6 @@ export const nodeCategories: NodeCategory[] = [
                 value: "correlation",
                 label: "Correlation (Filtering/Ranking)",
               },
-              { value: "mutual_info", label: "Mutual Information (Ranking)" },
-              { value: "kbest", label: "SelectKBest (Ranking)" },
             ],
             defaultValue: "variance",
             required: true,
@@ -673,86 +653,6 @@ export const nodeCategories: NodeCategory[] = [
             description:
               "Number of features to keep after removing highly correlated ones",
             conditionalDisplay: { field: "correlation_mode", equals: "topk" },
-          },
-
-          // Mutual Information fields
-          {
-            name: "target_column",
-            label: "Target Column",
-            type: "select",
-            required: true,
-            autoFill: true,
-            description:
-              "Features will be ranked by mutual information with this target",
-            conditionalDisplay: { field: "method", equals: "mutual_info" },
-          },
-          {
-            name: "task_type",
-            label: "Task Type",
-            type: "select",
-            options: [
-              { value: "regression", label: "Regression" },
-              { value: "classification", label: "Classification" },
-            ],
-            defaultValue: "regression",
-            description: "Type of machine learning task",
-            conditionalDisplay: { field: "method", equals: "mutual_info" },
-          },
-          {
-            name: "n_features",
-            label: "Number of Features (K)",
-            type: "number",
-            min: 1,
-            defaultValue: 10,
-            description: "Select top K features ranked by MI score",
-            conditionalDisplay: { field: "method", equals: "mutual_info" },
-          },
-
-          // SelectKBest fields
-          {
-            name: "target_column",
-            label: "Target Column",
-            type: "select",
-            required: true,
-            autoFill: true,
-            description:
-              "Features will be ranked using statistical tests against this target",
-            conditionalDisplay: { field: "method", equals: "kbest" },
-          },
-          {
-            name: "task_type",
-            label: "Task Type",
-            type: "select",
-            options: [
-              { value: "regression", label: "Regression" },
-              { value: "classification", label: "Classification" },
-            ],
-            defaultValue: "regression",
-            description: "Type of machine learning task",
-            conditionalDisplay: { field: "method", equals: "kbest" },
-          },
-          {
-            name: "scoring_function",
-            label: "Scoring Function",
-            type: "select",
-            options: [
-              { value: "f_test", label: "F-Test (ANOVA)" },
-              { value: "mutual_info", label: "Mutual Information" },
-              { value: "chi2", label: "Chi-Squared" },
-            ],
-            required: true,
-            description: "Statistical test to rank features",
-            conditionalDisplay: { field: "method", equals: "kbest" },
-          },
-          {
-            name: "n_features",
-            label: "Number of Features (K)",
-            type: "number",
-            min: 1,
-            defaultValue: 10,
-            description:
-              "Select K best features using the chosen scoring function",
-            conditionalDisplay: { field: "method", equals: "kbest" },
           },
         ],
       },

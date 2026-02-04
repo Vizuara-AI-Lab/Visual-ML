@@ -27,7 +27,7 @@ class DecisionTreeInput(NodeInput):
     train_dataset_id: str = Field(..., description="Training dataset ID")
     target_column: str = Field(..., description="Name of target column")
     task_type: str = Field(..., description="Task type: 'classification' or 'regression'")
-    
+
     # Hyperparameters
     max_depth: Optional[int] = Field(None, description="Maximum tree depth (None = unlimited)")
     min_samples_split: int = Field(2, description="Minimum samples required to split node")
@@ -40,17 +40,17 @@ class DecisionTreeOutput(NodeOutput):
 
     model_id: str = Field(..., description="Unique model identifier")
     model_path: str = Field(..., description="Path to saved model")
-    
+
     training_samples: int = Field(..., description="Number of training samples")
     n_features: int = Field(..., description="Number of features")
     task_type: str = Field(..., description="Task type used")
-    
+
     training_metrics: Dict[str, Any] = Field(..., description="Training metrics")
     training_time_seconds: float = Field(..., description="Training duration")
-    
+
     tree_depth: int = Field(..., description="Actual tree depth")
     n_leaves: int = Field(..., description="Number of leaf nodes")
-    
+
     metadata: Dict[str, Any] = Field(..., description="Training metadata")
 
 
@@ -126,7 +126,7 @@ class DecisionTreeNode(BaseNode):
             if df_train is None or df_train.empty:
                 raise InvalidDatasetError(
                     reason=f"Dataset {input_data.train_dataset_id} not found or empty",
-                    expected_format="Valid dataset ID"
+                    expected_format="Valid dataset ID",
                 )
 
             # Validate target column

@@ -353,7 +353,7 @@ export const FeatureEngineeringConfigPanel = ({
               ⚡ Apply mathematical transformations to features
             </p>
             <p className="text-xs text-purple-700">
-              Transform data using log, sqrt, power, or polynomial methods
+              Transform data using log, sqrt, or power methods
             </p>
           </div>
           {renderField("dataset_id", "Dataset Source", "text")}
@@ -361,21 +361,7 @@ export const FeatureEngineeringConfigPanel = ({
             { value: "log", label: "Log Transform" },
             { value: "sqrt", label: "Square Root" },
             { value: "power", label: "Power Transform (Box-Cox)" },
-            { value: "polynomial", label: "Polynomial Features" },
           ])}
-          {config.transformation_type === "polynomial" && (
-            <>
-              {renderField("degree", "Polynomial Degree", "number", {
-                min: 2,
-                max: 5,
-              })}
-              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-xs text-yellow-800">
-                  ⚠️ Higher degrees create more features exponentially
-                </p>
-              </div>
-            </>
-          )}
           {availableColumns.length > 0 && (
             <>
               <div className="bg-white border border-gray-200 rounded-lg p-4">
@@ -581,8 +567,6 @@ export const FeatureEngineeringConfigPanel = ({
           {renderField("method", "Selection Method", "select", [
             { value: "variance", label: "Variance Threshold" },
             { value: "correlation", label: "Correlation Threshold" },
-            { value: "mutual_info", label: "Mutual Information" },
-            { value: "kbest", label: "Select K Best" },
           ])}
 
           {config.method === "variance" && (
@@ -629,62 +613,6 @@ export const FeatureEngineeringConfigPanel = ({
                   {config.correlation_mode === "topk"
                     ? "Keep top K features after removing highly correlated ones"
                     : "Remove features with correlation above threshold"}
-                </p>
-              </div>
-            </>
-          )}
-
-          {config.method === "mutual_info" && (
-            <>
-              {renderField(
-                "target_column",
-                "Target Column",
-                "select",
-                availableColumns.length > 0
-                  ? availableColumns.map((col) => ({ value: col, label: col }))
-                  : [],
-              )}
-              {renderField("task_type", "Task Type", "select", [
-                { value: "regression", label: "Regression" },
-                { value: "classification", label: "Classification" },
-              ])}
-              {renderField("mi_threshold", "MI Threshold", "number", {
-                min: 0,
-                step: 0.01,
-              })}
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs text-blue-800">
-                  Select features based on mutual information with target
-                </p>
-              </div>
-            </>
-          )}
-
-          {config.method === "kbest" && (
-            <>
-              {renderField(
-                "target_column",
-                "Target Column",
-                "select",
-                availableColumns.length > 0
-                  ? availableColumns.map((col) => ({ value: col, label: col }))
-                  : [],
-              )}
-              {renderField("task_type", "Task Type", "select", [
-                { value: "regression", label: "Regression" },
-                { value: "classification", label: "Classification" },
-              ])}
-              {renderField("n_features", "Number of Features", "number", {
-                min: 1,
-              })}
-              {renderField("scoring_function", "Scoring Function", "select", [
-                { value: "f_classif", label: "F-Statistic (Classification)" },
-                { value: "f_regression", label: "F-Statistic (Regression)" },
-                { value: "chi2", label: "Chi-Squared" },
-              ])}
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs text-blue-800">
-                  Select top K features based on statistical tests
                 </p>
               </div>
             </>

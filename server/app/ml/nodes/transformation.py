@@ -1,6 +1,6 @@
 """
 Transformation Node - Apply mathematical transformations to features.
-Supports Log, Square Root, Box-Cox, and Polynomial transformations.
+Supports Log, Square Root, and Box-Cox transformations.
 """
 
 from typing import Type, Optional, Dict, Any, List
@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from pydantic import Field
 from pathlib import Path
-from sklearn.preprocessing import PowerTransformer, PolynomialFeatures
+from sklearn.preprocessing import PowerTransformer
 import io
 
 from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
@@ -25,12 +25,8 @@ class TransformationInput(NodeInput):
     """Input schema for Transformation node."""
 
     dataset_id: str = Field(..., description="Dataset ID to process")
-    transformation_type: str = Field(
-        "log", description="Transformation type: log, sqrt, power, polynomial"
-    )
+    transformation_type: str = Field("log", description="Transformation type: log, sqrt, power")
     columns: List[str] = Field(default_factory=list, description="Columns to transform")
-    degree: int = Field(2, description="Polynomial degree (for polynomial transformation)")
-    include_bias: bool = Field(False, description="Include bias term in polynomial features")
 
 
 class TransformationOutput(NodeOutput):
@@ -54,7 +50,6 @@ class TransformationNode(BaseNode):
     - Log Transform: log(x + 1) to handle zeros
     - Square Root: sqrt(x)
     - Power Transform: Box-Cox transformation
-    - Polynomial Features: Create interaction terms
     """
 
     node_type = "transformation"
@@ -154,33 +149,19 @@ class TransformationNode(BaseNode):
                     input_data=input_data.model_dump(),
                 )
 
-            # Apply transformation
-            if input_data.transformation_type == "polynomial":
-                # Polynomial features create new columns
-                df_transformed, new_cols = self._polynomial_transform(
-                    df_transformed, numeric_cols, input_data.degree, input_data.include_bias
-                )
-                new_columns_list = new_cols
-                transformation_summary["polynomial"] = {
-                    "degree": input_data.degree,
-                    "input_columns": numeric_cols,
-                    "output_columns": len(new_cols),
-                    "conversion_warnings": conversion_warnings,
-                }
-            else:
-                # Other transformations modify columns in-place
-                for column in numeric_cols:
-                    if input_data.transformation_type == "log":
-                        df_transformed[column] = self._log_transform(df_transformed[column])
-                        transformation_summary[column] = {"method": "log"}
+            # Apply transformation - all transformations modify columns in-place
+            for column in numeric_cols:
+                if input_data.transformation_type == "log":
+                    df_transformed[column] = self._log_transform(df_transformed[column])
+                    transformation_summary[column] = {"method": "log"}
 
-                    elif input_data.transformation_type == "sqrt":
-                        df_transformed[column] = self._sqrt_transform(df_transformed[column])
-                        transformation_summary[column] = {"method": "sqrt"}
+                elif input_data.transformation_type == "sqrt":
+                    df_transformed[column] = self._sqrt_transform(df_transformed[column])
+                    transformation_summary[column] = {"method": "sqrt"}
 
-                    elif input_data.transformation_type == "power":
-                        df_transformed[column] = self._power_transform(df_transformed[column])
-                        transformation_summary[column] = {"method": "box-cox"}
+                elif input_data.transformation_type == "power":
+                    df_transformed[column] = self._power_transform(df_transformed[column])
+                    transformation_summary[column] = {"method": "box-cox"}
 
             # Add conversion warnings to summary
             if conversion_warnings:
@@ -218,8 +199,16 @@ class TransformationNode(BaseNode):
             )
 
     async def _load_dataset(self, dataset_id: str) -> Optional[pd.DataFrame]:
-        """Load dataset from storage."""
+        """Load dataset from storage (uploads folder first, then database)."""
         try:
+            # FIRST: Try to load from uploads folder (for preprocessed datasets)
+            upload_path = Path(settings.UPLOAD_DIR) / f"{dataset_id}.csv"
+            if upload_path.exists():
+                logger.info(f"Loading dataset from uploads folder: {upload_path}")
+                df = pd.read_csv(upload_path)
+                return df
+
+            # SECOND: Try to load from database (for original datasets)
             db = SessionLocal()
             dataset = (
                 db.query(Dataset)
@@ -228,7 +217,7 @@ class TransformationNode(BaseNode):
             )
 
             if not dataset:
-                logger.error(f"Dataset not found: {dataset_id}")
+                logger.error(f"Dataset not found in uploads or database: {dataset_id}")
                 db.close()
                 return None
 
@@ -274,24 +263,3 @@ class TransformationNode(BaseNode):
         pt = PowerTransformer(method="box-cox")
         transformed = pt.fit_transform(series.values.reshape(-1, 1))
         return pd.Series(transformed.flatten(), index=series.index)
-
-    def _polynomial_transform(
-        self, df: pd.DataFrame, columns: List[str], degree: int, include_bias: bool
-    ) -> tuple[pd.DataFrame, List[str]]:
-        """Create polynomial features."""
-        # Extract specified columns
-        X = df[columns].values
-
-        # Create polynomial features
-        poly = PolynomialFeatures(degree=degree, include_bias=include_bias)
-        X_poly = poly.fit_transform(X)
-
-        # Generate column names
-        feature_names = poly.get_feature_names_out(columns)
-
-        # Drop original columns and add polynomial features
-        df = df.drop(columns=columns)
-        poly_df = pd.DataFrame(X_poly, columns=feature_names, index=df.index)
-        df = pd.concat([df, poly_df], axis=1)
-
-        return df, feature_names.tolist()

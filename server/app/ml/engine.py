@@ -209,9 +209,18 @@ class MLPipelineEngine:
                 )
             else:
                 # For non-view nodes, merge previous output (normal data flow)
-                # Input data takes precedence over previous_output to respect user configuration
-                merged_input = {**previous_output, **user_context, **input_data}
-                logger.info(f"Pipeline step {i+1}/{len(pipeline)}: {node_type}")
+                # previous_output takes precedence for dataset_id to enable proper data flow
+                # This allows preprocessing nodes (missing_value_handler, encoding, etc.) to pass their output to the next node
+                merged_input = {**user_context, **input_data, **previous_output}
+
+                # Log which dataset is being used
+                if "dataset_id" in previous_output and previous_output["dataset_id"]:
+                    logger.info(
+                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
+                        f"(using dataset from previous node: {previous_output['dataset_id']})"
+                    )
+                else:
+                    logger.info(f"Pipeline step {i+1}/{len(pipeline)}: {node_type}")
 
             try:
                 result = await self.execute_node(

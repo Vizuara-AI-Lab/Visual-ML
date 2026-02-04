@@ -1394,66 +1394,231 @@ function FeatureEngineeringResults({
         </div>
       )}
 
-      {/* Selected Features (for feature selection) */}
+      {/* Enhanced Feature Selection Results */}
       {result.selected_feature_names &&
         result.selected_feature_names.length > 0 && (
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">
-              Selected Features ({result.selected_feature_names.length})
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {result.selected_feature_names.map(
-                (feature: string, idx: number) => (
-                  <span
-                    key={idx}
-                    className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm"
-                  >
-                    {feature}
+          <div className="space-y-4">
+            {/* Method Summary Card */}
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-purple-900 mb-3 flex items-center gap-2">
+                🎯 Selection Method
+              </h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-700">Method:</span>
+                  <span className="font-semibold text-gray-900">
+                    {result.selection_summary?.method?.toUpperCase() || "N/A"}
                   </span>
-                ),
-              )}
+                </div>
+                {result.selection_summary?.variance_threshold !== undefined && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700">
+                      Variance Threshold:
+                    </span>
+                    <span className="font-semibold text-purple-600">
+                      {result.selection_summary.variance_threshold}
+                    </span>
+                  </div>
+                )}
+                {result.selection_summary?.correlation_threshold !==
+                  undefined && (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-700">
+                        Correlation Threshold:
+                      </span>
+                      <span className="font-semibold text-purple-600">
+                        {result.selection_summary.correlation_threshold}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-700">Mode:</span>
+                      <span className="font-semibold text-gray-900">
+                        {result.selection_summary.correlation_mode || "N/A"}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {result.selection_summary?.n_features && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-700">Target K:</span>
+                    <span className="font-semibold text-purple-600">
+                      {result.selection_summary.n_features}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t border-purple-200">
+                  <span className="text-sm text-gray-700">Reduction:</span>
+                  <span className="font-semibold text-red-600">
+                    {result.selection_summary?.reduction_percentage || 0}%
+                  </span>
+                </div>
+              </div>
             </div>
+
+            {/* Dataset Shape Comparison */}
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                📊 Dataset Shape Comparison
+              </h3>
+              <div className="flex items-center justify-center gap-6">
+                <div className="text-center">
+                  <div className="text-sm text-gray-600 mb-1">Before</div>
+                  <div className="text-2xl font-bold text-gray-900">
+                    {result.selection_summary?.original_features || 0}
+                  </div>
+                  <div className="text-xs text-gray-500">features</div>
+                </div>
+                <div className="text-3xl text-gray-400">→</div>
+                <div className="text-center">
+                  <div className="text-sm text-gray-600 mb-1">After</div>
+                  <div className="text-2xl font-bold text-green-600">
+                    {result.selected_feature_names.length}
+                  </div>
+                  <div className="text-xs text-gray-500">features</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Selected Features */}
+            <div className="bg-white border border-green-200 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-green-900 mb-3">
+                ✅ Selected Features ({result.selected_feature_names.length})
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {result.selected_feature_names.map(
+                  (feature: string, idx: number) => (
+                    <span
+                      key={idx}
+                      className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium border border-green-300"
+                    >
+                      {feature}
+                    </span>
+                  ),
+                )}
+              </div>
+            </div>
+
+            {/* Removed Features */}
+            {result.removed_feature_names &&
+              result.removed_feature_names.length > 0 && (
+                <div className="bg-white border border-red-200 rounded-lg p-4">
+                  <h3 className="text-lg font-semibold text-red-900 mb-3">
+                    ❌ Removed Features ({result.removed_feature_names.length})
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {result.removed_feature_names.map(
+                      (feature: string, idx: number) => (
+                        <span
+                          key={idx}
+                          className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium border border-red-300"
+                        >
+                          {feature}
+                        </span>
+                      ),
+                    )}
+                  </div>
+                </div>
+              )}
           </div>
         )}
 
-      {/* Feature Scores (for feature selection) */}
+      {/* Enhanced Feature Importance/Score Ranking Table */}
       {result.feature_scores &&
         Object.keys(result.feature_scores).length > 0 && (
           <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">
-              Feature Importance Scores
-            </h3>
-            <div className="overflow-auto max-h-96">
-              <table className="min-w-full border-collapse border border-gray-300">
-                <thead className="bg-gray-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                📈 Feature Ranking (
+                {result.selection_summary?.method === "variance"
+                  ? "Variance"
+                  : "Max Correlation"}{" "}
+                Scores)
+              </h3>
+              <span className="text-sm text-gray-600">
+                {Object.keys(result.feature_scores).length} features
+              </span>
+            </div>
+            <div className="overflow-auto max-h-96 border border-gray-300 rounded">
+              <table className="min-w-full border-collapse">
+                <thead className="bg-gray-100 sticky top-0">
                   <tr>
-                    <th className="border border-gray-300 px-4 py-2 text-left">
-                      Feature
+                    <th className="border-b border-gray-300 px-4 py-3 text-left text-xs font-semibold text-gray-700">
+                      Rank
                     </th>
-                    <th className="border border-gray-300 px-4 py-2 text-left">
+                    <th className="border-b border-gray-300 px-4 py-3 text-left text-xs font-semibold text-gray-700">
+                      Feature Name
+                    </th>
+                    <th className="border-b border-gray-300 px-4 py-3 text-right text-xs font-semibold text-gray-700">
                       Score
+                    </th>
+                    <th className="border-b border-gray-300 px-4 py-3 text-center text-xs font-semibold text-gray-700">
+                      Status
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {Object.entries(result.feature_scores)
-                    .sort(([, a]: any, [, b]: any) => b - a)
-                    .map(([feature, score]: any, idx: number) => (
-                      <tr
-                        key={idx}
-                        className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}
-                      >
-                        <td className="border border-gray-300 px-4 py-2">
-                          {feature}
-                        </td>
-                        <td className="border border-gray-300 px-4 py-2">
-                          {typeof score === "number" ? score.toFixed(4) : score}
-                        </td>
-                      </tr>
-                    ))}
+                    .sort(([, a]: any, [, b]: any) => {
+                      // For variance: higher is better (sort descending)
+                      // For correlation: lower is better (sort ascending)
+                      if (result.selection_summary?.method === "correlation") {
+                        return a - b; // ascending
+                      }
+                      return b - a; // descending (variance)
+                    })
+                    .map(([feature, score]: any, idx: number) => {
+                      const isSelected =
+                        result.selected_feature_names?.includes(feature);
+                      return (
+                        <tr
+                          key={idx}
+                          className={`${
+                            idx % 2 === 0 ? "bg-white" : "bg-gray-50"
+                          } hover:bg-gray-100 transition-colors`}
+                        >
+                          <td className="border-b border-gray-200 px-4 py-2 text-sm text-gray-600">
+                            #{idx + 1}
+                          </td>
+                          <td className="border-b border-gray-200 px-4 py-2 text-sm font-medium text-gray-900">
+                            {feature}
+                          </td>
+                          <td className="border-b border-gray-200 px-4 py-2 text-sm text-right font-mono">
+                            {typeof score === "number"
+                              ? score.toFixed(6)
+                              : score}
+                          </td>
+                          <td className="border-b border-gray-200 px-4 py-2 text-center">
+                            {isSelected ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800 border border-green-300">
+                                ✓ Selected
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800 border border-red-300">
+                                ✗ Removed
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
+            {result.selection_summary?.method === "variance" && (
+              <p className="text-xs text-gray-600 mt-2">
+                💡 Higher variance = more information retained. Features below
+                threshold {result.selection_summary.variance_threshold} were
+                removed.
+              </p>
+            )}
+            {result.selection_summary?.method === "correlation" && (
+              <p className="text-xs text-gray-600 mt-2">
+                💡 Lower correlation = less redundancy. Features with max
+                correlation above{" "}
+                {result.selection_summary.correlation_threshold} were removed.
+              </p>
+            )}
           </div>
         )}
 

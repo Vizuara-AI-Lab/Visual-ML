@@ -58,7 +58,7 @@ class SplitOutput(NodeOutput):
 
     train_dataset_id: str = Field(..., description="ID of training dataset")
     test_dataset_id: str = Field(..., description="ID of test dataset")
-    
+
     train_path: str = Field(..., description="Path to training set")
     test_path: str = Field(..., description="Path to test set")
 
@@ -148,7 +148,7 @@ class SplitNode(BaseNode):
             if df is None or df.empty:
                 raise InvalidDatasetError(
                     reason=f"Dataset {input_data.dataset_id} not found or empty",
-                    expected_format="Valid dataset ID"
+                    expected_format="Valid dataset ID",
                 )
 
             # Validate target column
@@ -186,16 +186,14 @@ class SplitNode(BaseNode):
 
             train_id = f"{split_id}_train"
             test_id = f"{split_id}_test"
-            
+
             train_path = upload_dir / f"{train_id}.csv"
             test_path = upload_dir / f"{test_id}.csv"
 
             train_df.to_csv(train_path, index=False)
             test_df.to_csv(test_path, index=False)
 
-            logger.info(
-                f"Dataset split complete - Train: {len(train_df)}, Test: {len(test_df)}"
-            )
+            logger.info(f"Dataset split complete - Train: {len(train_df)}, Test: {len(test_df)}")
 
             return SplitOutput(
                 node_type=self.node_type,

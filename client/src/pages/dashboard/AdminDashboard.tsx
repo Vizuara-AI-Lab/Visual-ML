@@ -11,7 +11,11 @@ const AdminDashboard: React.FC = () => {
 
   // Use TanStack Query hooks
   const { data: adminProfile } = useAdminProfile();
-  const { data: students = [], isLoading, error } = useStudentsList({
+  const {
+    data: students = [],
+    isLoading,
+    error,
+  } = useStudentsList({
     search: search || undefined,
     isPremium: filter.isPremium ? filter.isPremium === "true" : undefined,
     isActive: filter.isActive ? filter.isActive === "true" : undefined,
@@ -79,7 +83,9 @@ const AdminDashboard: React.FC = () => {
       <div className="bg-white border-b p-4 shadow-sm">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
+            <h1 className="text-2xl font-bold text-gray-800">
+              Admin Dashboard
+            </h1>
             {adminProfile && (
               <p className="text-sm text-gray-600 mt-1">
                 Welcome back, {adminProfile.name || adminProfile.email}

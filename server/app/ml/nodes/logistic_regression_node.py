@@ -25,7 +25,7 @@ class LogisticRegressionInput(NodeInput):
 
     train_dataset_id: str = Field(..., description="Training dataset ID")
     target_column: str = Field(..., description="Name of target column")
-    
+
     # Hyperparameters
     C: float = Field(1.0, description="Inverse of regularization strength")
     penalty: str = Field("l2", description="Regularization penalty type")
@@ -39,14 +39,16 @@ class LogisticRegressionOutput(NodeOutput):
 
     model_id: str = Field(..., description="Unique model identifier")
     model_path: str = Field(..., description="Path to saved model")
-    
+
     training_samples: int = Field(..., description="Number of training samples")
     n_features: int = Field(..., description="Number of features")
     n_classes: int = Field(..., description="Number of classes")
-    
-    training_metrics: Dict[str, Any] = Field(..., description="Training metrics (accuracy, precision, recall, F1)")
+
+    training_metrics: Dict[str, Any] = Field(
+        ..., description="Training metrics (accuracy, precision, recall, F1)"
+    )
     training_time_seconds: float = Field(..., description="Training duration")
-    
+
     class_names: list = Field(..., description="Class names/labels")
     metadata: Dict[str, Any] = Field(..., description="Training metadata")
 
@@ -123,7 +125,7 @@ class LogisticRegressionNode(BaseNode):
             if df_train is None or df_train.empty:
                 raise InvalidDatasetError(
                     reason=f"Dataset {input_data.train_dataset_id} not found or empty",
-                    expected_format="Valid dataset ID"
+                    expected_format="Valid dataset ID",
                 )
 
             # Validate target column

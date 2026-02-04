@@ -27,7 +27,7 @@ class RandomForestInput(NodeInput):
     train_dataset_id: str = Field(..., description="Training dataset ID")
     target_column: str = Field(..., description="Name of target column")
     task_type: str = Field(..., description="Task type: 'classification' or 'regression'")
-    
+
     # Hyperparameters
     n_estimators: int = Field(100, description="Number of trees in the forest")
     max_depth: Optional[int] = Field(None, description="Maximum tree depth (None = unlimited)")
@@ -41,15 +41,15 @@ class RandomForestOutput(NodeOutput):
 
     model_id: str = Field(..., description="Unique model identifier")
     model_path: str = Field(..., description="Path to saved model")
-    
+
     training_samples: int = Field(..., description="Number of training samples")
     n_features: int = Field(..., description="Number of features")
     task_type: str = Field(..., description="Task type used")
     n_estimators: int = Field(..., description="Number of trees in forest")
-    
+
     training_metrics: Dict[str, Any] = Field(..., description="Training metrics")
     training_time_seconds: float = Field(..., description="Training duration")
-    
+
     metadata: Dict[str, Any] = Field(..., description="Training metadata")
 
 
@@ -127,7 +127,7 @@ class RandomForestNode(BaseNode):
             if df_train is None or df_train.empty:
                 raise InvalidDatasetError(
                     reason=f"Dataset {input_data.train_dataset_id} not found or empty",
-                    expected_format="Valid dataset ID"
+                    expected_format="Valid dataset ID",
                 )
 
             # Validate target column
