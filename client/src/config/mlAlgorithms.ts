@@ -23,7 +23,6 @@ export const mlAlgorithmsCategory: NodeCategory = {
         train_dataset_id: "",
         target_column: "",
         fit_intercept: true,
-        random_state: 42,
       },
       configFields: [
         {
@@ -32,7 +31,7 @@ export const mlAlgorithmsCategory: NodeCategory = {
           type: "text",
           required: true,
           autoFill: true,
-          description: "Connect to train output from split node",
+          description: "Auto-filled from connected split node",
         },
         {
           name: "target_column",
@@ -40,7 +39,7 @@ export const mlAlgorithmsCategory: NodeCategory = {
           type: "select",
           required: true,
           autoFill: true,
-          description: "Column to predict",
+          description: "Auto-filled from dataset",
         },
         {
           name: "fit_intercept",
@@ -48,13 +47,6 @@ export const mlAlgorithmsCategory: NodeCategory = {
           type: "checkbox",
           defaultValue: true,
           description: "Calculate intercept for the model",
-        },
-        {
-          name: "random_state",
-          label: "Random State",
-          type: "number",
-          defaultValue: 42,
-          description: "Seed for reproducibility",
         },
       ],
     },

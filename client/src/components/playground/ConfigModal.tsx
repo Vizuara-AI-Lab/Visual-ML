@@ -76,18 +76,34 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
       "transformation",
       "scaling",
       "feature_selection",
+      "split",
+      "linear_regression",
+      "logistic_regression",
+      "decision_tree",
+      "random_forest",
     ].includes(node?.type || "");
 
     if (isAutoFillNode && nodeId) {
       const incomingEdge = edges.find((edge) => edge.target === nodeId);
       if (incomingEdge) {
         const sourceNode = getNodeById(incomingEdge.source);
-        // For missing_value_handler, check for preprocessed_dataset_id first, then dataset_id
-        const datasetId =
-          node?.type === "missing_value_handler"
-            ? sourceNode?.data.config?.preprocessed_dataset_id ||
-              sourceNode?.data.config?.dataset_id
-            : sourceNode?.data.config?.dataset_id;
+        const sourceResult = sourceNode?.data.result as
+          | Record<string, unknown>
+          | undefined;
+        const sourceConfig = sourceNode?.data.config;
+
+        // Priority 1: Check result for specific dataset IDs from preprocessing nodes
+        let datasetId =
+          sourceResult?.preprocessed_dataset_id ||
+          sourceResult?.encoded_dataset_id ||
+          sourceResult?.transformed_dataset_id ||
+          sourceResult?.scaled_dataset_id ||
+          sourceResult?.selected_dataset_id;
+
+        // Priority 2: Check config for dataset_id (for upload/select nodes)
+        if (!datasetId) {
+          datasetId = sourceConfig?.dataset_id;
+        }
 
         if (datasetId) {
           console.log(
@@ -122,6 +138,12 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
   const getAvailableColumns = (): string[] => {
     if (!connectedSourceNode) return [];
 
+    console.log(
+      "🔍 Getting columns from source node:",
+      connectedSourceNode.type,
+      connectedSourceNode.data,
+    );
+
     // Helper function to recursively search for columns
     const searchForColumns = (
       node: typeof connectedSourceNode,
@@ -134,6 +156,14 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
       const sourceResult = node.data.result as
         | Record<string, unknown>
         | undefined;
+
+      console.log(`  📦 Checking node ${node.type}:`, {
+        config_columns: sourceConfig?.columns,
+        result_columns: sourceResult?.columns,
+        encoded_columns: sourceResult?.encoded_columns,
+        final_columns: sourceResult?.final_columns,
+        selected_feature_names: sourceResult?.selected_feature_names,
+      });
 
       // Priority 1: Check config.columns (for dataset nodes like upload_file, select_dataset)
       if (sourceConfig?.columns && Array.isArray(sourceConfig.columns)) {
@@ -161,6 +191,30 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
         return sourceResult.encoded_columns as string[];
       }
 
+      // Priority 4.5: Check result.new_columns combined with original columns
+      // For encoding nodes, we need to get ALL columns, not just encoded ones
+      // If the node has been executed, try to load columns from the actual dataset
+      if (
+        sourceResult?.encoded_dataset_id ||
+        sourceResult?.transformed_dataset_id ||
+        sourceResult?.scaled_dataset_id ||
+        sourceResult?.selected_dataset_id ||
+        sourceResult?.preprocessed_dataset_id
+      ) {
+        // Node has been executed - columns should be in the result
+        // If not found above, trace back to parent to get original columns
+        const parentEdge = edges.find((edge) => edge.target === node.id);
+        if (parentEdge) {
+          const parentNode = getNodeById(parentEdge.source);
+          if (parentNode) {
+            const parentColumns = searchForColumns(parentNode, visited);
+            if (parentColumns.length > 0) {
+              return parentColumns;
+            }
+          }
+        }
+      }
+
       // Priority 5: Check result.final_columns (for transformation/scaling nodes)
       if (
         sourceResult?.final_columns &&
@@ -169,7 +223,15 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
         return sourceResult.final_columns as string[];
       }
 
-      // Priority 6: If this is a view/processing node without columns, trace back to its source
+      // Priority 6: Check result.selected_feature_names (for feature_selection nodes)
+      if (
+        sourceResult?.selected_feature_names &&
+        Array.isArray(sourceResult.selected_feature_names)
+      ) {
+        return sourceResult.selected_feature_names as string[];
+      }
+
+      // Priority 7: If this is a view/processing node without columns, trace back to its source
       const nodeTypes = [
         "table_view",
         "data_preview",
@@ -211,29 +273,17 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
 
   const handleFieldChange = (fieldName: string, value: unknown) => {
     console.log(`📝 ConfigModal - Field "${fieldName}" changed to:`, value);
-    
+
     // Special handling for split node train/test ratios
-    if (node.type === "split") {
-      if (fieldName === "train_ratio") {
-        const trainRatio = Number(value);
-        const testRatio = Math.max(0.1, Math.min(0.9, 1 - trainRatio));
-        setConfig((prev) => ({
-          ...prev,
-          train_ratio: trainRatio,
-          test_ratio: Number(testRatio.toFixed(2)),
-        }));
-        return;
-      }
-      if (fieldName === "test_ratio") {
-        const testRatio = Number(value);
-        const trainRatio = Math.max(0.1, Math.min(0.9, 1 - testRatio));
-        setConfig((prev) => ({
-          ...prev,
-          test_ratio: testRatio,
-          train_ratio: Number(trainRatio.toFixed(2)),
-        }));
-        return;
-      }
+    if (node.type === "split" && fieldName === "train_ratio") {
+      const trainRatio = Number(value);
+      const testRatio = Number((1 - trainRatio).toFixed(2));
+      setConfig((prev) => ({
+        ...prev,
+        train_ratio: trainRatio,
+        test_ratio: testRatio,
+      }));
+      return;
     }
 
     // Default behavior for all other fields
@@ -244,16 +294,22 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
   const getAutoFilledValue = (fieldName: string): unknown => {
     // For view nodes, auto-fill dataset_id from connected source node
     if (fieldName === "dataset_id" && connectedSourceNode) {
+      const sourceResult = connectedSourceNode.data.result as
+        | Record<string, unknown>
+        | undefined;
       const sourceConfig = connectedSourceNode.data.config;
-      if (sourceConfig?.dataset_id) {
-        return sourceConfig.dataset_id;
-      }
-      // If source is an upload node, use its dataset_id
-      if (
-        connectedSourceNode.type === "upload_file" &&
-        sourceConfig?.dataset_id
-      ) {
-        return sourceConfig.dataset_id;
+
+      // Priority 1: Check result for preprocessing node dataset IDs
+      const datasetId =
+        sourceResult?.preprocessed_dataset_id ||
+        sourceResult?.encoded_dataset_id ||
+        sourceResult?.transformed_dataset_id ||
+        sourceResult?.scaled_dataset_id ||
+        sourceResult?.selected_dataset_id ||
+        sourceConfig?.dataset_id;
+
+      if (datasetId) {
+        return datasetId;
       }
     }
 
@@ -535,6 +591,16 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                       "split",
                     ].includes(node.type);
 
+                  // Check if this is a train_dataset_id field for ML nodes (should be read-only)
+                  const isTrainDatasetIdField =
+                    field.name === "train_dataset_id" &&
+                    [
+                      "linear_regression",
+                      "logistic_regression",
+                      "decision_tree",
+                      "random_forest",
+                    ].includes(node.type);
+
                   return (
                     <div key={field.name}>
                       <label className="block text-sm font-medium text-gray-200 mb-2">
@@ -552,14 +618,14 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                             onChange={(e) =>
                               handleFieldChange(field.name, e.target.value)
                             }
-                            readOnly={isDatasetIdField}
+                            readOnly={isDatasetIdField || isTrainDatasetIdField}
                             className={`w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                              isDatasetIdField
+                              isDatasetIdField || isTrainDatasetIdField
                                 ? "cursor-not-allowed opacity-75"
                                 : ""
                             }`}
                             placeholder={
-                              isDatasetIdField && !currentValue
+                              (isDatasetIdField || isTrainDatasetIdField) && !currentValue
                                 ? "Connect a data source node"
                                 : field.description
                             }
@@ -572,6 +638,16 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                           {isDatasetIdField && !connectedSourceNode && (
                             <p className="text-xs text-amber-400 mt-1">
                               ⚠ Connect an upload dataset node to this view node
+                            </p>
+                          )}
+                          {isTrainDatasetIdField && connectedSourceNode && (
+                            <p className="text-xs text-green-400 mt-1">
+                              ✓ Connected to: {connectedSourceNode.data.label}
+                            </p>
+                          )}
+                          {isTrainDatasetIdField && !connectedSourceNode && (
+                            <p className="text-xs text-amber-400 mt-1">
+                              ⚠ Connect a split node to auto-fill training dataset
                             </p>
                           )}
                         </div>
@@ -592,6 +668,46 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                           step={field.step}
                           className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
+                      )}
+
+                      {field.type === "range" && (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between text-sm text-gray-400">
+                            <span>
+                              Train:{" "}
+                              {((currentValue as number) * 100).toFixed(0)}%
+                            </span>
+                            <span>
+                              Test:{" "}
+                              {((1 - (currentValue as number)) * 100).toFixed(
+                                0,
+                              )}
+                              %
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            value={(currentValue as number) || 0.8}
+                            onChange={(e) =>
+                              handleFieldChange(
+                                field.name,
+                                parseFloat(e.target.value),
+                              )
+                            }
+                            min={field.min}
+                            max={field.max}
+                            step={field.step}
+                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+                            style={{
+                              background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${((currentValue as number) || 0.8) * 100}%, #1F2937 ${((currentValue as number) || 0.8) * 100}%, #1F2937 100%)`,
+                            }}
+                          />
+                          <div className="flex justify-between text-xs text-gray-500">
+                            <span>10%</span>
+                            <span>50%</span>
+                            <span>90%</span>
+                          </div>
+                        </div>
                       )}
 
                       {field.type === "select" && (
@@ -667,9 +783,11 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                                 ))}
                                 {/* Auto-fill columns for target_column field */}
                                 {field.autoFill &&
-                                  datasetMetadata?.columns &&
                                   field.name === "target_column" &&
-                                  datasetMetadata.columns.map((col: string) => (
+                                  (availableColumns.length > 0
+                                    ? availableColumns
+                                    : datasetMetadata?.columns || []
+                                  ).map((col: string) => (
                                     <option key={col} value={col}>
                                       {col}
                                     </option>

@@ -24,10 +24,24 @@ export type NodeType =
   | "random_forest"
   | "train"
   | "evaluate"
+  // Result & Metrics nodes
+  | "r2_score"
+  | "mse_score"
+  | "rmse_score"
+  | "mae_score"
+  | "confusion_matrix"
+  | "classification_report"
+  | "accuracy_score"
+  | "roc_curve"
+  | "feature_importance"
+  | "residual_plot"
+  | "prediction_table"
+  // GenAI nodes
   | "llm_node"
   | "system_prompt"
   | "chatbot_node"
   | "example_node"
+  // Deployment nodes
   | "model_export"
   | "api_endpoint";
 

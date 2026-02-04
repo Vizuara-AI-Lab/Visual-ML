@@ -18,7 +18,9 @@ const NodePalette = () => {
     { id: "view", label: "View Data" },
     { id: "preprocessing", label: "Preprocess Data" },
     { id: "feature-engineering", label: "Feature Engineering" },
+    { id: "target-split", label: "Target & Split" },
     { id: "ml-algorithms", label: "Model Training" },
+    { id: "result", label: "Results & Metrics" },
     { id: "genai", label: "GenAI" },
     { id: "deployment", label: "Deployment" },
   ];

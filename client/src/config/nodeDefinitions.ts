@@ -21,10 +21,12 @@ import {
   Info,
   Hash,
   Split,
+  TrendingUp,
 } from "lucide-react";
 import { genaiCategory } from "./genaiNodes";
 import { deploymentCategory } from "./deploymentNodes";
 import { mlAlgorithmsCategory } from "./mlAlgorithms";
+import { resultNodes } from "./resultNodes";
 
 export interface NodeCategory {
   id: string;
@@ -50,6 +52,7 @@ export interface ConfigField {
   type:
     | "text"
     | "number"
+    | "range"
     | "select"
     | "multiselect"
     | "checkbox"
@@ -698,23 +701,13 @@ export const nodeCategories: NodeCategory[] = [
           },
           {
             name: "train_ratio",
-            label: "Training Set Ratio",
-            type: "number",
+            label: "Train/Test Split",
+            type: "range",
             defaultValue: 0.8,
             min: 0.1,
             max: 0.9,
             step: 0.05,
-            description: "Proportion of data for training (0.1-0.9)",
-          },
-          {
-            name: "test_ratio",
-            label: "Test Set Ratio",
-            type: "number",
-            defaultValue: 0.2,
-            min: 0.1,
-            max: 0.9,
-            step: 0.05,
-            description: "Proportion of data for testing (0.1-0.9)",
+            description: "Training set proportion (test set = 1 - train)",
           },
           {
             name: "split_type",
@@ -749,6 +742,12 @@ export const nodeCategories: NodeCategory[] = [
     ],
   },
   mlAlgorithmsCategory,
+  {
+    id: "result",
+    label: "Results & Metrics",
+    icon: TrendingUp,
+    nodes: resultNodes,
+  },
   genaiCategory,
   deploymentCategory,
 ];
