@@ -22,7 +22,12 @@ from app.ml.nodes.decision_tree_node import DecisionTreeNode
 from app.ml.nodes.random_forest_node import RandomForestNode
 
 # Result/Metrics Nodes
-from app.ml.nodes.r2_score_node import R2ScoreNode
+from app.ml.nodes.results_and_metrics import (
+    R2ScoreNode,
+    MSEScoreNode,
+    RMSEScoreNode,
+    MAEScoreNode,
+)
 
 from app.ml.nodes.view import (
     TableViewNode,
@@ -66,6 +71,9 @@ class MLPipelineEngine:
             "random_forest": RandomForestNode,
             # Result/Metrics Nodes
             "r2_score": R2ScoreNode,
+            "mse_score": MSEScoreNode,
+            "rmse_score": RMSEScoreNode,
+            "mae_score": MAEScoreNode,
             # View Nodes
             "table_view": TableViewNode,
             "data_preview": DataPreviewNode,

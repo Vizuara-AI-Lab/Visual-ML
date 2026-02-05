@@ -3,6 +3,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { useParams, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getProjectById } from "../../lib/api/projectApi";
+import toast, { Toaster } from "react-hot-toast";
 import "@xyflow/react/dist/style.css";
 import { Sidebar } from "../../components/playground/Sidebar";
 import { Canvas } from "../../components/playground/Canvas";
@@ -11,14 +12,12 @@ import { ChatbotModal } from "../../components/playground/ChatbotModal";
 import { ViewNodeModal } from "../../components/playground/ViewNodeModal";
 import { Toolbar } from "../../components/playground/Toolbar";
 import { ResultsPanel } from "../../components/playground/ResultsPanel";
-import { ValidationDialog } from "../../components/playground/ValidationDialog";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 import { executePipeline } from "../../features/playground/api";
-import taskApi from "../../features/playground/taskApi";
 import type { NodeType, BaseNodeData } from "../../types/pipeline";
 import { useProjectState } from "../../hooks/queries/useProjectState";
 import { useSaveProject } from "../../hooks/mutations/useSaveProject";
-import { validatePipeline, type ValidationError } from "../../utils/validation";
+import { validatePipeline } from "../../utils/validation";
 
 export default function PlayGround() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -27,9 +26,7 @@ export default function PlayGround() {
   const [viewNodeId, setViewNodeId] = useState<string | null>(null);
   const [chatbotNodeId, setChatbotNodeId] = useState<string | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<ValidationError[]>(
-    [],
-  );
+
   const [executionProgress, setExecutionProgress] = useState<{
     status: string;
     percent: number;
@@ -162,14 +159,24 @@ export default function PlayGround() {
       const validationResult = validatePipeline(nodes, edges);
 
       if (!validationResult.isValid) {
-        setValidationErrors(validationResult.errors);
+        // Show validation errors as toast notifications
+        validationResult.errors.forEach((error) => {
+          const message = error.suggestion
+            ? `${error.message}\n💡 ${error.suggestion}`
+            : error.message;
 
-        setExecutionResult({
-          success: false,
-          error:
-            "Pipeline validation failed. Please fix the errors and try again.",
-          nodeResults: {},
-          timestamp: new Date().toISOString(),
+          toast.error(message, {
+            duration: 3000,
+            position: "top-right",
+            style: {
+              background: "#1F2937",
+              color: "#fff",
+              border: "1px solid #EF4444",
+              borderRadius: "8px",
+              padding: "16px",
+              maxWidth: "400px",
+            },
+          });
         });
 
         setIsExecuting(false);
@@ -181,7 +188,25 @@ export default function PlayGround() {
         (e) => e.type === "warning",
       );
       if (warnings.length > 0) {
-        setValidationErrors(warnings);
+        warnings.forEach((warning) => {
+          const message = warning.suggestion
+            ? `${warning.message}\n💡 ${warning.suggestion}`
+            : warning.message;
+
+          toast(message, {
+            duration: 3000,
+            position: "top-right",
+            icon: "⚠️",
+            style: {
+              background: "#1F2937",
+              color: "#fff",
+              border: "1px solid #F59E0B",
+              borderRadius: "8px",
+              padding: "16px",
+              maxWidth: "400px",
+            },
+          });
+        });
         setIsExecuting(false);
         return;
       }
@@ -379,6 +404,7 @@ export default function PlayGround() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-950">
+      <Toaster />
       <Toolbar
         onExecute={handleExecute}
         onClear={handleClear}
@@ -414,59 +440,6 @@ export default function PlayGround() {
         nodeId={chatbotNodeId}
         onClose={() => setChatbotNodeId(null)}
       />
-
-      {validationErrors.length > 0 && (
-        <ValidationDialog
-          errors={validationErrors}
-          onClose={() => {
-            setValidationErrors([]);
-            setIsExecuting(false);
-          }}
-          onProceed={
-            validationErrors.every((e) => e.type === "warning")
-              ? async () => {
-                  setValidationErrors([]);
-                  // Continue with execution
-                  try {
-                    const pipelineNodes = nodes.map((node) => ({
-                      id: node.id,
-                      type: node.type as NodeType,
-                      config: node.data.config || {},
-                    }));
-
-                    const pipelineEdges = edges.map((edge) => ({
-                      source: edge.source,
-                      target: edge.target,
-                    }));
-
-                    const result = await executePipeline(
-                      pipelineNodes,
-                      pipelineEdges,
-                    );
-
-                    setExecutionResult({
-                      success: true,
-                      nodeResults: result.results,
-                      timestamp: new Date().toISOString(),
-                    });
-
-                    console.log("✅ Execution completed:", result);
-                  } catch (error: any) {
-                    console.error("❌ Execution failed:", error);
-                    setExecutionResult({
-                      success: false,
-                      error: error.message || "Unknown error occurred",
-                      nodeResults: {},
-                      timestamp: new Date().toISOString(),
-                    });
-                  } finally {
-                    setIsExecuting(false);
-                  }
-                }
-              : undefined
-          }
-        />
-      )}
     </div>
   );
 }
