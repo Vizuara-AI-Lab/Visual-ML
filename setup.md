@@ -461,3 +461,7 @@ For issues or questions:
 
 **Last Updated**: January 2026  
 **Version**: 1.0.0
+
+
+
+two method graph base and the previous output method

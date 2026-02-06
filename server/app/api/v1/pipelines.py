@@ -123,9 +123,13 @@ async def execute_pipeline(
 
         # Convert to dict format
         pipeline_config = [node.model_dump() for node in request.pipeline]
+        edges_config = [edge.model_dump() for edge in request.edges]
 
         results = await ml_service.execute_pipeline(
-            pipeline=pipeline_config, dry_run=request.dry_run, current_user=current_user
+            pipeline=pipeline_config, 
+            edges=edges_config,
+            dry_run=request.dry_run, 
+            current_user=current_user
         )
 
         execution_time = (datetime.utcnow() - start_time).total_seconds()

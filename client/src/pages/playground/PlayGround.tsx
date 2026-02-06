@@ -256,6 +256,12 @@ export default function PlayGround() {
 
       const result = await executePipeline({
         pipeline: pipelineConfig,
+        edges: edges.map((edge) => ({
+          source: edge.source,
+          target: edge.target,
+          sourceHandle: edge.sourceHandle || undefined,
+          targetHandle: edge.targetHandle || undefined,
+        })),
         pipeline_name: "Playground Pipeline",
       });
 

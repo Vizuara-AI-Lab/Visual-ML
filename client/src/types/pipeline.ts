@@ -126,8 +126,16 @@ export interface PipelineNodeConfig {
   node_id?: string;
 }
 
+export interface EdgeInfo {
+  source: string;
+  target: string;
+  sourceHandle?: string;
+  targetHandle?: string;
+}
+
 export interface PipelineExecuteRequest {
   pipeline: PipelineNodeConfig[];
+  edges?: EdgeInfo[];
   dry_run?: boolean;
   pipeline_name?: string;
 }
