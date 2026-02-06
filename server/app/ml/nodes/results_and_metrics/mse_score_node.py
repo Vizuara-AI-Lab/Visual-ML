@@ -79,8 +79,8 @@ class MSEScoreNode(BaseNode):
             elif input_data.training_metrics and "MSE" in input_data.training_metrics:
                 mse_score = input_data.training_metrics["MSE"]
             else:
-                logger.warning(
-                    f"MSE score not found in training metrics: {input_data.training_metrics}"
+                logger.debug(
+                    f"MSE score not pre-calculated in training metrics, will use default value: {input_data.training_metrics}"
                 )
 
             # Format display value

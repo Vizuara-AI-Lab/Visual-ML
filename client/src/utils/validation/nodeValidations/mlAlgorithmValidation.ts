@@ -39,7 +39,13 @@ const mlAlgorithmCommonRules = {
 export const mlAlgorithmValidationRules: ValidationRegistry = {
   linear_regression: {
     ...mlAlgorithmCommonRules,
-    customValidator: (_sourceNode: MLNode, targetNode: MLNode) => {
+    customValidator: (sourceNode: MLNode, targetNode: MLNode) => {
+      // Only validate when Linear Regression is the SOURCE (connecting to metrics)
+      // Don't validate when Linear Regression is the TARGET (receiving from Split)
+      if (sourceNode.data.type !== "linear_regression") {
+        return null; // Not our concern, let other validators handle it
+      }
+
       // Regression model should only connect to regression metrics
       const regressionMetrics = [
         "r2_score",
@@ -58,7 +64,7 @@ export const mlAlgorithmValidationRules: ValidationRegistry = {
         return {
           type: "error",
           nodeId: targetNode.id,
-          message: `${targetNode.data.label} cannot be used with Linear Regression (regression model)`,
+          message: `Linear Regression cannot connect to ${targetNode.data.label} (classification metric)`,
           suggestion:
             "Use regression metrics like R² Score, MSE, RMSE, or MAE. For classification metrics, use a classification model like Logistic Regression.",
         };
@@ -69,7 +75,13 @@ export const mlAlgorithmValidationRules: ValidationRegistry = {
 
   logistic_regression: {
     ...mlAlgorithmCommonRules,
-    customValidator: (_sourceNode: MLNode, targetNode: MLNode) => {
+    customValidator: (sourceNode: MLNode, targetNode: MLNode) => {
+      // Only validate when Logistic Regression is the SOURCE (connecting to metrics)
+      // Don't validate when Logistic Regression is the TARGET (receiving from Split)
+      if (sourceNode.data.type !== "logistic_regression") {
+        return null; // Not our concern, let other validators handle it
+      }
+
       // Classification model should only connect to classification metrics
       const classificationMetrics = [
         "confusion_matrix",
@@ -87,7 +99,7 @@ export const mlAlgorithmValidationRules: ValidationRegistry = {
         return {
           type: "error",
           nodeId: targetNode.id,
-          message: `${targetNode.data.label} cannot be used with Logistic Regression (classification model)`,
+          message: `Logistic Regression cannot connect to ${targetNode.data.label} (regression metric)`,
           suggestion:
             "Use classification metrics like Confusion Matrix, Accuracy, or Classification Report. For regression metrics, use a regression model like Linear Regression.",
         };

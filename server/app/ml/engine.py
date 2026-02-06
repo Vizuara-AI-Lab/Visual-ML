@@ -206,6 +206,7 @@ class MLPipelineEngine:
 
             # View nodes should NOT inherit dataset_id from previous_output
             # They should use their own configured dataset_id
+            # This allows multiple view nodes to connect to the same source independently
             view_node_types = [
                 "table_view",
                 "data_preview",
@@ -214,17 +215,56 @@ class MLPipelineEngine:
                 "chart_view",
             ]
 
-            # For view nodes, prioritize their configured dataset_id
+            # Preprocessing nodes that can operate in parallel or sequential
+            preprocessing_node_types = [
+                "missing_value_handler",
+                "encoding",
+                "transformation",
+                "scaling",
+                "feature_selection",
+            ]
+
+            # For view nodes, use their own configured dataset_id (don't inherit from previous_output)
             if node_type in view_node_types:
                 # Only merge user context, not previous_output
                 merged_input = {**user_context, **input_data}
                 logger.info(
                     f"Pipeline step {i+1}/{len(pipeline)}: {node_type} (view node - using configured dataset_id: {input_data.get('dataset_id')})"
                 )
+            elif node_type in preprocessing_node_types:
+                # Smart preprocessing logic:
+                # - If previous node is a preprocessing node (has preprocessed_dataset_id, encoded_dataset_id, etc.),
+                #   inherit it for sequential preprocessing
+                # - Otherwise, use configured dataset_id for parallel preprocessing from the same source
+                
+                is_sequential_preprocessing = any(
+                    key in previous_output
+                    for key in [
+                        "preprocessed_dataset_id",
+                        "encoded_dataset_id",
+                        "transformed_dataset_id",
+                        "scaled_dataset_id",
+                        "selected_dataset_id",
+                    ]
+                )
+
+                if is_sequential_preprocessing:
+                    # Sequential: Inherit from previous preprocessing node
+                    merged_input = {**user_context, **input_data, **previous_output}
+                    logger.info(
+                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
+                        f"(sequential preprocessing - using dataset from previous node: {previous_output.get('dataset_id', 'N/A')})"
+                    )
+                else:
+                    # Parallel: Use configured dataset_id (don't inherit from previous_output)
+                    merged_input = {**user_context, **input_data}
+                    logger.info(
+                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
+                        f"(parallel preprocessing - using configured dataset_id: {input_data.get('dataset_id')})"
+                    )
             else:
-                # For non-view nodes, merge previous output (normal data flow)
+                # For non-view, non-preprocessing nodes, merge previous output (normal data flow)
                 # previous_output takes precedence for dataset_id to enable proper data flow
-                # This allows preprocessing nodes (missing_value_handler, encoding, etc.) to pass their output to the next node
                 merged_input = {**user_context, **input_data, **previous_output}
 
                 # Log which dataset is being used

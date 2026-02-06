@@ -80,8 +80,8 @@ class MAEScoreNode(BaseNode):
             elif input_data.training_metrics and "MAE" in input_data.training_metrics:
                 mae_score = input_data.training_metrics["MAE"]
             else:
-                logger.warning(
-                    f"MAE score not found in training metrics: {input_data.training_metrics}"
+                logger.debug(
+                    f"MAE score not pre-calculated in training metrics, will use default value: {input_data.training_metrics}"
                 )
 
             # Format display value

@@ -86,8 +86,8 @@ class RMSEScoreNode(BaseNode):
                 rmse_score = math.sqrt(input_data.training_metrics["mse"])
                 logger.info(f"Calculated RMSE from MSE: {rmse_score:.4f}")
             else:
-                logger.warning(
-                    f"RMSE score not found in training metrics: {input_data.training_metrics}"
+                logger.debug(
+                    f"RMSE score not pre-calculated in training metrics, will use default value: {input_data.training_metrics}"
                 )
 
             # Format display value
