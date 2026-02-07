@@ -57,20 +57,6 @@ export const nodeDefinitions: NodeMetadata[] = [
       model_name: "",
     },
   },
-  {
-    type: "evaluate",
-    label: "View Result",
-    description: "Evaluate model performance",
-    color: "#EF4444", // red
-    icon: "📊",
-    category: "output",
-    defaultConfig: {
-      model_path: "",
-      test_dataset_path: "",
-      target_column: "",
-      task_type: "regression",
-    },
-  },
 ];
 
 export const getNodeDefinition = (type: string): NodeMetadata | undefined => {

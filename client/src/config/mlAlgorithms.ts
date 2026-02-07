@@ -4,7 +4,7 @@
  */
 
 import type { NodeCategory } from "./nodeDefinitions";
-import { Brain, Network } from "lucide-react";
+import { Brain } from "lucide-react";
 
 export const mlAlgorithmsCategory: NodeCategory = {
   id: "ml-algorithms",
@@ -34,14 +34,6 @@ export const mlAlgorithmsCategory: NodeCategory = {
           description: "Auto-filled from connected split node",
         },
         {
-          name: "target_column",
-          label: "Target Column",
-          type: "select",
-          required: true,
-          autoFill: true,
-          description: "Auto-filled from dataset",
-        },
-        {
           name: "fit_intercept",
           label: "Fit Intercept",
           type: "checkbox",
@@ -62,7 +54,9 @@ export const mlAlgorithmsCategory: NodeCategory = {
       color: "#8B5CF6",
       defaultConfig: {
         train_dataset_id: "",
-        target_column: "",
+        fit_intercept: true,
+        show_advanced_options: false,
+        // Advanced options with sensible defaults
         C: 1.0,
         penalty: "l2",
         solver: "lbfgs",
@@ -76,31 +70,41 @@ export const mlAlgorithmsCategory: NodeCategory = {
           type: "text",
           required: true,
           autoFill: true,
-          description: "Connect to train output from split node",
+          description: "Auto-filled from connected split node",
         },
         {
-          name: "target_column",
-          label: "Target Column",
-          type: "select",
-          required: true,
-          autoFill: true,
-          description: "Column to predict (classification target)",
+          name: "fit_intercept",
+          label: "Fit Intercept",
+          type: "checkbox",
+          defaultValue: true,
+          description: "Calculate intercept for the model",
         },
+        {
+          name: "show_advanced_options",
+          label: "Show Advanced Options",
+          type: "checkbox",
+          defaultValue: false,
+          description: "Toggle to show/hide advanced hyperparameters",
+        },
+        // Advanced hyperparameters (only shown when show_advanced_options is true)
         {
           name: "C",
           label: "Regularization Strength (C)",
           type: "number",
+          required: false,
           defaultValue: 1.0,
           min: 0.001,
           max: 100,
           step: 0.1,
           description:
             "Inverse of regularization strength (smaller = stronger regularization)",
+          conditionalDisplay: { field: "show_advanced_options", equals: true },
         },
         {
           name: "penalty",
           label: "Penalty Type",
           type: "select",
+          required: false,
           options: [
             { value: "l2", label: "L2 (Ridge)" },
             { value: "l1", label: "L1 (Lasso)" },
@@ -108,11 +112,13 @@ export const mlAlgorithmsCategory: NodeCategory = {
           ],
           defaultValue: "l2",
           description: "Regularization penalty type",
+          conditionalDisplay: { field: "show_advanced_options", equals: true },
         },
         {
           name: "solver",
           label: "Solver",
           type: "select",
+          required: false,
           options: [
             { value: "lbfgs", label: "LBFGS (recommended)" },
             { value: "liblinear", label: "Liblinear" },
@@ -121,22 +127,27 @@ export const mlAlgorithmsCategory: NodeCategory = {
           ],
           defaultValue: "lbfgs",
           description: "Optimization algorithm",
+          conditionalDisplay: { field: "show_advanced_options", equals: true },
         },
         {
           name: "max_iter",
           label: "Max Iterations",
           type: "number",
+          required: false,
           defaultValue: 1000,
           min: 100,
           max: 10000,
           description: "Maximum iterations for convergence",
+          conditionalDisplay: { field: "show_advanced_options", equals: true },
         },
         {
           name: "random_state",
           label: "Random State",
           type: "number",
+          required: false,
           defaultValue: 42,
           description: "Seed for reproducibility",
+          conditionalDisplay: { field: "show_advanced_options", equals: true },
         },
       ],
     },
@@ -150,7 +161,6 @@ export const mlAlgorithmsCategory: NodeCategory = {
       color: "#10B981",
       defaultConfig: {
         train_dataset_id: "",
-        target_column: "",
         task_type: "classification",
         max_depth: null,
         min_samples_split: 2,
@@ -232,7 +242,6 @@ export const mlAlgorithmsCategory: NodeCategory = {
       color: "#F59E0B",
       defaultConfig: {
         train_dataset_id: "",
-        target_column: "",
         task_type: "classification",
         n_estimators: 100,
         max_depth: null,
@@ -310,47 +319,6 @@ export const mlAlgorithmsCategory: NodeCategory = {
           type: "number",
           defaultValue: 42,
           description: "Seed for reproducibility",
-        },
-      ],
-    },
-
-    // Model Evaluation
-    {
-      type: "evaluate",
-      label: "Model Evaluation",
-      description: "Evaluate trained model performance on test data",
-      category: "ml-algorithms",
-      icon: Network,
-      color: "#EC4899",
-      defaultConfig: {
-        model_id: "",
-        test_dataset_id: "",
-        target_column: "",
-      },
-      configFields: [
-        {
-          name: "model_id",
-          label: "Trained Model",
-          type: "text",
-          required: true,
-          autoFill: true,
-          description: "Connect to a trained model node",
-        },
-        {
-          name: "test_dataset_id",
-          label: "Test Dataset",
-          type: "text",
-          required: true,
-          autoFill: true,
-          description: "Connect to test output from split node",
-        },
-        {
-          name: "target_column",
-          label: "Target Column",
-          type: "select",
-          required: true,
-          autoFill: true,
-          description: "Column to evaluate predictions against",
         },
       ],
     },

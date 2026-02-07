@@ -24,9 +24,14 @@ class LogisticRegressionInput(NodeInput):
     """Input schema for Logistic Regression node."""
 
     train_dataset_id: str = Field(..., description="Training dataset ID")
-    target_column: str = Field(..., description="Name of target column")
+    test_dataset_id: Optional[str] = Field(None, description="Test dataset ID (auto-filled from split node)")
+    target_column: Optional[str] = Field(None, description="Name of target column (auto-filled from split node)")
 
-    # Hyperparameters
+    # UI control
+    show_advanced_options: bool = Field(False, description="Toggle for advanced options visibility in UI")
+
+    # Hyperparameters (all optional with sensible defaults)
+    fit_intercept: bool = Field(True, description="Calculate intercept for the model")
     C: float = Field(1.0, description="Inverse of regularization strength")
     penalty: str = Field("l2", description="Regularization penalty type")
     solver: str = Field("lbfgs", description="Optimization algorithm")
@@ -51,6 +56,10 @@ class LogisticRegressionOutput(NodeOutput):
 
     class_names: list = Field(..., description="Class names/labels")
     metadata: Dict[str, Any] = Field(..., description="Training metadata")
+    
+    # Pass-through fields for downstream nodes (e.g., confusion_matrix)
+    test_dataset_id: Optional[str] = Field(None, description="Test dataset ID (passed from split node)")
+    target_column: Optional[str] = Field(None, description="Target column (passed from split node)")
 
 
 class LogisticRegressionNode(BaseNode):
@@ -82,11 +91,19 @@ class LogisticRegressionNode(BaseNode):
         return LogisticRegressionOutput
 
     async def _load_dataset(self, dataset_id: str) -> Optional[pd.DataFrame]:
-        """Load dataset from storage."""
+        """Load dataset from storage (uploads folder first, then database)."""
         try:
             # Recognize common missing value indicators: ?, NA, N/A, null, empty strings
             missing_values = ["?", "NA", "N/A", "null", "NULL", "", " ", "NaN", "nan"]
 
+            # FIRST: Try to load from uploads folder (for train/test datasets from split node)
+            upload_path = Path(settings.UPLOAD_DIR) / f"{dataset_id}.csv"
+            if upload_path.exists():
+                logger.info(f"Loading dataset from uploads folder: {upload_path}")
+                df = pd.read_csv(upload_path, na_values=missing_values, keep_default_na=True)
+                return df
+
+            # SECOND: Try to load from database (for original datasets)
             db = SessionLocal()
             dataset = (
                 db.query(Dataset)
@@ -95,7 +112,7 @@ class LogisticRegressionNode(BaseNode):
             )
 
             if not dataset:
-                logger.error(f"Dataset not found: {dataset_id}")
+                logger.error(f"Dataset not found in uploads or database: {dataset_id}")
                 db.close()
                 return None
 
@@ -134,6 +151,9 @@ class LogisticRegressionNode(BaseNode):
                 )
 
             # Validate target column
+            if not input_data.target_column:
+                raise ValueError("Target column must be provided (auto-filled from split node)")
+            
             if input_data.target_column not in df_train.columns:
                 raise ValueError(f"Target column '{input_data.target_column}' not found")
 
@@ -148,6 +168,7 @@ class LogisticRegressionNode(BaseNode):
                 solver=input_data.solver,
                 max_iter=input_data.max_iter,
                 random_state=input_data.random_state,
+                fit_intercept=input_data.fit_intercept,
             )
 
             training_start = datetime.utcnow()
@@ -175,23 +196,15 @@ class LogisticRegressionNode(BaseNode):
                 model_id=model_id,
                 model_path=str(model_path),
                 training_samples=len(X_train),
-                n_features=len(X_train.columns),
-                n_classes=training_metadata.get("n_classes", 0),
+                n_features=X_train.shape[1],
+                n_classes=len(model.class_names),
                 training_metrics=training_metadata.get("training_metrics", {}),
                 training_time_seconds=training_time,
-                class_names=training_metadata.get("class_names", []),
-                metadata={
-                    "target_column": input_data.target_column,
-                    "feature_names": X_train.columns.tolist(),
-                    "hyperparameters": {
-                        "C": input_data.C,
-                        "penalty": input_data.penalty,
-                        "solver": input_data.solver,
-                        "max_iter": input_data.max_iter,
-                        "random_state": input_data.random_state,
-                    },
-                    "full_training_metadata": training_metadata,
-                },
+                class_names=model.class_names,
+                metadata=model.training_metadata,
+                # Pass through split node fields for downstream nodes
+                test_dataset_id=input_data.test_dataset_id,
+                target_column=input_data.target_column,
             )
 
         except Exception as e:

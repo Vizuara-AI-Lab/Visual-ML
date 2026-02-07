@@ -13,7 +13,7 @@ from app.ml.nodes.transformation import TransformationNode
 from app.ml.nodes.scaling import ScalingNode
 from app.ml.nodes.feature_selection import FeatureSelectionNode
 from app.ml.nodes.split import SplitNode
-from app.ml.nodes.evaluate import EvaluateNode
+from app.ml.nodes.confusion_matrix_node import ConfusionMatrixNode
 
 # Individual ML Algorithm Nodes
 from app.ml.nodes.linear_regression_node import LinearRegressionNode
@@ -63,7 +63,7 @@ class MLPipelineEngine:
             "scaling": ScalingNode,
             "feature_selection": FeatureSelectionNode,
             "split": SplitNode,
-            "evaluate": EvaluateNode,
+            "confusion_matrix": ConfusionMatrixNode,
             # Individual ML Algorithm Nodes
             "linear_regression": LinearRegressionNode,
             "logistic_regression": LogisticRegressionNode,
@@ -375,9 +375,42 @@ class MLPipelineEngine:
                         f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
                         f"(metric node - using previous output)"
                     )
+            
+            # Split and ML algorithm nodes should also use graph-based connections
+            elif node_type in [
+                "split",  # Data splitting
+                "linear_regression", "logistic_regression",  # ML algorithms
+                "decision_tree", "random_forest",  # Tree-based
+                "svm", "knn", "naive_bayes",  # Other algorithms
+            ]:
+                # Get output from connected node (could be preprocessing, encoding, etc.)
+                connected_source = self._get_connected_source_output(node_id, edges, results)
+                
+                if connected_source:
+                    # Normalize dataset field names (preprocessing nodes use different field names)
+                    normalized_source = dict(connected_source)
+                    for old_field in ["preprocessed_dataset_id", "encoded_dataset_id", "transformed_dataset_id", "scaled_dataset_id", "selected_dataset_id"]:
+                        if old_field in normalized_source:
+                            normalized_source["dataset_id"] = normalized_source[old_field]
+                            break
+                    
+                    # Use graph-based connection with normalized field names
+                    merged_input = {**user_context, **input_data, **normalized_source}
+                    source_dataset = normalized_source.get("dataset_id") or normalized_source.get("train_dataset_id") or "N/A"
+                    logger.info(
+                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
+                        f"(graph-based - using dataset from connected node: {source_dataset})"
+                    )
+                else:
+                    # Fallback to previous_output for backward compatibility
+                    merged_input = {**user_context, **input_data, **previous_output}
+                    logger.info(
+                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
+                        f"(fallback - using previous output)"
+                    )
             else:
-                # For non-view, non-preprocessing, non-metric nodes, merge previous output (normal data flow)
-                # previous_output takes precedence for dataset_id to enable proper data flow
+                # For all other nodes, merge previous output (normal sequential data flow)
+                # This is the fallback for any nodes not explicitly categorized above
                 merged_input = {**user_context, **input_data, **previous_output}
 
                 # Log which dataset is being used

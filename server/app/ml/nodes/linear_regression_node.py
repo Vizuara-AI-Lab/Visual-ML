@@ -24,7 +24,7 @@ class LinearRegressionInput(NodeInput):
     """Input schema for Linear Regression node."""
 
     train_dataset_id: str = Field(..., description="Training dataset ID")
-    target_column: str = Field(..., description="Name of target column")
+    target_column: Optional[str] = Field(None, description="Name of target column (auto-filled from split node)")
 
     # Hyperparameters
     fit_intercept: bool = Field(True, description="Calculate intercept for the model")
@@ -147,6 +147,9 @@ class LinearRegressionNode(BaseNode):
                 )
 
             # Validate target column
+            if not input_data.target_column:
+                raise ValueError("Target column must be provided (auto-filled from split node)")
+            
             if input_data.target_column not in df_train.columns:
                 raise ValueError(f"Target column '{input_data.target_column}' not found")
 
