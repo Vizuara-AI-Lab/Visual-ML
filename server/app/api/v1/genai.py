@@ -1,112 +1,117 @@
 """
-GenAI Chat API endpoint for chatbot functionality.
+GenAI Chat API endpoint - Simple streaming with Gemini and DynaRoute
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-from app.ml.nodes.genai.llm_node import LLMNode
-from app.ml.nodes.genai.chatbot_node import ChatbotNode
-from app.ml.nodes.genai.base import GenAINodeInput
+from typing import Optional, List, Dict, Any
+import asyncio
+import json
+from functools import partial
+from google import genai
+from dynaroute import DynaRouteClient, APIError
+from app.core.config import settings
+from app.core.logging import logger
 
 router = APIRouter(prefix="/genai", tags=["genai"])
 
 
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-
 class ChatRequest(BaseModel):
     message: str
-    sessionId: str = "default"
-    llmConfig: Dict[str, Any]  # LLM Provider node config
-    chatbotConfig: Optional[Dict[str, Any]] = None
-    conversationHistory: List[ChatMessage] = []
+    provider: str = "gemini"  # "gemini" or "dynaroute"
+    apiKey: Optional[str] = None  # Optional user-provided API key
+    systemPrompt: Optional[str] = None  # Optional system prompt from System Prompt node
+    examples: Optional[List[Dict[str, Any]]] = None  # Optional examples from Example node
 
 
-class ChatResponse(BaseModel):
-    success: bool
-    response: Optional[str] = None
-    error: Optional[str] = None
-    sessionId: str
-    tokensUsed: Optional[int] = None
-    cost: Optional[float] = None
-
-
-@router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+@router.post("/chat")
+async def chat_stream(request: ChatRequest):
     """
-    Send a message to the chatbot and get LLM response.
-    
-    This endpoint:
-    1. Takes user message and LLM config
-    2. Manages conversation history via ChatbotNode
-    3. Calls LLM via LLMNode
-    4. Returns the response
+    Streaming chat: question → AI → streamed response
+    Supports: Gemini and DynaRoute
     """
-    try:
-        # Step 1: Process message through ChatbotNode
-        chatbot_node = ChatbotNode(request.chatbotConfig or {})
-        
-        chatbot_input = GenAINodeInput(data={
-            "userMessage": request.message,
-            "sessionId": request.sessionId,
-            "clearHistory": False,
-        })
-        
-        chatbot_result = await chatbot_node.execute(chatbot_input.data)
-        
-        if not chatbot_result.success:
-            return ChatResponse(
-                success=False,
-                error=chatbot_result.error,
-                sessionId=request.sessionId,
-            )
-        
-        # Get messages from chatbot (includes history + new user message)
-        messages = chatbot_result.data.get("messages", [])
-        
-        # Step 2: Send to LLM
-        llm_node = LLMNode(request.llmConfig)
-        
-        llm_input = GenAINodeInput(data={
-            "messages": messages,
-        })
-        
-        llm_result = await llm_node.execute(llm_input.data)
-        
-        if not llm_result.success:
-            return ChatResponse(
-                success=False,
-                error=llm_result.error,
-                sessionId=request.sessionId,
-            )
-        
-        # Step 3: Add assistant response to chatbot history
-        assistant_message = llm_result.data.get("response", "")
-        
-        # Update chatbot with assistant response
-        update_input = GenAINodeInput(data={
-            "userMessage": "",  # Empty, we're just adding assistant response
-            "sessionId": request.sessionId,
-            "llmMessages": messages + [{"role": "assistant", "content": assistant_message}],
-        })
-        
-        # Note: In a real implementation, you'd want to persist this
-        # For now, the frontend will manage the full conversation
-        
-        return ChatResponse(
-            success=True,
-            response=assistant_message,
-            sessionId=request.sessionId,
-            tokensUsed=llm_result.tokensUsed,
-            cost=llm_result.costUSD,
-        )
-        
-    except Exception as e:
-        return ChatResponse(
-            success=False,
-            error=f"Chat error: {str(e)}",
-            sessionId=request.sessionId,
-        )
+
+    async def generate():
+        try:
+            if request.provider == "dynaroute":
+                # DynaRoute streaming
+                api_key = request.apiKey or settings.DYNAROUTE_API_KEY
+                client = DynaRouteClient(api_key=api_key)
+
+                # Build messages with system prompt and examples if provided
+                messages = []
+                if request.systemPrompt:
+                    messages.append({"role": "system", "content": request.systemPrompt})
+
+                # Add examples as conversation history
+                if request.examples:
+                    for example in request.examples:
+                        if example.get("userInput") and example.get("expectedOutput"):
+                            messages.append({"role": "user", "content": example["userInput"]})
+                            messages.append(
+                                {"role": "assistant", "content": example["expectedOutput"]}
+                            )
+
+                messages.append({"role": "user", "content": request.message})
+
+                loop = asyncio.get_event_loop()
+                stream = await loop.run_in_executor(
+                    None, partial(client.chat, messages=messages, stream=True)
+                )
+
+                for chunk in stream:
+                    content = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                    if content:
+                        yield f"data: {json.dumps({'content': content})}\n\n"
+
+            else:
+                # Gemini streaming
+                api_key = request.apiKey or settings.GEMINI_API_KEY
+                client = genai.Client(api_key=api_key)
+
+                # Build content with system prompt and examples if provided
+                content_parts = []
+
+                if request.systemPrompt:
+                    content_parts.append(request.systemPrompt)
+
+                # Add examples
+                if request.examples:
+                    examples_text = "Here are some examples:\n\n"
+                    for i, example in enumerate(request.examples, 1):
+                        if example.get("userInput") and example.get("expectedOutput"):
+                            examples_text += f"Example {i}:\n"
+                            examples_text += f"User: {example['userInput']}\n"
+                            examples_text += f"Assistant: {example['expectedOutput']}\n\n"
+                    content_parts.append(examples_text)
+
+                content_parts.append(f"User: {request.message}")
+                content = "\n\n".join(content_parts)
+
+                loop = asyncio.get_event_loop()
+                stream = await loop.run_in_executor(
+                    None,
+                    partial(
+                        client.models.generate_content_stream,
+                        # Hay ai don't change the change the model here
+                        model="gemini-2.0-flash-exp",
+                        contents=content,
+                    ),
+                )
+
+                for chunk in stream:
+                    if hasattr(chunk, "text") and chunk.text:
+                        yield f"data: {json.dumps({'content': chunk.text})}\n\n"
+
+            # Send completion signal
+            yield f"data: {json.dumps({'done': True})}\n\n"
+
+        except APIError as e:
+            logger.exception(f"DynaRoute API error: {str(e)}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        except Exception as e:
+            logger.exception(f"Streaming error: {str(e)}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")

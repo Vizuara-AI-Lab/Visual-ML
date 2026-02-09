@@ -122,32 +122,3 @@ class MemoryNode(GenAIBaseNode):
         # For now, just create a simple summary
         user_msgs = [m["content"] for m in messages if m.get("role") == "user"]
         return f"User discussed: {', '.join(user_msgs[:3])}... ({len(messages)} messages)"
-
-    def get_input_schema(self) -> Dict[str, Any]:
-        """Memory input schema."""
-        return {
-            "type": "object",
-            "properties": {
-                "newMessage": {
-                    "oneOf": [{"type": "string"}, {"type": "object"}],
-                    "description": "New message to add",
-                },
-                "messages": {"type": "array", "description": "Current messages"},
-            },
-        }
-
-    def get_output_schema(self) -> Dict[str, Any]:
-        """Memory output schema."""
-        return {
-            "type": "object",
-            "properties": {
-                "success": {"type": "boolean"},
-                "data": {
-                    "type": "object",
-                    "properties": {
-                        "messages": {"type": "array"},
-                        "memoryStats": {"type": "object"},
-                    },
-                },
-            },
-        }

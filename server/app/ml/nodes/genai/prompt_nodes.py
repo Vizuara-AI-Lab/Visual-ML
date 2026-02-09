@@ -79,31 +79,6 @@ class SystemPromptNode(PromptNode):
             success=True, data={"messages": messages, "systemPrompt": system_content}
         )
 
-    def get_input_schema(self) -> Dict[str, Any]:
-        """System prompt input schema."""
-        return {
-            "type": "object",
-            "properties": {
-                "messages": {"type": "array", "description": "Existing messages (optional)"}
-            },
-        }
-
-    def get_output_schema(self) -> Dict[str, Any]:
-        """System prompt output schema."""
-        return {
-            "type": "object",
-            "properties": {
-                "success": {"type": "boolean"},
-                "data": {
-                    "type": "object",
-                    "properties": {
-                        "messages": {"type": "array"},
-                        "systemPrompt": {"type": "string"},
-                    },
-                },
-            },
-        }
-
 
 class FewShotNode(PromptNode):
     """
@@ -171,13 +146,6 @@ class FewShotNode(PromptNode):
         return GenAINodeOutput(
             success=True, data={"messages": messages, "fewShotExamples": examples}
         )
-
-    def get_input_schema(self) -> Dict[str, Any]:
-        """Few-shot input schema."""
-        return {
-            "type": "object",
-            "properties": {"messages": {"type": "array"}, "prompt": {"type": "string"}},
-        }
 
 
 class PromptTemplateNode(PromptNode):
@@ -247,30 +215,3 @@ class PromptTemplateNode(PromptNode):
             success=True,
             data={"messages": messages, "renderedPrompt": rendered, "variables": variables},
         )
-
-    def get_input_schema(self) -> Dict[str, Any]:
-        """Template input schema."""
-        return {
-            "type": "object",
-            "properties": {
-                "variables": {"type": "object", "description": "Runtime variable values"},
-                "messages": {"type": "array", "description": "Existing messages"},
-            },
-        }
-
-    def get_output_schema(self) -> Dict[str, Any]:
-        """Template output schema."""
-        return {
-            "type": "object",
-            "properties": {
-                "success": {"type": "boolean"},
-                "data": {
-                    "type": "object",
-                    "properties": {
-                        "messages": {"type": "array"},
-                        "renderedPrompt": {"type": "string"},
-                        "variables": {"type": "object"},
-                    },
-                },
-            },
-        }

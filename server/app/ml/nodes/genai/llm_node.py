@@ -46,22 +46,22 @@ class LLMNode(GenAIBaseNode):
 
     # Default models for each provider
     DEFAULT_MODELS = {
-        "gemini": "gemini-1.5-flash",
+        "dynaroute": "auto",
+        "gemini": "gemini-2.5-pro",
         "openai": "gpt-3.5-turbo",
         "anthropic": "claude-3-haiku-20240307",
-        "grok": "grok-beta",
-        "huggingface": "mistralai/Mistral-7B-Instruct-v0.2",
     }
 
     def _parse_provider_config(self, config: Dict[str, Any]) -> ProviderConfig:
         """Parse LLM config."""
-        provider = config.get("provider", "gemini")
-        
+        provider = config.get("provider", "dynaroute")
+
         # Auto-select default model if not specified or use default for provider
         model = config.get("model")
-        if not model or model == "gemini-1.5-flash":  # If default or not set
-            model = self.DEFAULT_MODELS.get(provider, "gpt-3.5-turbo")
-        
+        # Replace with provider-specific default if model is not set, is "auto", or is the old default
+        if not model or model in ("auto", "gemini-2.5-pro"):
+            model = self.DEFAULT_MODELS.get(provider, "auto")
+
         return ProviderConfig(
             provider=provider,
             model=model,
@@ -82,20 +82,25 @@ class LLMNode(GenAIBaseNode):
         messages = self._parse_messages(data)
 
         if not messages:
-            return GenAINodeOutput(success=False, error="No messages provided", data={})
-
-        # Get API key if needed
-        api_key = None
-        if self.config.get("useOwnApiKey") and self.config.get("apiKeyRef"):
-            # Note: In production, pass db session through context
-            # For now, use default provider keys
-            pass
+            return GenAINodeOutput(
+                node_type=self.node_type,
+                execution_time_ms=0,
+                success=False,
+                error="No messages provided",
+                data={},
+            )
 
         # Create provider
         try:
-            provider = ProviderFactory.create(self.provider_config.provider, api_key=api_key)
+            provider = ProviderFactory.create(self.provider_config.provider)
         except ValueError as e:
-            return GenAINodeOutput(success=False, error=str(e), data={})
+            return GenAINodeOutput(
+                node_type=self.node_type,
+                execution_time_ms=0,
+                success=False,
+                error=str(e),
+                data={},
+            )
 
         # Generate completion
         try:
@@ -110,14 +115,17 @@ class LLMNode(GenAIBaseNode):
                 stop_sequences=self.provider_config.stopSequences,
             )
         except Exception as e:
-            return GenAINodeOutput(success=False, error=f"LLM API error: {str(e)}", data={})
-
-        # Calculate cost
-        cost = self.calculate_cost(
-            self.provider_config.model, response.inputTokens, response.outputTokens
-        )
+            return GenAINodeOutput(
+                node_type=self.node_type,
+                execution_time_ms=0,
+                success=False,
+                error=f"LLM API error: {str(e)}",
+                data={},
+            )
 
         return GenAINodeOutput(
+            node_type=self.node_type,
+            execution_time_ms=0,
             success=True,
             data={
                 "response": response.content,
@@ -125,8 +133,6 @@ class LLMNode(GenAIBaseNode):
                 + [{"role": "assistant", "content": response.content}],
                 "finishReason": response.finishReason,
             },
-            tokensUsed=response.tokensUsed,
-            costUSD=cost,
             provider=self.provider_config.provider,
             model=self.provider_config.model,
             responseMetadata=response.metadata,
@@ -163,53 +169,3 @@ class LLMNode(GenAIBaseNode):
                     messages.append(Message(role=msg["role"], content=msg["content"]))
 
         return messages
-
-    def get_input_schema(self) -> Dict[str, Any]:
-        """LLM input schema."""
-        return {
-            "type": "object",
-            "properties": {
-                "messages": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "role": {"type": "string", "enum": ["system", "user", "assistant"]},
-                            "content": {"type": "string"},
-                        },
-                        "required": ["role", "content"],
-                    },
-                    "description": "Chat messages",
-                },
-                "prompt": {
-                    "type": "string",
-                    "description": "Single user prompt (alternative to messages)",
-                },
-                "systemPrompt": {
-                    "type": "string",
-                    "description": "System message (used with prompt)",
-                },
-            },
-            "oneOf": [{"required": ["messages"]}, {"required": ["prompt"]}],
-        }
-
-    def get_output_schema(self) -> Dict[str, Any]:
-        """LLM output schema."""
-        return {
-            "type": "object",
-            "properties": {
-                "success": {"type": "boolean"},
-                "data": {
-                    "type": "object",
-                    "properties": {
-                        "response": {"type": "string"},
-                        "messages": {"type": "array"},
-                        "finishReason": {"type": "string"},
-                    },
-                },
-                "tokensUsed": {"type": "integer"},
-                "costUSD": {"type": "number"},
-                "provider": {"type": "string"},
-                "model": {"type": "string"},
-            },
-        }

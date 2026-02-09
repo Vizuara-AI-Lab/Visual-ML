@@ -13,16 +13,15 @@ export const genaiCategory: NodeCategory = {
     {
       type: "llm_node",
       label: "LLM Provider",
-      description: "Configure LLM provider (GPT, Claude, Gemini, Grok)",
+      description: "Configure LLM provider (GPT, Claude, Gemini, DynaRoute)",
       category: "genai",
       icon: Bot,
       color: "#8B5CF6",
       defaultConfig: {
-        provider: "gemini",
-        model: "gemini-1.5-flash", // Set by backend based on provider
+        provider: "dynaroute",
+        model: "auto", // Set by backend based on provider
         temperature: 0.7,
         maxTokens: 1000,
-        useOwnApiKey: false,
         apiKey: "",
       },
       configFields: [
@@ -31,13 +30,12 @@ export const genaiCategory: NodeCategory = {
           label: "Provider",
           type: "select",
           options: [
+            { value: "dynaroute", label: "DynaRoute (Smart Routing)" },
             { value: "gemini", label: "Google Gemini" },
             { value: "openai", label: "OpenAI" },
             { value: "anthropic", label: "Anthropic Claude" },
-            { value: "grok", label: "xAI Grok" },
-            { value: "huggingface", label: "HuggingFace" },
           ],
-          defaultValue: "gemini",
+          defaultValue: "dynaroute",
           required: true,
         },
         {
@@ -59,19 +57,13 @@ export const genaiCategory: NodeCategory = {
           defaultValue: 1000,
         },
         {
-          name: "useOwnApiKey",
-          label: "Use Your Own API Key",
-          type: "checkbox",
-          defaultValue: false,
-          description: "Use your own API key instead of platform key",
-        },
-        {
           name: "apiKey",
           label: "API Key",
           type: "password",
-          conditionalDisplay: { field: "useOwnApiKey", equals: true },
-          description: "Your API key (encrypted and stored securely)",
+          conditionalDisplay: { field: "provider", notEquals: "gemini" },
+          description: "Your API key (required for this provider)",
           placeholder: "Enter your API key...",
+          required: true,
         },
       ],
     },
@@ -154,44 +146,14 @@ export const genaiCategory: NodeCategory = {
       icon: FileText,
       color: "#F59E0B",
       defaultConfig: {
-        examples: [{ input: "Example input 1", output: "Example output 1" }],
-        prefix: "Here are some examples:",
-        includeInstructions: true,
+        examples: [{ userInput: "", expectedOutput: "" }],
       },
       configFields: [
         {
           name: "examples",
           label: "Examples",
-          type: "array",
+          type: "custom",
           description: "Add multiple input/output examples",
-          itemFields: [
-            {
-              name: "input",
-              label: "Input",
-              type: "textarea",
-              placeholder: "Example input...",
-            },
-            {
-              name: "output",
-              label: "Output",
-              type: "textarea",
-              placeholder: "Expected output...",
-            },
-          ],
-        },
-        {
-          name: "prefix",
-          label: "Prefix Text",
-          type: "text",
-          defaultValue: "Here are some examples:",
-          description: "Text shown before examples",
-        },
-        {
-          name: "includeInstructions",
-          label: "Include Instructions",
-          type: "boolean",
-          defaultValue: true,
-          description: "Add instructional text with examples",
         },
       ],
     },
