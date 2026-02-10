@@ -6,7 +6,6 @@ import Features from "./Features";
 import HowItWorks from "./HowItWorks";
 import Templates from "./Templates";
 import Testimonials from "./Testimonials";
-import FAQ from "./FAQ";
 import Footer from "./Footer";
 
 const LandingPage: React.FC = () => {
@@ -19,7 +18,6 @@ const LandingPage: React.FC = () => {
       <HowItWorks />
       <Templates />
       <Testimonials />
-      <FAQ />
       <Footer />
     </div>
   );

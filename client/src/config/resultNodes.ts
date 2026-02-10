@@ -1,5 +1,5 @@
 import type { NodeDefinition } from "./nodeDefinitions";
-import { TrendingUp, BarChart3, Activity } from "lucide-react";
+import { TrendingUp, BarChart3, Activity, Target } from "lucide-react";
 
 /**
  * Result and Metrics Node Definitions
@@ -128,6 +128,49 @@ export const resultNodes: NodeDefinition[] = [
         type: "number",
         required: true,
         description: "Number of decimal places to display",
+      },
+    ],
+  },
+  {
+    type: "confusion_matrix",
+    label: "Confusion Matrix",
+    description:
+      "Visualization of classification predictions vs actual values showing TP, TN, FP, FN",
+    category: "result",
+    icon: Target,
+    color: "#8B5CF6",
+    defaultConfig: {
+      model_output_id: "",
+      show_percentages: true,
+      color_scheme: "blue", // "blue" | "green" | "purple"
+    },
+    configFields: [
+      {
+        name: "model_output_id",
+        label: "Model Output",
+        type: "text",
+        required: true,
+        autoFill: true,
+        description: "Auto-filled from connected classification model node",
+      },
+      {
+        name: "show_percentages",
+        label: "Show Percentages",
+        type: "boolean",
+        required: false,
+        description: "Display percentages in addition to counts",
+      },
+      {
+        name: "color_scheme",
+        label: "Color Scheme",
+        type: "select",
+        required: true,
+        options: [
+          { value: "blue", label: "Blue" },
+          { value: "green", label: "Green" },
+          { value: "purple", label: "Purple" },
+        ],
+        description: "Color scheme for the matrix visualization",
       },
     ],
   },

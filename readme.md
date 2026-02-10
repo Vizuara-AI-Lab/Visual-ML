@@ -92,3 +92,6 @@ project = (
 [5] Target & Split
    ↓
 [6] Linear Regression Model
+
+visualml@admin.com
+Admin123

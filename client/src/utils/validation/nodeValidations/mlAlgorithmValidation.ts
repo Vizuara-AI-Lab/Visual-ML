@@ -21,6 +21,7 @@ const mlAlgorithmCommonRules = {
     "mse_score",
     "rmse_score",
     "mae_score",
+    "confusion_matrix",
     // Evaluation
     "evaluate",
     // Deployment
@@ -74,6 +75,7 @@ export const mlAlgorithmValidationRules: ValidationRegistry = {
 
       // Classification model should only connect to classification metrics
       const classificationMetrics = [
+        "confusion_matrix",
         "evaluate",
         "model_export",
         "api_endpoint",

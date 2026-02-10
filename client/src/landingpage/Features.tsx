@@ -1,4 +1,5 @@
 import React from "react";
+import { motion } from "framer-motion";
 import {
   Workflow,
   Sparkles,
@@ -51,7 +52,13 @@ const Features: React.FC = () => {
   return (
     <section id="features" className="py-24 px-6 lg:px-8 bg-white">
       <div className="max-w-7xl mx-auto">
-        <div className="text-center space-y-4 mb-16">
+        <motion.div
+          className="text-center space-y-4 mb-16"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.6 }}
+        >
           <h2 className="text-4xl lg:text-5xl font-bold text-gray-900">
             Everything you need to ship ML products
           </h2>
@@ -59,13 +66,21 @@ const Features: React.FC = () => {
             From data ingestion to deployment, Visual ML provides a complete
             toolkit for building production-ready machine learning solutions.
           </p>
-        </div>
+        </motion.div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
           {features.map((feature, index) => {
             const Icon = feature.icon;
             return (
-              <div key={index} className="space-y-4">
+              <motion.div
+                key={index}
+                className="space-y-4"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+              >
                 <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
                   <Icon className="w-6 h-6 text-gray-900" />
                 </div>
@@ -75,7 +90,7 @@ const Features: React.FC = () => {
                 <p className="text-gray-600 leading-relaxed">
                   {feature.description}
                 </p>
-              </div>
+              </motion.div>
             );
           })}
         </div>

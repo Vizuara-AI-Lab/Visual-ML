@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useAdminProfile } from "../../hooks/queries/useAdminProfile";
 import { useStudentsList } from "../../hooks/queries/useStudentsList";
@@ -7,7 +7,17 @@ import { useUpdateStudent } from "../../hooks/mutations/useUpdateStudent";
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filter, setFilter] = useState({ isPremium: "", isActive: "" });
+
+  // Debounce search input (500ms delay)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Use TanStack Query hooks
   const { data: adminProfile } = useAdminProfile();
@@ -16,7 +26,7 @@ const AdminDashboard: React.FC = () => {
     isLoading,
     error,
   } = useStudentsList({
-    search: search || undefined,
+    search: debouncedSearch || undefined,
     isPremium: filter.isPremium ? filter.isPremium === "true" : undefined,
     isActive: filter.isActive ? filter.isActive === "true" : undefined,
   });
@@ -114,13 +124,20 @@ const AdminDashboard: React.FC = () => {
       <div className="max-w-7xl mx-auto p-4">
         <div className="bg-white p-4 rounded shadow mb-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <input
-              type="text"
-              placeholder="Search by email or college"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="px-3 py-2 border rounded"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search by name, email, or college"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="px-3 py-2 border rounded w-full"
+              />
+              {search !== debouncedSearch && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                </div>
+              )}
+            </div>
 
             <select
               value={filter.isPremium}
@@ -165,6 +182,7 @@ const AdminDashboard: React.FC = () => {
               <thead className="bg-gray-100">
                 <tr>
                   <th className="p-3 text-left">ID</th>
+                  <th className="p-3 text-left">Name</th>
                   <th className="p-3 text-left">Email</th>
                   <th className="p-3 text-left">College/School</th>
                   <th className="p-3 text-left">Premium</th>
@@ -177,6 +195,7 @@ const AdminDashboard: React.FC = () => {
                 {students.map((student) => (
                   <tr key={student.id} className="border-b hover:bg-gray-50">
                     <td className="p-3">{student.id}</td>
+                    <td className="p-3 font-medium">{student.fullName}</td>
                     <td className="p-3">{student.emailId}</td>
                     <td className="p-3">{student.collegeOrSchool || "-"}</td>
                     <td className="p-3">

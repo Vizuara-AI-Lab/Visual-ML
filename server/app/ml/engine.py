@@ -13,6 +13,7 @@ from app.ml.nodes.transformation import TransformationNode
 from app.ml.nodes.scaling import ScalingNode
 from app.ml.nodes.feature_selection import FeatureSelectionNode
 from app.ml.nodes.split import SplitNode
+from app.ml.nodes.confusion_matrix_node import ConfusionMatrixNode
 
 # Individual ML Algorithm Nodes
 from app.ml.nodes.linear_regression_node import LinearRegressionNode
@@ -62,6 +63,7 @@ class MLPipelineEngine:
             "scaling": ScalingNode,
             "feature_selection": FeatureSelectionNode,
             "split": SplitNode,
+            "confusion_matrix": ConfusionMatrixNode,
             # Individual ML Algorithm Nodes
             "linear_regression": LinearRegressionNode,
             "logistic_regression": LogisticRegressionNode,
@@ -372,6 +374,7 @@ class MLPipelineEngine:
                 "mae_score",
                 "mse_score",
                 "rmse_score",
+                "confusion_matrix",
             ]:
                 # Get output from connected ML algorithm node
                 connected_source = self._get_connected_source_output(node_id, edges, results)

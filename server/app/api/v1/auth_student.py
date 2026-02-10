@@ -271,12 +271,20 @@ async def logout(request: Request, response: Response, db: Session = Depends(get
 
 
 @router.get("/student/me", response_model=StudentResponse)
-async def get_student_profile(student: Student = Depends(get_current_student)):
+async def get_student_profile(
+    student: Student = Depends(get_current_student),
+    db: Session = Depends(get_db),
+):
     """
     Get current student profile.
     Requires valid access token.
     """
-    return StudentResponse.model_validate(student)
+    # Fetch full student from database to get all fields including authProvider and createdAt
+    db_student = db.query(Student).filter(Student.id == student.id).first()
+    if not db_student:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+
+    return StudentResponse.model_validate(db_student)
 
 
 @router.patch("/student/me", response_model=StudentResponse)
@@ -294,25 +302,30 @@ async def update_student_profile(
     - **recentProject**: Recent project description
     - **profilePic**: Profile picture URL
     """
+    # Fetch full student from database
+    db_student = db.query(Student).filter(Student.id == student.id).first()
+    if not db_student:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+
     # Update fields
     if data.collegeOrSchool is not None:
-        student.collegeOrSchool = data.collegeOrSchool
+        db_student.collegeOrSchool = data.collegeOrSchool
     if data.contactNo is not None:
-        student.contactNo = data.contactNo
+        db_student.contactNo = data.contactNo
     if data.recentProject is not None:
-        student.recentProject = data.recentProject
+        db_student.recentProject = data.recentProject
     if data.profilePic is not None:
-        student.profilePic = data.profilePic
+        db_student.profilePic = data.profilePic
 
     db.commit()
-    db.refresh(student)
+    db.refresh(db_student)
 
     # ✅ Invalidate cache to reflect changes immediately
-    await redis_cache.delete_user(student.id)
+    await redis_cache.delete_user(db_student.id)
 
-    logger.info(f"Student profile updated: {student.emailId}")
+    logger.info(f"Student profile updated: {db_student.emailId}")
 
-    return StudentResponse.model_validate(student)
+    return StudentResponse.model_validate(db_student)
 
 
 @router.post("/student/change-password")
@@ -327,7 +340,12 @@ async def change_password(
     Only for students with LOCAL authentication.
     Revokes all refresh tokens and clears cookies for security.
     """
-    await auth_service.change_password(db, student, data.oldPassword, data.newPassword)
+    # Fetch full student from database
+    db_student = db.query(Student).filter(Student.id == student.id).first()
+    if not db_student:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+
+    await auth_service.change_password(db, db_student, data.oldPassword, data.newPassword)
 
     # Clear cookies (user must login again)
     clear_auth_cookies(response)
@@ -390,7 +408,7 @@ async def list_students(
     Query parameters:
     - **skip**: Pagination offset (default: 0)
     - **limit**: Max results (default: 100)
-    - **search**: Search by email or college
+    - **search**: Search by name, email, or college
     - **isPremium**: Filter by premium status
     - **isActive**: Filter by active status
     """
@@ -406,7 +424,9 @@ async def list_students(
     # Apply filters
     if search:
         query = query.filter(
-            (Student.emailId.ilike(f"%{search}%")) | (Student.collegeOrSchool.ilike(f"%{search}%"))
+            (Student.fullName.ilike(f"%{search}%"))
+            | (Student.emailId.ilike(f"%{search}%"))
+            | (Student.collegeOrSchool.ilike(f"%{search}%"))
         )
 
     if isPremium is not None:

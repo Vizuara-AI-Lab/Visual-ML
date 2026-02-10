@@ -29,6 +29,7 @@ export type NodeType =
   | "mse_score"
   | "rmse_score"
   | "mae_score"
+  | "confusion_matrix"
   // GenAI nodes
   | "llm_node"
   | "system_prompt"

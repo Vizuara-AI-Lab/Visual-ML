@@ -258,6 +258,7 @@ class StudentListItem(BaseModel):
 
     id: int
     emailId: str
+    fullName: str
     authProvider: AuthProvider
     collegeOrSchool: Optional[str] = None
     isPremium: bool
