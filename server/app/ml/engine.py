@@ -13,7 +13,6 @@ from app.ml.nodes.transformation import TransformationNode
 from app.ml.nodes.scaling import ScalingNode
 from app.ml.nodes.feature_selection import FeatureSelectionNode
 from app.ml.nodes.split import SplitNode
-from app.ml.nodes.confusion_matrix_node import ConfusionMatrixNode
 
 # Individual ML Algorithm Nodes
 from app.ml.nodes.linear_regression_node import LinearRegressionNode
@@ -63,7 +62,6 @@ class MLPipelineEngine:
             "scaling": ScalingNode,
             "feature_selection": FeatureSelectionNode,
             "split": SplitNode,
-            "confusion_matrix": ConfusionMatrixNode,
             # Individual ML Algorithm Nodes
             "linear_regression": LinearRegressionNode,
             "logistic_regression": LogisticRegressionNode,
@@ -153,7 +151,6 @@ class MLPipelineEngine:
 
             return result_dict
 
-
         except NodeExecutionError:
             raise
         except Exception as e:
@@ -175,7 +172,9 @@ class MLPipelineEngine:
             Output dictionary from connected source node, or empty dict if no connection
         """
         if not edges or not node_id:
-            logger.info(f"_get_connected_source_output: No edges or node_id (node_id={node_id}, edges count={len(edges) if edges else 0})")
+            logger.info(
+                f"_get_connected_source_output: No edges or node_id (node_id={node_id}, edges count={len(edges) if edges else 0})"
+            )
             return {}
 
         # Find edge where target is current node
@@ -190,16 +189,18 @@ class MLPipelineEngine:
             logger.info(f"_get_connected_source_output: Incoming edge has no source for {node_id}")
             return {}
 
-        logger.info(f"_get_connected_source_output: Looking for source {source_node_id} in {len(results)} results")
-        
+        logger.info(
+            f"_get_connected_source_output: Looking for source {source_node_id} in {len(results)} results"
+        )
+
         # Log all result node_ids for debugging
         result_node_ids = [r.get("node_id", "NO_ID") for r in results]
-        logger.info(f"_get_connected_source_output: Available node_ids in results: {result_node_ids}")
+        logger.info(
+            f"_get_connected_source_output: Available node_ids in results: {result_node_ids}"
+        )
 
         # Find result from source node (search by node_id in results)
-        source_result = next(
-            (r for r in results if r.get("node_id") == source_node_id), {}
-        )
+        source_result = next((r for r in results if r.get("node_id") == source_node_id), {})
 
         logger.info(
             f"Found connected source for {node_id}: {source_node_id} "
@@ -207,7 +208,6 @@ class MLPipelineEngine:
         )
 
         return source_result
-
 
     async def execute_pipeline(
         self,
@@ -242,7 +242,7 @@ class MLPipelineEngine:
 
         # Initialize edges (backward compatibility - default to empty if not provided)
         edges = edges or []
-        
+
         logger.info(
             f"Executing pipeline with {len(pipeline)} nodes, {len(edges)} edges (dry_run={dry_run})"
         )
@@ -285,7 +285,7 @@ class MLPipelineEngine:
             if node_type in view_node_types:
                 # Check if view node has a configured dataset_id
                 configured_dataset_id = input_data.get("dataset_id")
-                
+
                 if configured_dataset_id:
                     # Use configured dataset_id
                     merged_input = {**user_context, **input_data}
@@ -305,9 +305,9 @@ class MLPipelineEngine:
                 # Graph-aware preprocessing logic:
                 # Use the connection graph to find the ACTUAL connected source
                 # This works for both sequential (Handler→Encoding) and parallel (Dataset→[Handler1, Handler2])
-                
+
                 connected_source = self._get_connected_source_output(node_id, edges, results)
-                
+
                 # Check if connected source is a preprocessing node
                 is_sequential_preprocessing = any(
                     key in connected_source
@@ -324,21 +324,36 @@ class MLPipelineEngine:
                     # Sequential: Inherit from connected preprocessing node
                     # Normalize the dataset ID field name so downstream nodes can find it
                     normalized_source = dict(connected_source)
-                    for old_field in ["preprocessed_dataset_id", "encoded_dataset_id", "transformed_dataset_id", "scaled_dataset_id", "selected_dataset_id"]:
+                    for old_field in [
+                        "preprocessed_dataset_id",
+                        "encoded_dataset_id",
+                        "transformed_dataset_id",
+                        "scaled_dataset_id",
+                        "selected_dataset_id",
+                    ]:
                         if old_field in normalized_source:
                             normalized_source["dataset_id"] = normalized_source[old_field]
                             break
-                    
+
                     merged_input = {**user_context, **input_data, **normalized_source}
-                    
+
                     # Find which preprocessing dataset field is present for logging
                     dataset_field = next(
-                        (key for key in ["preprocessed_dataset_id", "encoded_dataset_id", "transformed_dataset_id", "scaled_dataset_id", "selected_dataset_id"] 
-                         if key in connected_source), 
-                        "dataset_id"
+                        (
+                            key
+                            for key in [
+                                "preprocessed_dataset_id",
+                                "encoded_dataset_id",
+                                "transformed_dataset_id",
+                                "scaled_dataset_id",
+                                "selected_dataset_id",
+                            ]
+                            if key in connected_source
+                        ),
+                        "dataset_id",
                     )
                     dataset_value = connected_source.get(dataset_field, "N/A")
-                    
+
                     logger.info(
                         f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
                         f"(sequential preprocessing - using {dataset_field}: {dataset_value})"
@@ -350,17 +365,17 @@ class MLPipelineEngine:
                         f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
                         f"(parallel/first preprocessing - using configured dataset_id: {input_data.get('dataset_id')})"
                     )
-            
+
             # Metric/Result nodes should inherit from their connected ML algorithm node
             elif node_type in [
-                "r2_score", "mae_score", "mse_score", "rmse_score",
-                "accuracy_score", "confusion_matrix", "classification_report",
-                "residual_plot", "prediction_table", "feature_importance",
-                "roc_curve"
+                "r2_score",
+                "mae_score",
+                "mse_score",
+                "rmse_score",
             ]:
                 # Get output from connected ML algorithm node
                 connected_source = self._get_connected_source_output(node_id, edges, results)
-                
+
                 if connected_source:
                     # Merge connected source (ML algorithm output) with input_data
                     merged_input = {**user_context, **input_data, **connected_source}
@@ -375,28 +390,42 @@ class MLPipelineEngine:
                         f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
                         f"(metric node - using previous output)"
                     )
-            
+
             # Split and ML algorithm nodes should also use graph-based connections
             elif node_type in [
                 "split",  # Data splitting
-                "linear_regression", "logistic_regression",  # ML algorithms
-                "decision_tree", "random_forest",  # Tree-based
-                "svm", "knn", "naive_bayes",  # Other algorithms
+                "linear_regression",
+                "logistic_regression",  # ML algorithms
+                "decision_tree",
+                "random_forest",  # Tree-based
+                "svm",
+                "knn",
+                "naive_bayes",  # Other algorithms
             ]:
                 # Get output from connected node (could be preprocessing, encoding, etc.)
                 connected_source = self._get_connected_source_output(node_id, edges, results)
-                
+
                 if connected_source:
                     # Normalize dataset field names (preprocessing nodes use different field names)
                     normalized_source = dict(connected_source)
-                    for old_field in ["preprocessed_dataset_id", "encoded_dataset_id", "transformed_dataset_id", "scaled_dataset_id", "selected_dataset_id"]:
+                    for old_field in [
+                        "preprocessed_dataset_id",
+                        "encoded_dataset_id",
+                        "transformed_dataset_id",
+                        "scaled_dataset_id",
+                        "selected_dataset_id",
+                    ]:
                         if old_field in normalized_source:
                             normalized_source["dataset_id"] = normalized_source[old_field]
                             break
-                    
+
                     # Use graph-based connection with normalized field names
                     merged_input = {**user_context, **input_data, **normalized_source}
-                    source_dataset = normalized_source.get("dataset_id") or normalized_source.get("train_dataset_id") or "N/A"
+                    source_dataset = (
+                        normalized_source.get("dataset_id")
+                        or normalized_source.get("train_dataset_id")
+                        or "N/A"
+                    )
                     logger.info(
                         f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
                         f"(graph-based - using dataset from connected node: {source_dataset})"
@@ -426,11 +455,11 @@ class MLPipelineEngine:
                 result = await self.execute_node(
                     node_type=node_type, input_data=merged_input, node_id=node_id, dry_run=dry_run
                 )
-                
+
                 # Ensure result includes node_id for graph-aware lookup
                 if node_id and "node_id" not in result:
                     result["node_id"] = node_id
-                    
+
                 results.append(result)
 
                 # Store output for next node (exclude metadata fields)

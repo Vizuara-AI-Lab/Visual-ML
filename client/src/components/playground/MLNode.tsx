@@ -29,13 +29,6 @@ const MLNode = ({ data, id }: NodeProps<BaseNodeData>) => {
     "mse_score",
     "rmse_score",
     "mae_score",
-    "confusion_matrix",
-    "classification_report",
-    "accuracy_score",
-    "roc_curve",
-    "feature_importance",
-    "residual_plot",
-    "prediction_table",
   ];
 
   const isViewNode = viewNodeTypes.includes(nodeData.type);

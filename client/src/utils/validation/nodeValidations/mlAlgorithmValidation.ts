@@ -21,13 +21,6 @@ const mlAlgorithmCommonRules = {
     "mse_score",
     "rmse_score",
     "mae_score",
-    "confusion_matrix",
-    "classification_report",
-    "accuracy_score",
-    "roc_curve",
-    "feature_importance",
-    "residual_plot",
-    "prediction_table",
     // Evaluation
     "evaluate",
     // Deployment
@@ -52,12 +45,9 @@ export const mlAlgorithmValidationRules: ValidationRegistry = {
         "mse_score",
         "rmse_score",
         "mae_score",
-        "residual_plot",
-        "prediction_table",
         "evaluate",
         "model_export",
         "api_endpoint",
-        "feature_importance",
       ];
 
       if (!regressionMetrics.includes(targetNode.data.type)) {
@@ -84,15 +74,9 @@ export const mlAlgorithmValidationRules: ValidationRegistry = {
 
       // Classification model should only connect to classification metrics
       const classificationMetrics = [
-        "confusion_matrix",
-        "classification_report",
-        "accuracy_score",
-        "roc_curve",
-        "prediction_table",
         "evaluate",
         "model_export",
         "api_endpoint",
-        "feature_importance",
       ];
 
       if (!classificationMetrics.includes(targetNode.data.type)) {

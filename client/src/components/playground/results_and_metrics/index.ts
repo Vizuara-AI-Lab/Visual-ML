@@ -7,4 +7,3 @@ export { R2ScoreResult } from "./R2ScoreResult";
 export { MSEScoreResult } from "./MSEScoreResult";
 export { RMSEScoreResult } from "./RMSEScoreResult";
 export { MAEScoreResult } from "./MAEScoreResult";
-export { ConfusionMatrixResult } from "./ConfusionMatrixResult";

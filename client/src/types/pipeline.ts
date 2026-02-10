@@ -29,13 +29,6 @@ export type NodeType =
   | "mse_score"
   | "rmse_score"
   | "mae_score"
-  | "confusion_matrix"
-  | "classification_report"
-  | "accuracy_score"
-  | "roc_curve"
-  | "feature_importance"
-  | "residual_plot"
-  | "prediction_table"
   // GenAI nodes
   | "llm_node"
   | "system_prompt"

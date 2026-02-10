@@ -17,7 +17,6 @@ import {
   MSEScoreResult,
   RMSEScoreResult,
   MAEScoreResult,
-  ConfusionMatrixResult,
 } from "./results_and_metrics";
 
 interface ViewNodeModalProps {
@@ -85,13 +84,6 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
     "mse_score",
     "rmse_score",
     "mae_score",
-    "confusion_matrix",
-    "classification_report",
-    "accuracy_score",
-    "roc_curve",
-    "feature_importance",
-    "residual_plot",
-    "prediction_table",
   ].includes(nodeType);
 
   if (!isViewNode) return null;
@@ -158,9 +150,6 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
               )}
               {nodeType === "mae_score" && (
                 <MAEScoreResult result={nodeResult} />
-              )}
-              {nodeType === "confusion_matrix" && (
-                <ConfusionMatrixResult result={nodeResult} />
               )}
             </div>
           )}
