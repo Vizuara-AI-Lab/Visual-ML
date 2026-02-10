@@ -1,12 +1,16 @@
 """
 LLM Provider abstraction layer.
-Unified interface for OpenAI, Anthropic, HuggingFace, and local models.
+Unified interface for OpenAI, Anthropic, Gemini, and DynaRoute.
 """
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional, AsyncGenerator
 from pydantic import BaseModel
 import os
+import asyncio
+from functools import partial
+from app.core.config import settings
+from app.core.logging import logger
 
 
 class Message(BaseModel):
@@ -68,8 +72,8 @@ class OpenAIProvider(BaseLLMProvider):
     """OpenAI API provider."""
 
     def _get_default_api_key(self) -> Optional[str]:
-        """Get OpenAI API key from environment."""
-        return os.getenv("OPENAI_API_KEY")
+        """Get OpenAI API key from settings."""
+        return settings.OPENAI_API_KEY
 
     async def generate(
         self,
@@ -154,8 +158,8 @@ class AnthropicProvider(BaseLLMProvider):
     """Anthropic Claude API provider."""
 
     def _get_default_api_key(self) -> Optional[str]:
-        """Get Anthropic API key from environment."""
-        return os.getenv("ANTHROPIC_API_KEY")
+        """Get Anthropic API key from settings."""
+        return settings.ANTHROPIC_API_KEY
 
     async def generate(
         self,
@@ -242,97 +246,12 @@ class AnthropicProvider(BaseLLMProvider):
                 yield text
 
 
-class HuggingFaceProvider(BaseLLMProvider):
-    """HuggingFace Inference API provider."""
-
-    def _get_default_api_key(self) -> Optional[str]:
-        """Get HuggingFace API key from environment."""
-        return os.getenv("HUGGINGFACE_API_KEY")
-
-    async def generate(
-        self,
-        messages: List[Message],
-        model: str,
-        temperature: float = 0.7,
-        max_tokens: int = 1000,
-        **kwargs,
-    ) -> LLMResponse:
-        """Generate completion using HuggingFace."""
-        try:
-            from huggingface_hub import AsyncInferenceClient
-        except ImportError:
-            raise ImportError("huggingface_hub not installed. Run: pip install huggingface_hub")
-
-        client = AsyncInferenceClient(token=self.api_key)
-
-        # Format prompt (most HF models expect string, not chat format)
-        prompt = self._format_prompt(messages)
-
-        response = await client.text_generation(
-            prompt=prompt,
-            model=model,
-            max_new_tokens=max_tokens,
-            temperature=temperature,
-            top_p=kwargs.get("top_p", 0.95),
-        )
-
-        # Estimate tokens (HF doesn't always return token count)
-        input_tokens = len(prompt) // 4
-        output_tokens = len(response) // 4
-
-        return LLMResponse(
-            content=response,
-            tokensUsed=input_tokens + output_tokens,
-            inputTokens=input_tokens,
-            outputTokens=output_tokens,
-            metadata={"model": model},
-        )
-
-    async def generate_stream(
-        self,
-        messages: List[Message],
-        model: str,
-        temperature: float = 0.7,
-        max_tokens: int = 1000,
-        **kwargs,
-    ) -> AsyncGenerator[str, None]:
-        """Generate streaming completion using HuggingFace."""
-        try:
-            from huggingface_hub import AsyncInferenceClient
-        except ImportError:
-            raise ImportError("huggingface_hub not installed. Run: pip install huggingface_hub")
-
-        client = AsyncInferenceClient(token=self.api_key)
-        prompt = self._format_prompt(messages)
-
-        async for token in client.text_generation(
-            prompt=prompt,
-            model=model,
-            max_new_tokens=max_tokens,
-            temperature=temperature,
-            stream=True,
-        ):
-            yield token
-
-    def _format_prompt(self, messages: List[Message]) -> str:
-        """Format messages as a single prompt string."""
-        parts = []
-        for msg in messages:
-            if msg.role == "system":
-                parts.append(f"System: {msg.content}")
-            elif msg.role == "user":
-                parts.append(f"User: {msg.content}")
-            elif msg.role == "assistant":
-                parts.append(f"Assistant: {msg.content}")
-        return "\n\n".join(parts) + "\n\nAssistant:"
-
-
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini API provider."""
 
     def _get_default_api_key(self) -> Optional[str]:
-        """Get Gemini API key from environment."""
-        return os.getenv("GEMINI_API_KEY")
+        """Get Gemini API key from settings."""
+        return settings.GEMINI_API_KEY
 
     async def generate(
         self,
@@ -344,60 +263,37 @@ class GeminiProvider(BaseLLMProvider):
     ) -> LLMResponse:
         """Generate completion using Gemini."""
         try:
-            import google.generativeai as genai
+            from google import genai
         except ImportError:
-            raise ImportError("google-generativeai package not installed. Run: pip install google-generativeai")
+            raise ImportError("google-genai package not installed. Run: pip install google-genai")
 
-        genai.configure(api_key=self.api_key)
-        
-        # Create model instance
-        gemini_model = genai.GenerativeModel(model)
-        
-        # Convert messages to Gemini format
-        # Gemini uses a different format - system message is separate
-        system_instruction = None
-        conversation_parts = []
-        
-        for msg in messages:
-            if msg.role == "system":
-                system_instruction = msg.content
-            elif msg.role == "user":
-                conversation_parts.append({"role": "user", "parts": [msg.content]})
-            elif msg.role == "assistant":
-                conversation_parts.append({"role": "model", "parts": [msg.content]})
-        
-        # Build prompt from messages
-        if system_instruction:
-            prompt = f"{system_instruction}\n\n"
-        else:
-            prompt = ""
-        
-        for part in conversation_parts:
-            role = "User" if part["role"] == "user" else "Assistant"
-            prompt += f"{role}: {part['parts'][0]}\n\n"
-        
-        # Generate response
-        generation_config = genai.GenerationConfig(
-            temperature=temperature,
-            max_output_tokens=max_tokens,
-            top_p=kwargs.get("top_p", 1.0),
+        if not self.api_key:
+            raise ValueError("Gemini API key is not configured")
+
+        client = genai.Client(api_key=self.api_key)
+
+        # Convert messages to simple text format
+        contents = "\n".join([f"{msg.role}: {msg.content}" for msg in messages])
+
+        # Generate content
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None, partial(client.models.generate_content, model=model, contents=contents)
         )
-        
-        response = gemini_model.generate_content(
-            prompt,
-            generation_config=generation_config,
-        )
-        
-        # Estimate tokens (Gemini API may not always provide exact counts)
-        input_tokens = len(prompt) // 4
-        output_tokens = len(response.text) // 4
-        
+
+        # Extract text
+        response_text = response.text
+
+        # Estimate tokens
+        input_tokens = len(contents) // 4
+        output_tokens = len(response_text) // 4
+
         return LLMResponse(
-            content=response.text,
+            content=response_text,
             tokensUsed=input_tokens + output_tokens,
             inputTokens=input_tokens,
             outputTokens=output_tokens,
-            finishReason=str(response.candidates[0].finish_reason) if response.candidates else None,
+            finishReason=None,
             metadata={"model": model},
         )
 
@@ -411,56 +307,33 @@ class GeminiProvider(BaseLLMProvider):
     ) -> AsyncGenerator[str, None]:
         """Generate streaming completion using Gemini."""
         try:
-            import google.generativeai as genai
+            from google import genai
         except ImportError:
-            raise ImportError("google-generativeai package not installed. Run: pip install google-generativeai")
+            raise ImportError("google-genai package not installed. Run: pip install google-genai")
 
-        genai.configure(api_key=self.api_key)
-        gemini_model = genai.GenerativeModel(model)
-        
-        # Build prompt
-        system_instruction = None
-        conversation_parts = []
-        
-        for msg in messages:
-            if msg.role == "system":
-                system_instruction = msg.content
-            elif msg.role == "user":
-                conversation_parts.append({"role": "user", "parts": [msg.content]})
-            elif msg.role == "assistant":
-                conversation_parts.append({"role": "model", "parts": [msg.content]})
-        
-        if system_instruction:
-            prompt = f"{system_instruction}\n\n"
-        else:
-            prompt = ""
-        
-        for part in conversation_parts:
-            role = "User" if part["role"] == "user" else "Assistant"
-            prompt += f"{role}: {part['parts'][0]}\n\n"
-        
-        generation_config = genai.GenerationConfig(
-            temperature=temperature,
-            max_output_tokens=max_tokens,
+        if not self.api_key:
+            raise ValueError("Gemini API key is not configured")
+
+        client = genai.Client(api_key=self.api_key)
+
+        # Convert messages to simple text format
+        contents = "\n".join([f"{msg.role}: {msg.content}" for msg in messages])
+
+        # Generate content (non-streaming fallback)
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None, partial(client.models.generate_content, model=model, contents=contents)
         )
-        
-        response = gemini_model.generate_content(
-            prompt,
-            generation_config=generation_config,
-            stream=True,
-        )
-        
-        for chunk in response:
-            if chunk.text:
-                yield chunk.text
+
+        yield response.text
 
 
-class GrokProvider(BaseLLMProvider):
-    """xAI Grok API provider."""
+class DynaRouteProvider(BaseLLMProvider):
+    """DynaRoute API provider - intelligent model routing."""
 
     def _get_default_api_key(self) -> Optional[str]:
-        """Get Grok API key from environment."""
-        return os.getenv("GROK_API_KEY")
+        """Get DynaRoute API key from settings."""
+        return settings.DYNAROUTE_API_KEY
 
     async def generate(
         self,
@@ -470,44 +343,49 @@ class GrokProvider(BaseLLMProvider):
         max_tokens: int = 1000,
         **kwargs,
     ) -> LLMResponse:
-        """Generate completion using Grok."""
+        """Generate completion using DynaRoute."""
         try:
-            from openai import AsyncOpenAI
+            from dynaroute import DynaRouteClient
         except ImportError:
-            raise ImportError("openai package not installed. Run: pip install openai")
+            raise ImportError(
+                "dynaroute-client package not installed. Run: pip install dynaroute-client"
+            )
 
-        # Grok uses OpenAI-compatible API
-        client = AsyncOpenAI(
-            api_key=self.api_key,
-            base_url="https://api.x.ai/v1"
+        if not self.api_key:
+            raise ValueError("DynaRoute API key is not configured")
+
+        client = DynaRouteClient(api_key=self.api_key)
+
+        # Convert messages to DynaRoute format
+        dynaroute_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
+
+        # Run synchronous client.chat in thread pool
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None, partial(client.chat, messages=dynaroute_messages)
         )
 
-        # Convert messages to OpenAI format
-        grok_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
+        # Extract response
+        if not response or "choices" not in response or not response["choices"]:
+            raise ValueError("DynaRoute returned invalid response")
 
-        # Call API
-        response = await client.chat.completions.create(
-            model=model,
-            messages=grok_messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            top_p=kwargs.get("top_p", 1.0),
-            frequency_penalty=kwargs.get("frequency_penalty", 0.0),
-            presence_penalty=kwargs.get("presence_penalty", 0.0),
-            stop=kwargs.get("stop_sequences"),
-        )
+        content = response["choices"][0].get("message", {}).get("content", "")
 
-        choice = response.choices[0]
+        # Extract token usage
+        usage = response.get("usage", {})
+        input_tokens = usage.get("prompt_tokens", 0)
+        output_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", input_tokens + output_tokens)
 
         return LLMResponse(
-            content=choice.message.content or "",
-            tokensUsed=response.usage.total_tokens,
-            inputTokens=response.usage.prompt_tokens,
-            outputTokens=response.usage.completion_tokens,
-            finishReason=choice.finish_reason,
+            content=content,
+            tokensUsed=total_tokens,
+            inputTokens=input_tokens,
+            outputTokens=output_tokens,
+            finishReason=response["choices"][0].get("finish_reason"),
             metadata={
-                "model": response.model,
-                "id": response.id,
+                "model": response.get("model", "dynaroute"),
+                "id": response.get("id"),
             },
         )
 
@@ -519,44 +397,42 @@ class GrokProvider(BaseLLMProvider):
         max_tokens: int = 1000,
         **kwargs,
     ) -> AsyncGenerator[str, None]:
-        """Generate streaming completion using Grok."""
+        """Generate streaming completion using DynaRoute."""
         try:
-            from openai import AsyncOpenAI
+            from dynaroute import DynaRouteClient
         except ImportError:
-            raise ImportError("openai package not installed. Run: pip install openai")
+            raise ImportError(
+                "dynaroute-client package not installed. Run: pip install dynaroute-client"
+            )
 
-        client = AsyncOpenAI(
-            api_key=self.api_key,
-            base_url="https://api.x.ai/v1"
-        )
+        if not self.api_key:
+            raise ValueError("DynaRoute API key is not configured")
 
-        grok_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
+        client = DynaRouteClient(api_key=self.api_key)
+        dynaroute_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
 
-        stream = await client.chat.completions.create(
-            model=model,
-            messages=grok_messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stream=True,
-            top_p=kwargs.get("top_p", 1.0),
-            frequency_penalty=kwargs.get("frequency_penalty", 0.0),
-            presence_penalty=kwargs.get("presence_penalty", 0.0),
-        )
+        # Get streaming response
+        stream = client.chat(messages=dynaroute_messages, stream=True)
 
-        async for chunk in stream:
-            if chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
+        # Iterate through stream chunks
+        loop = asyncio.get_event_loop()
+        for chunk in stream:
+            # Yield control to event loop periodically
+            await asyncio.sleep(0)
+
+            content = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
+            if content:
+                yield content
 
 
 class ProviderFactory:
     """Factory for creating LLM providers."""
 
     _providers: Dict[str, type[BaseLLMProvider]] = {
+        "dynaroute": DynaRouteProvider,
         "openai": OpenAIProvider,
         "anthropic": AnthropicProvider,
-        "huggingface": HuggingFaceProvider,
         "gemini": GeminiProvider,
-        "grok": GrokProvider,
     }
 
     @classmethod

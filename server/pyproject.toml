@@ -10,7 +10,6 @@ dependencies = [
     "uvicorn[standard]>=0.30.0",
     "pydantic[email]>=2.0.0",
     "pydantic-settings>=2.0.0",
-    
     # Authentication & Security (Required)
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
@@ -18,38 +17,31 @@ dependencies = [
     "google-auth>=2.27.0",
     "argon2-cffi>=25.1.0",
     "email-validator>=2.3.0",
-    
     # Database (Required)
     "sqlalchemy>=2.0.0",
     "alembic>=1.13.0",
     "psycopg2-binary>=2.9.11",
-    
     # ML Core (Required - Lightweight)
     "pandas>=2.0.0",
     "numpy>=1.24.0",
     "scikit-learn>=1.3.0",
     "joblib>=1.3.0",
-    
     # Cache & Background Tasks (Required)
     "redis>=6.4.0",
     "celery[redis]>=5.6.2",
-    
     # Cloud Storage (Required)
     "boto3>=1.34.0",
-    
     # GenAI - Core Only (Required for chatbot)
     "openai>=2.15.0",
     "anthropic>=0.76.0",
     "google-generativeai>=0.8.6",
-    
+    "dynaroute-client>=0.1.0",
     # Utilities (Required)
     "loguru>=0.7.0",
     "python-dotenv>=1.0.0",
     "httpx>=0.28.1",
     "aiofiles>=25.1.0",
     "brevo-python>=1.2.0",
-    
-   
 ]
 
 

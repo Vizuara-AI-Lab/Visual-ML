@@ -1109,6 +1109,104 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                         />
                       )}
 
+                      {field.type === "custom" && field.name === "examples" && (
+                        <div className="space-y-3">
+                          {((currentValue as any[]) || []).map(
+                            (example: any, index: number) => (
+                              <div
+                                key={index}
+                                className="p-4 bg-gray-800 rounded-lg border border-gray-600 space-y-3"
+                              >
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-sm font-medium text-gray-300">
+                                    Example {index + 1}
+                                  </span>
+                                  <button
+                                    onClick={() => {
+                                      const newExamples = [
+                                        ...(currentValue as any[]),
+                                      ];
+                                      newExamples.splice(index, 1);
+                                      handleFieldChange(
+                                        field.name,
+                                        newExamples,
+                                      );
+                                    }}
+                                    className="text-red-400 hover:text-red-300 text-sm"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-gray-400 mb-1">
+                                    User Input
+                                  </label>
+                                  <textarea
+                                    value={example.userInput || ""}
+                                    onChange={(e) => {
+                                      const newExamples = [
+                                        ...(currentValue as any[]),
+                                      ];
+                                      newExamples[index] = {
+                                        ...newExamples[index],
+                                        userInput: e.target.value,
+                                      };
+                                      handleFieldChange(
+                                        field.name,
+                                        newExamples,
+                                      );
+                                    }}
+                                    rows={2}
+                                    className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Enter user input example..."
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-gray-400 mb-1">
+                                    Expected Output
+                                  </label>
+                                  <textarea
+                                    value={example.expectedOutput || ""}
+                                    onChange={(e) => {
+                                      const newExamples = [
+                                        ...(currentValue as any[]),
+                                      ];
+                                      newExamples[index] = {
+                                        ...newExamples[index],
+                                        expectedOutput: e.target.value,
+                                      };
+                                      handleFieldChange(
+                                        field.name,
+                                        newExamples,
+                                      );
+                                    }}
+                                    rows={2}
+                                    className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Enter expected output..."
+                                  />
+                                </div>
+                              </div>
+                            ),
+                          )}
+                          <button
+                            onClick={() => {
+                              const newExamples = [
+                                ...((currentValue as any[]) || []),
+                                { userInput: "", expectedOutput: "" },
+                              ];
+                              handleFieldChange(field.name, newExamples);
+                            }}
+                            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                          >
+                            + Add Example
+                          </button>
+                          <p className="text-xs text-gray-400 mt-1">
+                            Add examples to teach the AI how to respond in
+                            specific situations
+                          </p>
+                        </div>
+                      )}
+
                       {field.type === "checkbox" && (
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input

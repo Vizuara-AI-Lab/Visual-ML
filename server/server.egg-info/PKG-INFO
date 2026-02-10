@@ -27,6 +27,7 @@ Requires-Dist: boto3>=1.34.0
 Requires-Dist: openai>=2.15.0
 Requires-Dist: anthropic>=0.76.0
 Requires-Dist: google-generativeai>=0.8.6
+Requires-Dist: dynaroute-client>=0.1.0
 Requires-Dist: loguru>=0.7.0
 Requires-Dist: python-dotenv>=1.0.0
 Requires-Dist: httpx>=0.28.1

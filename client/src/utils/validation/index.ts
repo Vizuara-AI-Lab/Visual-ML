@@ -6,7 +6,7 @@
 
 export {
   validatePipeline,
-  validateViewNodeConnections,
+  validateNodeConnections,
   validateNodeConfiguration,
   validateNoCircularDependencies,
   formatValidationErrors,

@@ -4,8 +4,10 @@
  * Validates node connections and pipeline structure before execution
  */
 
-import type { MLNode } from "../../types/pipeline";
 import type { Edge } from "@xyflow/react";
+import type { Node } from "@xyflow/react";
+import type { BaseNodeData } from "../../types/pipeline";
+import { validateAllConnections } from "./nodeValidations";
 
 export interface ValidationError {
   type: "error" | "warning";
@@ -19,11 +21,14 @@ export interface ValidationResult {
   errors: ValidationError[];
 }
 
+// Type alias for consistency with old code
+export type MLNode = Node<BaseNodeData>;
+
 /**
- * Define node categories
+ * Define node categories (legacy - now handled by modular validation)
  */
 const NODE_CATEGORIES = {
-  DATA_SOURCE: ["upload_file", "select_dataset", "load_url"],
+  DATA_SOURCE: ["upload_file", "select_dataset", "load_url", "sample_dataset"],
   VIEW: [
     "table_view",
     "data_preview",
@@ -46,87 +51,14 @@ function isNodeCategory(
 }
 
 /**
- * Get all incoming edges for a node
+ * Validate node connections using modular validation system
  */
-function getIncomingEdges(nodeId: string, edges: Edge[]): Edge[] {
-  return edges.filter((edge) => edge.target === nodeId);
-}
-
-/**
- * Get source node for an edge
- */
-function getSourceNode(edge: Edge, nodes: MLNode[]): MLNode | undefined {
-  return nodes.find((node) => node.id === edge.source);
-}
-
-/**
- * Validate that view nodes are only connected to data source nodes
- */
-export function validateViewNodeConnections(
+export function validateNodeConnections(
   nodes: MLNode[],
   edges: Edge[],
 ): ValidationError[] {
-  const errors: ValidationError[] = [];
-
-  // Find all view nodes
-  const viewNodes = nodes.filter((node) =>
-    isNodeCategory(node.data.type, "VIEW"),
-  );
-
-  for (const viewNode of viewNodes) {
-    const incomingEdges = getIncomingEdges(viewNode.id, edges);
-
-    // Check if view node has no connections
-    if (incomingEdges.length === 0) {
-      errors.push({
-        type: "error",
-        nodeId: viewNode.id,
-        message: `${viewNode.data.label} must be connected to a data source`,
-        suggestion:
-          "Connect this view node to an Upload File or Select Dataset node",
-      });
-      continue;
-    }
-
-    // Check each incoming connection
-    for (const edge of incomingEdges) {
-      const sourceNode = getSourceNode(edge, nodes);
-
-      if (!sourceNode) {
-        errors.push({
-          type: "error",
-          nodeId: viewNode.id,
-          message: `${viewNode.data.label} has invalid connection`,
-          suggestion: "Remove and reconnect this edge",
-        });
-        continue;
-      }
-
-      // View nodes should only connect to data sources
-      if (!isNodeCategory(sourceNode.data.type, "DATA_SOURCE")) {
-        errors.push({
-          type: "error",
-          nodeId: viewNode.id,
-          message: `${viewNode.data.label} cannot be connected to ${sourceNode.data.label}`,
-          suggestion:
-            "View nodes can only connect to data source nodes (Upload File, Select Dataset, Load from URL)",
-        });
-      }
-    }
-
-    // Check for multiple connections (view nodes should have only one input)
-    if (incomingEdges.length > 1) {
-      errors.push({
-        type: "warning",
-        nodeId: viewNode.id,
-        message: `${viewNode.data.label} has multiple incoming connections`,
-        suggestion:
-          "View nodes should typically connect to only one data source",
-      });
-    }
-  }
-
-  return errors;
+  // Use the modular validation system
+  return validateAllConnections(nodes, edges);
 }
 
 /**
@@ -230,8 +162,8 @@ export function validatePipeline(
   const allErrors: ValidationError[] = [];
 
   // Run all validations
-  allErrors.push(...validateViewNodeConnections(nodes, edges));
-  allErrors.push(...validateNodeConfiguration(nodes, edges));
+  allErrors.push(...validateNodeConnections(nodes, edges));
+  allErrors.push(...validateNodeConfiguration(nodes));
   allErrors.push(...validateNoCircularDependencies(nodes, edges));
 
   return {

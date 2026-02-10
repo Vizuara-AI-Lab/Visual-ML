@@ -103,6 +103,7 @@ class MLPipelineService:
     async def execute_pipeline(
         self,
         pipeline: List[Dict[str, Any]],
+        edges: List[Dict[str, Any]] = None,
         dry_run: bool = False,
         current_user: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
@@ -111,6 +112,7 @@ class MLPipelineService:
 
         Args:
             pipeline: List of node configurations
+            edges: List of edge connections (source -> target)
             dry_run: Validate without executing
             current_user: Current user context for authentication
 
@@ -119,7 +121,7 @@ class MLPipelineService:
         """
         try:
             results = await pipeline_engine.execute_pipeline(
-                pipeline=pipeline, dry_run=dry_run, current_user=current_user
+                pipeline=pipeline, edges=edges, dry_run=dry_run, current_user=current_user
             )
             return results
         except Exception as e:

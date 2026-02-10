@@ -41,9 +41,7 @@ class ExampleNode(PromptNode):
                 success=False, error="At least one example is required in config", data={}
             )
 
-        example_format = self.config.get(
-            "exampleFormat", "Input: {input}\nOutput: {output}"
-        )
+        example_format = self.config.get("exampleFormat", "Input: {input}\nOutput: {output}")
         prefix = self.config.get("prefix", "Here are some examples:")
         include_instructions = self.config.get("includeInstructions", True)
 
@@ -108,36 +106,3 @@ class ExampleNode(PromptNode):
                 "exampleCount": len(examples),
             },
         )
-
-    def get_input_schema(self) -> Dict[str, Any]:
-        """Example node input schema."""
-        return {
-            "type": "object",
-            "properties": {
-                "messages": {
-                    "type": "array",
-                    "description": "Existing messages (optional)",
-                },
-                "userPrompt": {
-                    "type": "string",
-                    "description": "User's prompt to append after examples",
-                },
-            },
-        }
-
-    def get_output_schema(self) -> Dict[str, Any]:
-        """Example node output schema."""
-        return {
-            "type": "object",
-            "properties": {
-                "success": {"type": "boolean"},
-                "data": {
-                    "type": "object",
-                    "properties": {
-                        "messages": {"type": "array"},
-                        "formattedExamples": {"type": "string"},
-                        "exampleCount": {"type": "integer"},
-                    },
-                },
-            },
-        }

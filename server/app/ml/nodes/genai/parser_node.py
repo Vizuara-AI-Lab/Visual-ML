@@ -157,33 +157,3 @@ class OutputParserNode(PromptNode):
             f"Previous response:\n{response}\n\n"
             f"Please provide the response in the correct format."
         )
-
-    def get_input_schema(self) -> Dict[str, Any]:
-        """Parser input schema."""
-        return {
-            "type": "object",
-            "properties": {
-                "response": {"type": "string", "description": "Response text to parse"},
-                "messages": {"type": "array", "description": "Messages with assistant response"},
-            },
-            "oneOf": [{"required": ["response"]}, {"required": ["messages"]}],
-        }
-
-    def get_output_schema(self) -> Dict[str, Any]:
-        """Parser output schema."""
-        return {
-            "type": "object",
-            "properties": {
-                "success": {"type": "boolean"},
-                "data": {
-                    "type": "object",
-                    "properties": {
-                        "parsedData": {"type": "object"},
-                        "parseErrors": {"type": "array"},
-                        "originalResponse": {"type": "string"},
-                        "needsRetry": {"type": "boolean"},
-                        "fixPrompt": {"type": "string"},
-                    },
-                },
-            },
-        }

@@ -39,12 +39,24 @@ class PipelineNodeConfig(BaseModel):
     node_id: Optional[str] = Field(None, description="Optional custom node ID")
 
 
+class EdgeInfo(BaseModel):
+    """Represents a connection between two nodes in the pipeline graph."""
+
+    source: str = Field(..., description="Source node ID")
+    target: str = Field(..., description="Target node ID")
+    sourceHandle: Optional[str] = Field(None, description="Source handle ID (for multiple outputs)")
+    targetHandle: Optional[str] = Field(None, description="Target handle ID (for multiple inputs)")
+
+
+
 class PipelineExecuteRequest(BaseModel):
     """Request to execute a complete pipeline."""
 
     pipeline: List[PipelineNodeConfig] = Field(..., description="List of nodes to execute")
+    edges: List[EdgeInfo] = Field(default_factory=list, description="Connection graph (edges between nodes)")
     dry_run: bool = Field(False, description="Validate without executing")
     pipeline_name: Optional[str] = Field(None, description="Optional pipeline name")
+
 
 
 class PipelineExecuteResponse(BaseModel):

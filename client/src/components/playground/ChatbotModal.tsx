@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Send, AlertTriangle, MessageSquare } from "lucide-react";
+import { X, Send, MessageSquare, AlertTriangle } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 
@@ -23,17 +23,103 @@ export const ChatbotModal = ({ nodeId, onClose }: ChatbotModalProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Check if connected to LLM node
-  const isConnectedToLLM = () => {
-    if (!nodeId) return false;
+  // Get connected LLM Provider node
+  const getConnectedLLMNode = () => {
+    if (!nodeId) return null;
     const incomingEdges = edges.filter((edge) => edge.target === nodeId);
-    return incomingEdges.some((edge) => {
+    const llmEdge = incomingEdges.find((edge) => {
       const sourceNode = getNodeById(edge.source);
       return sourceNode?.type === "llm_node";
     });
+    if (!llmEdge) return null;
+    return getNodeById(llmEdge.source);
   };
 
-  const hasLLMConnection = isConnectedToLLM();
+  // Get connected System Prompt node
+  const getConnectedSystemPromptNode = () => {
+    if (!nodeId) return null;
+    const incomingEdges = edges.filter((edge) => edge.target === nodeId);
+    const systemPromptEdge = incomingEdges.find((edge) => {
+      const sourceNode = getNodeById(edge.source);
+      return sourceNode?.type === "system_prompt";
+    });
+    if (!systemPromptEdge) return null;
+    return getNodeById(systemPromptEdge.source);
+  };
+
+  // Get connected Example node
+  const getConnectedExampleNode = () => {
+    if (!nodeId) return null;
+    const incomingEdges = edges.filter((edge) => edge.target === nodeId);
+    const exampleEdge = incomingEdges.find((edge) => {
+      const sourceNode = getNodeById(edge.source);
+      return sourceNode?.type === "example_node";
+    });
+    if (!exampleEdge) return null;
+    return getNodeById(exampleEdge.source);
+  };
+
+  // Build system prompt from connected node
+  const buildSystemPrompt = () => {
+    const systemPromptNode = getConnectedSystemPromptNode();
+    if (!systemPromptNode) return null;
+
+    const config = systemPromptNode.data?.config;
+    if (!config) return null;
+
+    const role = config.role;
+    const customRole = config.customRole || "";
+    const instructions = config.systemPrompt || "";
+
+    // Role templates
+    const roleTemplates: Record<string, string> = {
+      helpful_assistant: "You are a helpful assistant.",
+      domain_expert: "You are a domain expert with deep knowledge.",
+      tutor: "You are a patient and encouraging tutor.",
+      code_reviewer: "You are an experienced code reviewer.",
+      creative_writer:
+        "You are a creative writer with excellent storytelling skills.",
+      data_analyst: "You are a data analyst skilled in interpreting data.",
+      technical_writer:
+        "You are a technical writer who explains complex topics clearly.",
+      problem_solver: "You are a problem solver who thinks step-by-step.",
+      research_assistant:
+        "You are a research assistant who provides accurate information.",
+      custom: customRole,
+    };
+
+    const roleText = roleTemplates[role] || roleTemplates.helpful_assistant;
+    return `${roleText}\n\n${instructions}`.trim();
+  };
+
+  const llmNode = getConnectedLLMNode();
+  const hasLLMConnection = !!llmNode;
+  const provider = llmNode?.data?.config?.provider || "gemini";
+  const apiKey = llmNode?.data?.config?.apiKey || "";
+  const systemPrompt = buildSystemPrompt();
+
+  // Get examples from connected node
+  const getExamples = () => {
+    const exampleNode = getConnectedExampleNode();
+    if (!exampleNode) return null;
+
+    const config = exampleNode.data?.config;
+    if (!config || !config.examples) return null;
+
+    // Filter out empty examples
+    const validExamples = config.examples.filter(
+      (ex: any) => ex.userInput?.trim() && ex.expectedOutput?.trim(),
+    );
+
+    return validExamples.length > 0 ? validExamples : null;
+  };
+
+  const examples = getExamples();
+
+  // Check if API key is required and missing
+  const requiresApiKey = provider !== "gemini";
+  const hasApiKey = apiKey.trim().length > 0;
+  const isApiKeyMissing = requiresApiKey && !hasApiKey;
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -44,8 +130,18 @@ export const ChatbotModal = ({ nodeId, onClose }: ChatbotModalProps) => {
   if (!nodeId || !node) return null;
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim()) return;
-    if (!hasLLMConnection) return;
+    if (!inputMessage.trim() || !hasLLMConnection) return;
+
+    // Check if API key is required but missing
+    if (isApiKeyMissing) {
+      const errorMessage: Message = {
+        role: "assistant",
+        content: `Error: API key required for ${provider}. Please configure your API key in the LLM Provider node settings.`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      return;
+    }
 
     const userMessage: Message = {
       role: "user",
@@ -54,64 +150,91 @@ export const ChatbotModal = ({ nodeId, onClose }: ChatbotModalProps) => {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    const currentMessage = inputMessage;
     setInputMessage("");
     setIsLoading(true);
 
     try {
-      // Get LLM Provider node config
-      const incomingEdges = edges.filter((edge) => edge.target === nodeId);
-      const llmEdge = incomingEdges.find((edge) => {
-        const sourceNode = getNodeById(edge.source);
-        return sourceNode?.type === "llm_node";
-      });
+      // Create a placeholder message for streaming
+      const assistantMessageId = Date.now();
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "",
+          timestamp: new Date(),
+        },
+      ]);
 
-      if (!llmEdge) {
-        throw new Error("LLM Provider node not found");
-      }
-
-      const llmNode = getNodeById(llmEdge.source);
-      if (!llmNode) {
-        throw new Error("LLM Provider node not found");
-      }
-
-      // Call backend API
+      // Use streaming endpoint
       const response = await fetch("/api/v1/genai/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message: inputMessage,
-          sessionId: node.data.config?.sessionId || "default",
-          llmConfig: llmNode.data.config,
-          chatbotConfig: node.data.config,
-          conversationHistory: messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
+          message: currentMessage,
+          provider: provider,
+          ...(apiKey && { apiKey: apiKey }), // Include apiKey only if provided
+          ...(systemPrompt && { systemPrompt: systemPrompt }), // Include system prompt if connected
+          ...(examples && { examples: examples }), // Include examples if connected
         }),
       });
 
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.error || "Failed to get response");
+      if (!response.body) {
+        throw new Error("No response body");
       }
 
-      const assistantMessage: Message = {
-        role: "assistant",
-        content: data.response,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedContent = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = JSON.parse(line.slice(6));
+
+            if (data.error) {
+              throw new Error(data.error);
+            }
+
+            if (data.content) {
+              accumulatedContent += data.content;
+              // Update the last message with accumulated content
+              setMessages((prev) => {
+                const newMessages = [...prev];
+                newMessages[newMessages.length - 1] = {
+                  role: "assistant",
+                  content: accumulatedContent,
+                  timestamp: new Date(),
+                };
+                return newMessages;
+              });
+            }
+
+            if (data.done) {
+              break;
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error("Chat error:", error);
-      const errorMessage: Message = {
-        role: "assistant",
-        content: `Error: ${error instanceof Error ? error.message : "Failed to get response"}`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        newMessages[newMessages.length - 1] = {
+          role: "assistant",
+          content: `Error: ${error instanceof Error ? error.message : "Failed to get response"}`,
+          timestamp: new Date(),
+        };
+        return newMessages;
+      });
     } finally {
       setIsLoading(false);
     }
@@ -152,7 +275,10 @@ export const ChatbotModal = ({ nodeId, onClose }: ChatbotModalProps) => {
                 className="p-2 rounded-lg"
                 style={{ backgroundColor: "#10B98120" }}
               >
-                <MessageSquare className="w-5 h-5" style={{ color: "#10B981" }} />
+                <MessageSquare
+                  className="w-5 h-5"
+                  style={{ color: "#10B981" }}
+                />
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-white">
@@ -180,7 +306,34 @@ export const ChatbotModal = ({ nodeId, onClose }: ChatbotModalProps) => {
                   Not Connected to LLM Provider
                 </p>
                 <p className="text-xs text-amber-300 mt-1">
-                  Please connect an LLM Provider node to this Chatbot node to enable chat functionality.
+                  Please connect an LLM Provider node to this Chatbot node to
+                  enable chat functionality.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Provider Info */}
+          {hasLLMConnection && !isApiKeyMissing && (
+            <div className="mx-6 mt-4 px-4 py-2 bg-blue-900/20 border border-blue-700 rounded-lg">
+              <p className="text-xs text-blue-300">
+                Using provider:{" "}
+                <span className="font-semibold">{provider}</span>
+              </p>
+            </div>
+          )}
+
+          {/* Warning if API key is missing */}
+          {hasLLMConnection && isApiKeyMissing && (
+            <div className="mx-6 mt-4 p-4 bg-red-900/20 border border-red-700 rounded-lg flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-red-200">
+                  API Key Required
+                </p>
+                <p className="text-xs text-red-300 mt-1">
+                  Provider "{provider}" requires an API key. Please configure
+                  your API key in the LLM Provider node settings.
                 </p>
               </div>
             </div>
@@ -194,9 +347,11 @@ export const ChatbotModal = ({ nodeId, onClose }: ChatbotModalProps) => {
                   <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
                   <p className="text-sm">No messages yet</p>
                   <p className="text-xs mt-1">
-                    {hasLLMConnection
-                      ? "Start a conversation by typing a message below"
-                      : "Connect an LLM Provider node first"}
+                    {!hasLLMConnection
+                      ? "Connect an LLM Provider node first"
+                      : isApiKeyMissing
+                        ? `API key required for ${provider}`
+                        : "Start a conversation by typing a message below"}
                   </p>
                 </div>
               </div>
@@ -215,7 +370,9 @@ export const ChatbotModal = ({ nodeId, onClose }: ChatbotModalProps) => {
                         : "bg-gray-800 text-gray-200"
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <p className="text-sm whitespace-pre-wrap">
+                      {message.content}
+                    </p>
                     <p className="text-xs opacity-70 mt-1">
                       {message.timestamp.toLocaleTimeString()}
                     </p>
@@ -250,18 +407,25 @@ export const ChatbotModal = ({ nodeId, onClose }: ChatbotModalProps) => {
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                disabled={!hasLLMConnection || isLoading}
+                disabled={!hasLLMConnection || isApiKeyMissing || isLoading}
                 placeholder={
-                  hasLLMConnection
-                    ? "Type your message... (Press Enter to send, Shift+Enter for new line)"
-                    : "Connect an LLM Provider node first..."
+                  !hasLLMConnection
+                    ? "Connect an LLM Provider node first..."
+                    : isApiKeyMissing
+                      ? `API key required for ${provider}. Please configure it in the LLM Provider node.`
+                      : "Type your message... (Press Enter to send, Shift+Enter for new line)"
                 }
                 className="flex-1 px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed resize-none"
                 rows={2}
               />
               <button
                 onClick={handleSendMessage}
-                disabled={!hasLLMConnection || isLoading || !inputMessage.trim()}
+                disabled={
+                  !hasLLMConnection ||
+                  isApiKeyMissing ||
+                  isLoading ||
+                  !inputMessage.trim()
+                }
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
               >
                 <Send className="w-4 h-4" />
