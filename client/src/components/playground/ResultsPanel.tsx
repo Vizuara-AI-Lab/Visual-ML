@@ -10,6 +10,42 @@ interface ResultsPanelProps {
 export const ResultsPanel = ({ isOpen, onClose }: ResultsPanelProps) => {
   const { executionResult, isExecuting } = usePlaygroundStore();
 
+  // Helper function to extract user-friendly error message
+  const getErrorMessage = (error: unknown): string => {
+    if (typeof error === "string") {
+      return error;
+    }
+
+    if (error && typeof error === "object") {
+      const errorObj = error as Record<string, unknown>;
+
+      // Try to extract the most user-friendly message
+      // Priority: details.reason > message (cleaned) > error field
+      if (errorObj.details && typeof errorObj.details === "object") {
+        const details = errorObj.details as Record<string, unknown>;
+        if (details.reason && typeof details.reason === "string") {
+          return details.reason;
+        }
+      }
+
+      if (errorObj.message && typeof errorObj.message === "string") {
+        // Remove the "Node execution failed [node_type]: " prefix
+        const message = errorObj.message;
+        const match = message.match(/\[.*?\]: (.+)/);
+        return match ? match[1] : message;
+      }
+
+      if (errorObj.error && typeof errorObj.error === "string") {
+        return errorObj.error;
+      }
+
+      // Fallback to stringify if we can't extract a message
+      return JSON.stringify(error);
+    }
+
+    return "Unknown error";
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -18,18 +54,18 @@ export const ResultsPanel = ({ isOpen, onClose }: ResultsPanelProps) => {
           animate={{ x: 0 }}
           exit={{ x: "100%" }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          className="fixed right-0 top-0 h-full w-96 bg-gray-900 border-l border-gray-700 shadow-2xl z-40 flex flex-col"
+          className="fixed right-0 top-0 h-full w-96 bg-white/90 backdrop-blur-md border-l border-slate-200/60 shadow-2xl z-40 flex flex-col"
         >
           {/* Header */}
-          <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">
+          <div className="px-4 py-3 border-b border-slate-200/60 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-slate-800">
               Execution Results
             </h3>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
             >
-              <X className="w-5 h-5 text-gray-400" />
+              <X className="w-5 h-5 text-slate-500" />
             </button>
           </div>
 
@@ -37,13 +73,13 @@ export const ResultsPanel = ({ isOpen, onClose }: ResultsPanelProps) => {
           <div className="flex-1 overflow-y-auto p-4">
             {isExecuting && (
               <div className="flex flex-col items-center justify-center py-12">
-                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <p className="text-gray-400 mt-4">Executing pipeline...</p>
+                <div className="w-12 h-12 border-4 border-slate-900 border-t-transparent rounded-full animate-spin" />
+                <p className="text-slate-600 mt-4">Executing pipeline...</p>
               </div>
             )}
 
             {!isExecuting && !executionResult && (
-              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+              <div className="flex flex-col items-center justify-center py-12 text-slate-500">
                 <TrendingUp className="w-12 h-12 mb-3" />
                 <p>No results yet</p>
                 <p className="text-sm mt-1">
@@ -56,30 +92,77 @@ export const ResultsPanel = ({ isOpen, onClose }: ResultsPanelProps) => {
               <div className="space-y-4">
                 {/* Success/Error Banner */}
                 {executionResult.success ? (
-                  <div className="flex items-start gap-3 p-4 bg-green-900/20 border border-green-700 rounded-lg">
-                    <CheckCircle className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="text-sm font-medium text-green-300">
+                      <h4 className="text-sm font-medium text-green-800">
                         Execution Successful
                       </h4>
-                      <p className="text-xs text-green-400/80 mt-1">
+                      <p className="text-xs text-green-700 mt-1">
                         All nodes executed without errors
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-start gap-3 p-4 bg-red-900/20 border border-red-700 rounded-lg">
-                    <XCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="text-sm font-medium text-red-300">
-                        Execution Failed
-                      </h4>
-                      {executionResult.error && (
-                        <p className="text-xs text-red-400/80 mt-1">
-                          {executionResult.error}
-                        </p>
-                      )}
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+                      <XCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h4 className="text-sm font-medium text-red-800">
+                          Execution Failed
+                        </h4>
+                        {executionResult.error && (
+                          <p className="text-sm text-red-700 mt-2">
+                            {executionResult.error}
+                          </p>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Error Details */}
+                    {executionResult.errorDetails && (
+                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                        <h5 className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">
+                          Details
+                        </h5>
+                        <div className="space-y-1.5">
+                          {Object.entries(executionResult.errorDetails).map(
+                            ([key, value]) => {
+                              // Skip input_summary as it's too technical
+                              if (key === "input_summary") return null;
+
+                              return (
+                                <div key={key} className="flex items-start">
+                                  <span className="text-xs font-medium text-slate-600 min-w-25 capitalize">
+                                    {key.replace(/_/g, " ")}:
+                                  </span>
+                                  <span className="text-xs text-slate-800">
+                                    {typeof value === "object"
+                                      ? JSON.stringify(value, null, 2)
+                                      : String(value)}
+                                  </span>
+                                </div>
+                              );
+                            },
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Suggestion */}
+                    {executionResult.errorSuggestion && (
+                      <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <AlertCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                        <div>
+                          <h5 className="text-xs font-semibold text-blue-800 uppercase tracking-wide mb-1">
+                            Suggestion
+                          </h5>
+                          <p className="text-sm text-blue-700">
+                            {executionResult.errorSuggestion}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -87,7 +170,7 @@ export const ResultsPanel = ({ isOpen, onClose }: ResultsPanelProps) => {
                 {executionResult.nodeResults &&
                   Object.keys(executionResult.nodeResults).length > 0 && (
                     <div>
-                      <h4 className="text-sm font-medium text-gray-300 mb-2">
+                      <h4 className="text-sm font-medium text-slate-800 mb-2">
                         Node Results
                       </h4>
                       <div className="space-y-2">
@@ -101,30 +184,28 @@ export const ResultsPanel = ({ isOpen, onClose }: ResultsPanelProps) => {
                             return (
                               <div
                                 key={nodeId}
-                                className="p-3 bg-gray-800 border border-gray-700 rounded-lg"
+                                className="p-3 bg-white border border-slate-200 rounded-lg"
                               >
                                 <div className="flex items-center justify-between mb-2">
-                                  <span className="text-xs font-mono text-gray-400">
+                                  <span className="text-xs font-mono text-slate-600">
                                     {nodeId}
                                   </span>
                                   {nodeResult.success ? (
-                                    <CheckCircle className="w-4 h-4 text-green-400" />
+                                    <CheckCircle className="w-4 h-4 text-green-600" />
                                   ) : (
-                                    <XCircle className="w-4 h-4 text-red-400" />
+                                    <XCircle className="w-4 h-4 text-red-600" />
                                   )}
                                 </div>
                                 {nodeResult.output && (
-                                  <pre className="text-xs text-gray-300 bg-gray-900 p-2 rounded overflow-x-auto">
+                                  <pre className="text-xs text-slate-800 bg-slate-50 p-2 rounded overflow-x-auto">
                                     {JSON.stringify(nodeResult.output, null, 2)}
                                   </pre>
                                 )}
                                 {nodeResult.error && (
-                                  <div className="flex items-start gap-2 mt-2 text-xs text-red-400">
-                                    <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
-                                    <span>
-                                      {typeof nodeResult.error === "string"
-                                        ? nodeResult.error
-                                        : JSON.stringify(nodeResult.error)}
+                                  <div className="flex items-start gap-2 mt-2">
+                                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                                    <span className="text-sm text-red-700">
+                                      {getErrorMessage(nodeResult.error)}
                                     </span>
                                   </div>
                                 )}
@@ -139,7 +220,7 @@ export const ResultsPanel = ({ isOpen, onClose }: ResultsPanelProps) => {
                 {/* Metrics */}
                 {executionResult.metrics && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-300 mb-2">
+                    <h4 className="text-sm font-medium text-slate-800 mb-2">
                       Metrics
                     </h4>
                     <div className="grid grid-cols-2 gap-2">
@@ -147,12 +228,12 @@ export const ResultsPanel = ({ isOpen, onClose }: ResultsPanelProps) => {
                         ([key, value]) => (
                           <div
                             key={key}
-                            className="p-3 bg-gray-800 border border-gray-700 rounded-lg"
+                            className="p-3 bg-white border border-slate-200 rounded-lg"
                           >
-                            <div className="text-xs text-gray-400 uppercase tracking-wide">
+                            <div className="text-xs text-slate-600 uppercase tracking-wide">
                               {key}
                             </div>
-                            <div className="text-lg font-semibold text-white mt-1">
+                            <div className="text-lg font-semibold text-slate-800 mt-1">
                               {typeof value === "number"
                                 ? value.toFixed(4)
                                 : String(value)}

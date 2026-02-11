@@ -306,8 +306,10 @@ export default function PlayGround() {
 
       setExecutionProgress(null);
 
-      // Format user-friendly error message
+      // Format user-friendly error message with details and suggestion
       let userFriendlyError = "Pipeline execution failed";
+      let errorDetails: Record<string, unknown> | undefined = undefined;
+      let errorSuggestion: string | undefined = undefined;
 
       if (error && typeof error === "object" && "response" in error) {
         const responseError = (error as any).response?.data;
@@ -320,20 +322,31 @@ export default function PlayGround() {
           if (errorMsg.includes("Missing values found")) {
             const columnMatch = errorMsg.match(/column '([^']+)'/);
             const column = columnMatch ? columnMatch[1] : "a column";
-            userFriendlyError = `⚠️ Missing values detected in "${column}". Please handle missing values before encoding.`;
+            userFriendlyError = `Missing values detected in "${column}"`;
+            errorSuggestion = "Please handle missing values before encoding.";
           } else if (errorMsg.includes("column_configs")) {
-            userFriendlyError =
-              "⚠️ Please configure encoding settings for at least one column.";
+            userFriendlyError = "No columns configured for encoding";
+            errorSuggestion =
+              "Please configure encoding settings for at least one column.";
           } else if (
             errorMsg.includes("Dataset") &&
             errorMsg.includes("not found")
           ) {
-            userFriendlyError =
-              "⚠️ Dataset not found. Please ensure the data source is properly connected.";
+            userFriendlyError = "Dataset not found or empty";
+            errorSuggestion =
+              "Please ensure the data source is properly connected.";
           } else {
             // Extract just the reason part if it exists
             const reasonMatch = errorMsg.match(/\[.*?\]: (.+)/);
             userFriendlyError = reasonMatch ? reasonMatch[1] : errorMsg;
+          }
+
+          // Extract details and suggestion from response if available
+          if (responseError.details) {
+            errorDetails = responseError.details;
+          }
+          if (responseError.suggestion && !errorSuggestion) {
+            errorSuggestion = responseError.suggestion;
           }
         } else if (responseError?.error) {
           userFriendlyError = responseError.error;
@@ -345,6 +358,8 @@ export default function PlayGround() {
       setExecutionResult({
         success: false,
         error: userFriendlyError,
+        errorDetails: errorDetails,
+        errorSuggestion: errorSuggestion,
         timestamp: new Date().toISOString(),
       });
     } finally {

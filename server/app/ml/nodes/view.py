@@ -166,27 +166,73 @@ class BaseViewNode(BaseNode):
                 .first()
             )
 
-            if not dataset:
-                logger.error(f"Dataset not found: {dataset_id}")
-                return None
+            if dataset:
+                # Dataset found in database - load from S3 or configured local path
+                if dataset.storage_backend == "s3" and dataset.s3_key:
+                    # Download from S3
+                    file_content = await s3_service.download_file(dataset.s3_key)
+                    df = pd.read_csv(io.BytesIO(file_content))
+                    logger.info(f"Loaded dataset from S3: {dataset.s3_key}")
+                elif dataset.local_path:
+                    # Load from local path
+                    df = pd.read_csv(dataset.local_path)
+                    logger.info(f"Loaded dataset from local path: {dataset.local_path}")
+                else:
+                    logger.error(f"No storage path found for dataset: {dataset_id}")
+                    db.close()
+                    return None
 
-            # Load from S3 or local storage
-            if dataset.storage_backend == "s3" and dataset.s3_key:
-                # Download from S3
-                file_content = await s3_service.download_file(dataset.s3_key)
-                df = pd.read_csv(io.BytesIO(file_content))
-            elif dataset.local_path:
-                # Load from local path
-                df = pd.read_csv(dataset.local_path)
+                db.close()
+                return df
             else:
-                logger.error(f"No storage path found for dataset: {dataset_id}")
-                return None
+                # Dataset not found in database - try loading from local uploads directory
+                # This handles preprocessed/intermediate datasets created by preprocessing nodes
+                logger.info(
+                    f"Dataset {dataset_id} not found in DB, checking local uploads directory..."
+                )
 
-            db.close()
-            return df
+                from app.core.config import settings
+                from pathlib import Path
+
+                # Try common file patterns for preprocessed datasets
+                upload_dir = Path(settings.UPLOAD_DIR).resolve()  # Get absolute path
+                logger.info(f"Upload directory (absolute): {upload_dir}")
+                logger.info(f"Upload directory exists: {upload_dir.exists()}")
+
+                # List all files in upload directory for debugging
+                if upload_dir.exists():
+                    csv_files = list(upload_dir.glob("*.csv"))
+                    logger.info(f"Found {len(csv_files)} CSV files in upload directory")
+                    logger.info(f"CSV files: {[f.name for f in csv_files[:10]]}")  # Log first 10
+
+                possible_paths = [
+                    upload_dir / f"{dataset_id}.csv",
+                    upload_dir / f"preprocessed_{dataset_id}.csv",
+                    upload_dir / f"encoded_{dataset_id}.csv",
+                    upload_dir / f"transformed_{dataset_id}.csv",
+                    upload_dir / f"scaled_{dataset_id}.csv",
+                    upload_dir / f"selected_{dataset_id}.csv",
+                ]
+
+                logger.info(
+                    f"Checking {len(possible_paths)} possible file paths for dataset_id: {dataset_id}"
+                )
+                for i, file_path in enumerate(possible_paths):
+                    logger.info(f"  [{i+1}] Checking: {file_path} - Exists: {file_path.exists()}")
+                    if file_path.exists():
+                        logger.info(f"✓ Found preprocessed dataset at: {file_path}")
+                        df = pd.read_csv(file_path)
+                        db.close()
+                        return df
+
+                logger.error(f"Dataset {dataset_id} not found in database or local storage")
+                logger.error(f"Searched in directory: {upload_dir}")
+                logger.error(f"Searched for patterns: {[p.name for p in possible_paths]}")
+                db.close()
+                return None
 
         except Exception as e:
-            logger.error(f"Error loading dataset {dataset_id}: {str(e)}")
+            logger.error(f"Error loading dataset {dataset_id}: {str(e)}", exc_info=True)
             return None
 
 

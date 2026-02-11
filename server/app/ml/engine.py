@@ -283,25 +283,58 @@ class MLPipelineEngine:
                 "feature_selection",
             ]
 
-            # For view nodes, use their own configured dataset_id (don't inherit from previous_output)
+            # For view nodes, prefer connected source output over configured dataset_id
             if node_type in view_node_types:
-                # Check if view node has a configured dataset_id
-                configured_dataset_id = input_data.get("dataset_id")
+                # FIRST: Check if connected to a preprocessing node
+                connected_source = self._get_connected_source_output(node_id, edges, results)
 
-                if configured_dataset_id:
-                    # Use configured dataset_id
+                # Check if connected source has preprocessed/encoded/etc dataset_id
+                has_preprocessing_output = any(
+                    key in connected_source
+                    for key in [
+                        "preprocessed_dataset_id",
+                        "encoded_dataset_id",
+                        "transformed_dataset_id",
+                        "scaled_dataset_id",
+                        "selected_dataset_id",
+                    ]
+                )
+
+                if has_preprocessing_output:
+                    # Connected to preprocessing node - use its output
+                    # Normalize the dataset ID field name
+                    normalized_source = dict(connected_source)
+                    for old_field in [
+                        "preprocessed_dataset_id",
+                        "encoded_dataset_id",
+                        "transformed_dataset_id",
+                        "scaled_dataset_id",
+                        "selected_dataset_id",
+                    ]:
+                        if old_field in normalized_source:
+                            normalized_source["dataset_id"] = normalized_source[old_field]
+                            dataset_field_used = old_field
+                            break
+
+                    merged_input = {**user_context, **input_data, **normalized_source}
+                    logger.info(
+                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
+                        f"(view node - using {dataset_field_used}: {normalized_source['dataset_id']})"
+                    )
+                elif connected_source.get("dataset_id"):
+                    # Connected to dataset node or other source with dataset_id
+                    merged_input = {**user_context, **input_data, **connected_source}
+                    logger.info(
+                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
+                        f"(view node - using connected dataset_id: {connected_source.get('dataset_id')})"
+                    )
+                else:
+                    # No connection or connected source has no dataset - use configured dataset_id
+                    configured_dataset_id = input_data.get("dataset_id")
                     merged_input = {**user_context, **input_data}
                     logger.info(
                         f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
                         f"(view node - using configured dataset_id: {configured_dataset_id})"
-                    )
-                else:
-                    # No configured dataset_id - inherit from connected source
-                    connected_source = self._get_connected_source_output(node_id, edges, results)
-                    merged_input = {**user_context, **input_data, **connected_source}
-                    logger.info(
-                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
-                        f"(view node - using dataset from connected node: {connected_source.get('dataset_id', 'N/A')})"
                     )
             elif node_type in preprocessing_node_types:
                 # Graph-aware preprocessing logic:

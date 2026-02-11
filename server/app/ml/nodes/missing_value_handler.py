@@ -25,7 +25,7 @@ class ColumnConfig(BaseNode):
 
     strategy: str = Field(
         "drop",
-        description="Strategy: 'drop', 'mean', 'median', 'mode', 'fill', 'forward_fill', 'backward_fill', 'none'",
+        description="Strategy: 'drop', 'drop_column', 'mean', 'median', 'mode', 'fill', 'forward_fill', 'backward_fill', 'none'",
     )
     fill_value: Optional[Any] = Field(None, description="Value to fill if strategy='fill'")
     enabled: bool = Field(True, description="Whether to apply strategy to this column")
@@ -70,6 +70,7 @@ class MissingValueHandlerInput(NodeInput):
         """Validate default strategy."""
         valid_strategies = [
             "drop",
+            "drop_column",
             "mean",
             "median",
             "mode",
@@ -88,6 +89,9 @@ class MissingValueHandlerOutput(NodeOutput):
 
     preprocessed_dataset_id: str = Field(..., description="ID of preprocessed dataset")
     preprocessed_path: Optional[str] = Field(None, description="Path to preprocessed data")
+
+    # Column information (for frontend to detect available columns)
+    columns: List[str] = Field(..., description="List of column names in preprocessed dataset")
 
     # Statistics
     original_rows: int = Field(..., description="Rows before preprocessing")
@@ -198,6 +202,7 @@ class MissingValueHandlerNode(BaseNode):
                     execution_time_ms=0,
                     preprocessed_dataset_id=input_data.dataset_id,  # Same as input in preview
                     preprocessed_path=None,
+                    columns=df_processed.columns.tolist(),
                     original_rows=original_rows,
                     final_rows=final_rows,
                     rows_dropped=rows_dropped,
@@ -234,6 +239,7 @@ class MissingValueHandlerNode(BaseNode):
                 execution_time_ms=0,
                 preprocessed_dataset_id=preprocessed_id,
                 preprocessed_path=str(preprocessed_path),
+                columns=df_processed.columns.tolist(),
                 original_rows=original_rows,
                 final_rows=final_rows,
                 rows_dropped=rows_dropped,
@@ -346,7 +352,7 @@ class MissingValueHandlerNode(BaseNode):
 
         missing_before = df[column].isnull().sum()
 
-        if missing_before == 0:
+        if missing_before == 0 and strategy != "drop_column":
             return df, {
                 "strategy": strategy,
                 "missing_before": 0,
@@ -358,6 +364,16 @@ class MissingValueHandlerNode(BaseNode):
             if strategy == "drop":
                 # Drop rows with missing values in this column
                 df = df.dropna(subset=[column])
+
+            elif strategy == "drop_column":
+                # Drop the entire column
+                df = df.drop(columns=[column])
+                return df, {
+                    "strategy": "drop_column",
+                    "missing_before": int(missing_before),
+                    "action": "column_dropped",
+                    "column_dropped": column,
+                }
 
             elif strategy == "mean":
                 if pd.api.types.is_numeric_dtype(df[column]):

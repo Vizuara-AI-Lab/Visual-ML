@@ -182,15 +182,30 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
               datasetId = sourceConfig?.dataset_id;
             }
 
+            console.log(
+              "🔗 Auto-fill dataset_id - Source node:",
+              sourceNode?.type,
+              "\n  - sourceResult:",
+              sourceResult,
+              "\n  - sourceConfig:",
+              sourceConfig,
+              "\n  - Resolved dataset_id:",
+              datasetId,
+            );
+
             if (datasetId) {
               console.log(
-                "🔗 Auto-filling dataset_id from connected source:",
+                "✅ Auto-filling dataset_id from connected source:",
                 datasetId,
               );
               setConfig((prev) => ({
                 ...prev,
                 dataset_id: datasetId,
               }));
+            } else {
+              console.warn(
+                "⚠️ No dataset_id found in source node - connection may not be properly established",
+              );
             }
           }
         }

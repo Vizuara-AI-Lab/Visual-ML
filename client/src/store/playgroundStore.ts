@@ -32,6 +32,8 @@ export interface PipelineExecutionResult {
   >;
   metrics?: Record<string, number | string>;
   error?: string;
+  errorDetails?: Record<string, unknown>;
+  errorSuggestion?: string;
   timestamp: string;
 }
 
@@ -199,7 +201,7 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
     console.log("🏪 Store - updateNodeConfig called for node:", nodeId);
     console.log("🏪 Store - Config received:", config);
     console.log("🏪 Store - target_column in config:", config.target_column);
-    
+
     set((state) => ({
       nodes: state.nodes.map((node) =>
         node.id === nodeId
