@@ -1187,6 +1187,7 @@ function FeatureEngineeringResults({
   const [showRawConfig, setShowRawConfig] = useState(false);
   const [showAllColumns, setShowAllColumns] = useState(false);
   const [columnSearch, setColumnSearch] = useState("");
+  const [downloading, setDownloading] = useState(false);
 
   const isEncodingNode = nodeTypeName === "Encoding";
 
@@ -1202,6 +1203,33 @@ function FeatureEngineeringResults({
     ? filteredColumns
     : filteredColumns.slice(0, 10);
   const hasMoreColumns = filteredColumns.length > 10;
+
+  // Get the dataset ID
+  const datasetId =
+    result.encoded_dataset_id ||
+    result.transformed_dataset_id ||
+    result.scaled_dataset_id ||
+    result.selected_dataset_id;
+
+  // Download complete dataset with all columns as CSV
+  const downloadDataset = async () => {
+    if (!datasetId) {
+      alert("No dataset ID available for download");
+      return;
+    }
+
+    setDownloading(true);
+    try {
+      const { downloadFileFromUploads } =
+        await import("../../lib/api/datasetApi");
+      await downloadFileFromUploads(datasetId);
+    } catch (error) {
+      console.error("Download failed:", error);
+      alert("Failed to download dataset. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   // Download columns as CSV
   const downloadColumns = () => {
@@ -1270,13 +1298,17 @@ function FeatureEngineeringResults({
           <h3 className="text-sm font-semibold text-green-900 mb-3 flex items-center gap-2">
             ✅ Output Dataset
           </h3>
-          <code className="text-xs bg-white px-3 py-2 rounded border border-green-300 block break-all">
-            {result.encoded_dataset_id ||
-              result.transformed_dataset_id ||
-              result.scaled_dataset_id ||
-              result.selected_dataset_id ||
-              "N/A"}
+          <code className="text-xs bg-white px-3 py-2 rounded border border-green-300 block break-all mb-3">
+            {datasetId || "N/A"}
           </code>
+          <button
+            onClick={downloadDataset}
+            disabled={downloading || !datasetId}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium"
+          >
+            <Download className="w-4 h-4" />
+            {downloading ? "Downloading..." : "Download Complete Dataset"}
+          </button>
         </div>
       </div>
 
@@ -1357,10 +1389,10 @@ function FeatureEngineeringResults({
             <div className="flex gap-2">
               <button
                 onClick={downloadColumns}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-600 text-white rounded-md hover:bg-slate-700 text-sm"
               >
                 <Download className="w-4 h-4" />
-                Download CSV
+                Column Names
               </button>
             </div>
           </div>

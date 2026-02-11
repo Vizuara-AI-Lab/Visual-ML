@@ -2,9 +2,10 @@
 Authentication API endpoints for students .
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime
 
 from app.db.session import get_db
 from app.models.user import Student, Admin
@@ -35,6 +36,8 @@ from app.core.security import (
 )
 from app.core.logging import logger
 from app.core.redis_cache import redis_cache
+from app.services.s3_service import s3_service
+from app.core.config import settings
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -326,6 +329,124 @@ async def update_student_profile(
     logger.info(f"Student profile updated: {db_student.emailId}")
 
     return StudentResponse.model_validate(db_student)
+
+
+@router.post("/student/upload-profile-pic")
+async def upload_profile_picture(
+    file: UploadFile = File(..., description="Profile picture to upload"),
+    student: Student = Depends(get_current_student),
+    db: Session = Depends(get_db),
+):
+    """
+    Upload a profile picture to S3 and update student profile.
+
+    Supported formats: JPG, JPEG, PNG, GIF, WEBP
+    Max file size: 5MB
+
+    **Authentication Required - JWT from HTTP-only cookies**
+    """
+    logger.info(f"📸 Profile picture upload request - User: {student.id} ({student.emailId})")
+    logger.info(f"📄 File: {file.filename}, Content-Type: {file.content_type}")
+
+    try:
+        # Read file content
+        file_content = await file.read()
+        file_size_mb = len(file_content) / (1024 * 1024)
+
+        logger.info(
+            f"✅ File content read - Size: {len(file_content)} bytes ({file_size_mb:.2f} MB)"
+        )
+
+        # Validate file type
+        allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+        if file.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid file type. Allowed: {', '.join(allowed_types)}",
+            )
+
+        # Validate file size (max 5MB)
+        if file_size_mb > 5:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File too large ({file_size_mb:.2f}MB). Maximum size is 5MB",
+            )
+
+        # Validate filename
+        filename = file.filename or "profile.jpg"
+        file_ext = filename.split(".")[-1].lower()
+        if file_ext not in ["jpg", "jpeg", "png", "gif", "webp"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid file extension. Allowed: jpg, jpeg, png, gif, webp",
+            )
+
+        # Generate unique S3 key
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        s3_key = f"profile-pictures/{student.id}/{timestamp}.{file_ext}"
+
+        logger.info(f"📦 Uploading to S3 - Key: {s3_key}")
+
+        # Upload to S3
+        s3_url = await s3_service.upload_file(
+            file_content=file_content,
+            s3_key=s3_key,
+            content_type=file.content_type or "image/jpeg",
+            metadata={
+                "student_id": str(student.id),
+                "email": student.emailId,
+                "upload_timestamp": timestamp,
+            },
+        )
+
+        logger.info(f"✅ File uploaded to S3 - URL: {s3_url}")
+
+        # Generate public URL using presigned URL (7 days)
+        # For production, consider making profile pictures publicly accessible
+        # or using CloudFront with proper cache settings
+        public_url = await s3_service.get_presigned_url(s3_key, expiry=604800)  # 7 days
+
+        # Update student profile with new picture URL
+        db_student = db.query(Student).filter(Student.id == student.id).first()
+        if not db_student:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+
+        # Delete old profile picture from S3 if exists
+        old_pic = db_student.profilePic
+        if old_pic is not None and old_pic.startswith("https://"):
+            try:
+                # Extract S3 key from old URL if it's an S3 URL
+                if "profile-pictures/" in old_pic:
+                    old_key = old_pic.split("profile-pictures/")[1].split("?")[0]
+                    old_key = f"profile-pictures/{old_key}"
+                    logger.info(f"🗑️ Deleting old profile picture - Key: {old_key}")
+                    await s3_service.delete_file(old_key)
+            except Exception as e:
+                logger.warning(f"Failed to delete old profile picture: {str(e)}")
+
+        db_student.profilePic = public_url
+        db.commit()
+
+        # Invalidate cache
+        await redis_cache.delete_user(db_student.id)
+
+        logger.info(f"✅ Profile picture updated for student {student.emailId}")
+
+        return {
+            "success": True,
+            "message": "Profile picture uploaded successfully",
+            "profilePicUrl": public_url,
+            "s3Key": s3_key,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Profile picture upload failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload profile picture: {str(e)}",
+        )
 
 
 @router.post("/student/change-password")

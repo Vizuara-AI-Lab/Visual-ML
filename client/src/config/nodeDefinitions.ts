@@ -487,13 +487,6 @@ export const nodeCategories: NodeCategory[] = [
             description: "Connect to a data source node",
           },
           // column_configs handled by custom UI in FeatureEngineeringConfigPanel
-          {
-            name: "target_column",
-            label: "Target Column",
-            type: "select",
-            autoFill: true,
-            description: "Required when using target encoding for any column",
-          },
         ],
       },
       {

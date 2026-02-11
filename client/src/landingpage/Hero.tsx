@@ -1,275 +1,70 @@
-import React, { useState, useCallback } from "react";
-import {
-  Sparkles,
-  Workflow,
-  Share2,
-  Database,
-  Layers,
-  Cpu,
-  BarChart3,
-  Rocket,
-  Zap,
-} from "lucide-react";
+import React from "react";
+import { ArrowRight, Code2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router";
-import {
-  ReactFlow,
-  Background,
-  BackgroundVariant,
-  type Node,
-  type Edge,
-  type NodeTypes,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-
-// Custom Node Component
-const CustomNode = ({
-  data,
-}: {
-  data: { label: string; icon: React.ElementType };
-}) => {
-  const Icon = data.icon;
-  return (
-    <div className="bg-white/95 backdrop-blur-sm border border-gray-300 rounded-lg px-4 py-3 shadow-lg hover:shadow-xl transition-shadow min-w-[120px] cursor-move">
-      <div className="flex items-center gap-2">
-        <div className="flex-shrink-0 w-8 h-8 bg-gray-100 rounded-md flex items-center justify-center">
-          <Icon className="w-4 h-4 text-gray-700" />
-        </div>
-        <span className="text-sm font-medium text-gray-900">{data.label}</span>
-      </div>
-    </div>
-  );
-};
-
-const nodeTypes: NodeTypes = {
-  custom: CustomNode,
-};
+import WorkflowCanvas from "./WorkflowCanvas";
 
 const Hero: React.FC = () => {
   const navigate = useNavigate();
 
-  const highlights = [
-    { icon: Sparkles, text: "GenAI workflows" },
-    { icon: Workflow, text: "Custom UI builder" },
-    { icon: Share2, text: "Shareable pipelines" },
-  ];
-
-  const initialNodes: Node[] = [
-    {
-      id: "1",
-      type: "custom",
-      position: { x: 100, y: 80 },
-      data: { label: "Dataset", icon: Database },
-    },
-    {
-      id: "2",
-      type: "custom",
-      position: { x: 400, y: 80 },
-      data: { label: "Clean", icon: Sparkles },
-    },
-    {
-      id: "3",
-      type: "custom",
-      position: { x: 700, y: 80 },
-      data: { label: "Embed", icon: Layers },
-    },
-    {
-      id: "4",
-      type: "custom",
-      position: { x: 250, y: 250 },
-      data: { label: "Train", icon: Cpu },
-    },
-    {
-      id: "5",
-      type: "custom",
-      position: { x: 550, y: 250 },
-      data: { label: "Evaluate", icon: BarChart3 },
-    },
-    {
-      id: "6",
-      type: "custom",
-      position: { x: 400, y: 420 },
-      data: { label: "GenAI Prompt", icon: Zap },
-    },
-    {
-      id: "7",
-      type: "custom",
-      position: { x: 700, y: 420 },
-      data: { label: "Deploy", icon: Rocket },
-    },
-  ];
-
-  const initialEdges: Edge[] = [
-    {
-      id: "e1-2",
-      source: "1",
-      target: "2",
-      animated: true,
-      style: { stroke: "#d1d5db" },
-    },
-    {
-      id: "e2-3",
-      source: "2",
-      target: "3",
-      animated: true,
-      style: { stroke: "#d1d5db" },
-    },
-    {
-      id: "e1-4",
-      source: "1",
-      target: "4",
-      animated: true,
-      style: { stroke: "#d1d5db" },
-    },
-    {
-      id: "e3-5",
-      source: "3",
-      target: "5",
-      animated: true,
-      style: { stroke: "#d1d5db" },
-    },
-    {
-      id: "e4-5",
-      source: "4",
-      target: "5",
-      animated: true,
-      style: { stroke: "#d1d5db" },
-    },
-    {
-      id: "e5-6",
-      source: "5",
-      target: "6",
-      animated: true,
-      style: { stroke: "#d1d5db" },
-    },
-    {
-      id: "e6-7",
-      source: "6",
-      target: "7",
-      animated: true,
-      style: { stroke: "#d1d5db" },
-    },
-  ];
-
-  const [nodes, setNodes] = useState<Node[]>(initialNodes);
-  const [edges, setEdges] = useState<Edge[]>(initialEdges);
-
-  const onNodesChange = useCallback((changes: any) => {
-    setNodes((nds) => {
-      const updatedNodes = [...nds];
-      changes.forEach((change: any) => {
-        if (change.type === "position" && change.position) {
-          const nodeIndex = updatedNodes.findIndex((n) => n.id === change.id);
-          if (nodeIndex !== -1) {
-            updatedNodes[nodeIndex] = {
-              ...updatedNodes[nodeIndex],
-              position: change.position,
-            };
-          }
-        }
-      });
-      return updatedNodes;
-    });
-  }, []);
-
   return (
-    <section className="relative h-screen overflow-hidden">
-      {/* ReactFlow Canvas with Dotted Background */}
-      <div className="absolute inset-0 w-full h-full">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          nodeTypes={nodeTypes}
-          fitView
-          attributionPosition="bottom-left"
-          nodesDraggable={true}
-          nodesConnectable={false}
-          elementsSelectable={true}
-        >
-          <Background
-            color="#94a3b8"
-            variant={BackgroundVariant.Dots}
-            gap={16}
-            size={1}
-          />
-        </ReactFlow>
-      </div>
+    <section className="relative min-h-screen bg-white overflow-hidden">
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]" />
 
-      {/* Overlay Content - Text on Left */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 h-full flex items-center">
-          <motion.div
-            className="w-full lg:w-1/2 space-y-8 pointer-events-auto"
-            initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-          >
-            <div className="space-y-6">
-              <motion.h1
-                className="text-5xl lg:text-6xl font-bold text-gray-900 leading-tight"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-              >
-                Build ML workflows visually.
-              </motion.h1>
-
-              <motion.p
-                className="text-xl text-gray-600 leading-relaxed"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.4 }}
-              >
-                Create powerful machine learning pipelines without code.
-                Leverage GenAI assistance to build, validate, and deploy
-                workflows. Export custom UIs and share your work instantly.
-              </motion.p>
-            </div>
-
+      <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
+        <div className="pt-32 pb-20 lg:pt-40 lg:pb-28">
+          {/* Main Content */}
+          <div className="max-w-4xl mx-auto text-center space-y-8">
             <motion.div
-              className="flex flex-wrap gap-4"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.6 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="space-y-6"
             >
-              <motion.button
+              <h1 className="text-6xl lg:text-7xl xl:text-8xl font-bold tracking-tight">
+                <span className="block bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+                  Machine Learning
+                </span>
+                <span className="block mt-2 bg-gradient-to-r from-slate-400 via-slate-300 to-slate-400 bg-clip-text text-transparent">
+                  Made Visual
+                </span>
+              </h1>
+              <p className="text-xl lg:text-2xl text-slate-600 max-w-3xl mx-auto leading-relaxed font-light">
+                Build production-ready ML pipelines with an intuitive
+                drag-and-drop interface. Enterprise-grade performance, zero
+                code.
+              </p>
+            </motion.div>
+
+            {/* CTA Buttons */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4"
+            >
+              <button
                 onClick={() => navigate("/signup")}
-                className="px-6 py-3 bg-gray-900 text-white font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-sm hover:shadow-lg"
-                whileHover={{
-                  scale: 1.05,
-                  boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
-                }}
-                whileTap={{ scale: 0.95 }}
+                className="group relative px-8 py-4 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition-all duration-300 flex items-center gap-2 shadow-lg shadow-slate-900/25 hover:shadow-xl hover:shadow-slate-900/40 hover:-translate-y-0.5"
               >
-                Try the builder
-              </motion.button>
+                <span>Get Started Free</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
+              <button className="px-8 py-4 text-slate-700 font-medium hover:text-slate-900 transition-colors flex items-center gap-2 bg-white/50 backdrop-blur-sm rounded-xl border border-slate-200/60 hover:bg-white/80 hover:border-slate-300/60">
+                <Code2 className="w-4 h-4" />
+                <span>Documentation</span>
+              </button>
             </motion.div>
+          </div>
 
-            <motion.div
-              className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.8 }}
-            >
-              {highlights.map((item, index) => (
-                <motion.div
-                  key={index}
-                  className="flex items-center space-x-3"
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.4, delay: 0.9 + index * 0.1 }}
-                  whileHover={{ scale: 1.05 }}
-                >
-                  <div className="flex-shrink-0 w-10 h-10 bg-white/80 backdrop-blur-sm rounded-lg flex items-center justify-center shadow-sm">
-                    <item.icon className="w-5 h-5 text-gray-900" />
-                  </div>
-                  <span className="text-sm font-medium text-gray-900">
-                    {item.text}
-                  </span>
-                </motion.div>
-              ))}
-            </motion.div>
+          {/* Visual Workflow Preview */}
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+            className="mt-24 max-w-6xl mx-auto relative"
+          >
+            <WorkflowCanvas />
           </motion.div>
         </div>
       </div>

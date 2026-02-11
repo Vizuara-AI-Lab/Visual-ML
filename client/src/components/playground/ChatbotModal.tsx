@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Send, MessageSquare, AlertTriangle } from "lucide-react";
+import { X, Send, MessageSquare, AlertTriangle, Trash2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 
@@ -128,6 +128,10 @@ export const ChatbotModal = ({ nodeId, onClose }: ChatbotModalProps) => {
 
   // Early return AFTER ALL hooks
   if (!nodeId || !node) return null;
+
+  const handleClearChat = () => {
+    setMessages([]);
+  };
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || !hasLLMConnection) return;
@@ -289,12 +293,23 @@ export const ChatbotModal = ({ nodeId, onClose }: ChatbotModalProps) => {
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5 text-gray-400" />
-            </button>
+            <div className="flex items-center gap-2">
+              {messages.length > 0 && (
+                <button
+                  onClick={handleClearChat}
+                  className="p-2 hover:bg-gray-800 rounded-lg transition-colors group"
+                  title="Clear chat history"
+                >
+                  <Trash2 className="w-5 h-5 text-gray-400 group-hover:text-red-400 transition-colors" />
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
           </div>
 
           {/* Warning if not connected to LLM */}

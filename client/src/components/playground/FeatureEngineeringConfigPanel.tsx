@@ -192,8 +192,6 @@ export const FeatureEngineeringConfigPanel = ({
                             <option value="none">None (Skip)</option>
                             <option value="onehot">One-Hot Encoding</option>
                             <option value="label">Label Encoding</option>
-                            <option value="ordinal">Ordinal Encoding</option>
-                            <option value="target">Target Encoding</option>
                           </select>
                         </div>
 
@@ -292,32 +290,6 @@ export const FeatureEngineeringConfigPanel = ({
                   ))}
                 </div>
               </div>
-
-              {/* Target Column (for target encoding) */}
-              {Object.values(columnConfigs).some(
-                (cfg: Record<string, unknown>) =>
-                  cfg?.encoding_method === "target",
-              ) && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Target Column (for Target Encoding)
-                  </label>
-                  <select
-                    value={(config.target_column as string) || ""}
-                    onChange={(e) =>
-                      updateField("target_column", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="">-- Select target column --</option>
-                    {availableColumns.map((col) => (
-                      <option key={col} value={col}>
-                        {col}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
             </>
           ) : (
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">

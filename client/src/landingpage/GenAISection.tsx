@@ -1,38 +1,58 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Lightbulb, Shield, TrendingUp, Cpu } from "lucide-react";
+import { Clock, Bot, Mail, Sparkles, Zap, Code2 } from "lucide-react";
 
 const GenAISection: React.FC = () => {
   const features = [
     {
-      icon: Lightbulb,
-      title: "Smart Suggestions",
+      icon: Clock,
+      title: "Cron Scheduling",
       description:
-        "GenAI recommends optimal nodes and configurations as you build your pipeline.",
+        "Automate web scraping with flexible cron-based scheduling. .",
     },
     {
-      icon: Shield,
-      title: "Auto Validation",
+      icon: Bot,
+      title: "GPT Integration",
       description:
-        "Prevent errors before they happen with intelligent validation and best practice enforcement.",
+        "Leverage GPT models for intelligent data analysis, and automated insights generation.",
     },
     {
-      icon: TrendingUp,
-      title: "Explainable Insights",
+      icon: Mail,
+      title: "Email Automation",
       description:
-        "Understand model behavior with AI-generated explanations and performance insights.",
+        "Automatically send reports, alerts, and predictions via email. Keep stakeholders informed in real-time.",
     },
     {
-      icon: Cpu,
-      title: "Hardware Integration",
+      icon: Sparkles,
+      title: "Smart Workflows",
       description:
-        "Seamless hardware integration for faster experiments and real-time performance.",
+        "AI-powered workflow optimization and node recommendations based on your data and objectives.",
+    },
+    {
+      icon: Zap,
+      title: "Webhook Triggers",
+      description:
+        "Connect to external services with custom webhooks. Trigger pipelines on any event from any platform.",
+    },
+    {
+      icon: Code2,
+      title: "API Automation",
+      description:
+        "RESTful APIs for every pipeline. Integrate ML into your applications with simple HTTP requests.",
     },
   ];
 
   return (
-    <section id="genai" className="py-24 px-6 lg:px-8 bg-gray-50">
-      <div className="max-w-7xl mx-auto">
+    <section
+      id="automation"
+      className="relative py-32 px-6 lg:px-8 bg-white overflow-hidden"
+    >
+      {/* Background Elements */}
+      <div className="absolute inset-0">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-40" />
+      </div>
+
+      <div className="relative max-w-7xl mx-auto">
         <motion.div
           className="text-center space-y-4 mb-16"
           initial={{ opacity: 0, y: 30 }}
@@ -40,44 +60,39 @@ const GenAISection: React.FC = () => {
           viewport={{ once: true, margin: "-100px" }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-4xl lg:text-5xl font-bold text-gray-900">
-            GenAI that accelerates every workflow
+          <h2 className="text-4xl lg:text-5xl font-bold bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+            Powerful Automation Built-In
           </h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Build smarter, faster, and with confidence. Our GenAI engine assists
-            you at every step, from node recommendations to deployment
-            optimization.
+          <p className="text-xl text-slate-600 max-w-3xl mx-auto font-light">
+            Schedule workflows, integrate with GPT, send automated emails, and
+            connect to any platform. Production-ready automation without the
+            complexity.
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((feature, index) => {
             const Icon = feature.icon;
             return (
               <motion.div
                 key={index}
-                className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-shadow"
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
+                className="group relative bg-white/80 backdrop-blur-xl border border-slate-200/60 rounded-2xl p-8 hover:bg-white transition-all duration-300 hover:shadow-xl hover:shadow-slate-900/10 ring-1 ring-slate-900/5"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-50px" }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
                 whileHover={{
-                  y: -8,
-                  scale: 1.03,
-                  transition: { duration: 0.3 },
+                  y: -4,
+                  transition: { duration: 0.2 },
                 }}
               >
-                <motion.div
-                  className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mb-4"
-                  whileHover={{ rotate: 360, scale: 1.1 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <Icon className="w-6 h-6 text-gray-900" />
-                </motion.div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                <div className="w-14 h-14 bg-gradient-to-br from-slate-900 to-slate-700 rounded-xl flex items-center justify-center mb-6 shadow-lg shadow-slate-900/25 group-hover:shadow-xl group-hover:shadow-slate-900/30 transition-all">
+                  <Icon className="w-7 h-7 text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-3">
                   {feature.title}
                 </h3>
-                <p className="text-sm text-gray-600 leading-relaxed">
+                <p className="text-sm text-slate-600 leading-relaxed">
                   {feature.description}
                 </p>
               </motion.div>

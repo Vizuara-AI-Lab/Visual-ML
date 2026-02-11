@@ -324,9 +324,6 @@ export default function PlayGround() {
           } else if (errorMsg.includes("column_configs")) {
             userFriendlyError =
               "⚠️ Please configure encoding settings for at least one column.";
-          } else if (errorMsg.includes("Target column required")) {
-            userFriendlyError =
-              "⚠️ Target column is required when using target encoding.";
           } else if (
             errorMsg.includes("Dataset") &&
             errorMsg.includes("not found")
@@ -380,34 +377,6 @@ export default function PlayGround() {
     );
   };
 
-  const handleLoad = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        try {
-          const data = JSON.parse(event.target?.result as string);
-          // TODO: Load nodes and edges into store
-          console.log("Loaded pipeline:", data);
-        } catch (error) {
-          console.error("Failed to load pipeline:", error);
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
-  };
-
-  const handleExport = () => {
-    // Export as Python code or other format
-    console.log("Export functionality coming soon");
-  };
-
   return (
     <div className="h-screen flex flex-col bg-gray-950">
       <Toaster />
@@ -415,8 +384,6 @@ export default function PlayGround() {
         onExecute={handleExecute}
         onClear={handleClear}
         onSave={handleSave}
-        onLoad={handleLoad}
-        onExport={handleExport}
         isExecuting={usePlaygroundStore.getState().isExecuting}
         executionProgress={executionProgress}
         projectName={projectData?.name}

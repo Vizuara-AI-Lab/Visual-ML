@@ -155,7 +155,7 @@ export const Canvas = ({ onNodeClick }: CanvasProps) => {
   );
 
   return (
-    <div ref={reactFlowWrapper} className="flex-1 bg-gray-950">
+    <div ref={reactFlowWrapper} className="flex-1 bg-white/90">
       <ReactFlow
         nodes={nodes}
         edges={edges}

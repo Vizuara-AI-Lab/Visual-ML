@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Eye, EyeOff, Mail, Lock } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, ArrowRight } from "lucide-react";
+import { motion } from "framer-motion";
 import axiosInstance from "../../lib/axios";
 import { useNavigate } from "react-router";
 
@@ -36,15 +37,13 @@ const SignIn: React.FC = () => {
       });
 
       // @ts-expect-error - Google Sign-In loaded from CDN
-      window.google.accounts.id.renderButton(
-        googleButtonRef.current,
-        {
-          theme: "outline",
-          size: "large",
-          width: googleButtonRef.current.offsetWidth,
-          text: "signin_with",
-        }
-      );    };
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: "outline",
+        size: "large",
+        width: googleButtonRef.current.offsetWidth,
+        text: "signin_with",
+      });
+    };
 
     // Wait for Google SDK to load
     const checkGoogleLoaded = setInterval(() => {
@@ -71,8 +70,8 @@ const SignIn: React.FC = () => {
     } catch (err: any) {
       setError(
         err.response?.data?.detail ||
-        err.response?.data?.message ||
-        "Google Sign-In failed. Please try again."
+          err.response?.data?.message ||
+          "Google Sign-In failed. Please try again.",
       );
     } finally {
       setLoading(false);
@@ -111,24 +110,56 @@ const SignIn: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-gray-50 to-gray-100 px-4 py-12">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-50 px-4 py-12 relative overflow-hidden">
+      {/* Premium Background Pattern */}
+      <div className="fixed inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30" />
+
+      {/* Animated Gradient Orbs */}
+      <div className="fixed top-0 left-0 w-96 h-96 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-full blur-3xl animate-pulse" />
+      <div
+        className="fixed bottom-0 right-0 w-96 h-96 bg-gradient-to-br from-violet-400/20 to-pink-400/20 rounded-full blur-3xl animate-pulse"
+        style={{ animationDelay: "1s" }}
+      />
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="max-w-md w-full space-y-8 relative z-10"
+      >
         {/* Logo and Header */}
-        <div className="text-center">
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.1 }}
+          className="text-center"
+        >
+          <h2 className="text-4xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
             Welcome back
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Sign in to your account to continue
+          <p className="mt-3 text-base text-slate-600">
+            Sign in to continue building amazing ML projects
           </p>
-        </div>
+        </motion.div>
 
         {/* Sign In Form */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 space-y-6">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-2xl shadow-slate-900/10 p-8 space-y-6 border border-slate-200/60 ring-1 ring-slate-900/5"
+        >
           {error && (
-            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3"
+            >
+              <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-red-600 text-xs font-bold">!</span>
+              </div>
+              <p className="text-sm text-red-800 flex-1">{error}</p>
+            </motion.div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -136,13 +167,13 @@ const SignIn: React.FC = () => {
             <div>
               <label
                 htmlFor="emailId"
-                className="block text-sm font-medium text-gray-700 mb-2"
+                className="block text-sm font-semibold text-slate-700 mb-2"
               >
                 Email address
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Mail className="h-5 w-5 " />
                 </div>
                 <input
                   id="emailId"
@@ -151,7 +182,7 @@ const SignIn: React.FC = () => {
                   required
                   value={formData.emailId}
                   onChange={handleChange}
-                  className="block w-full pl-10 pr-3 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#29ABE2] focus:border-transparent transition-all"
+                  className="block w-full pl-12 pr-4 py-3.5 bg-white/60 border border-slate-200/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all shadow-sm hover:shadow-md backdrop-blur-sm font-medium text-slate-900 placeholder:text-slate-400"
                   placeholder="you@example.com"
                 />
               </div>
@@ -161,13 +192,13 @@ const SignIn: React.FC = () => {
             <div>
               <label
                 htmlFor="password"
-                className="block text-sm font-medium text-gray-700 mb-2"
+                className="block text-sm font-semibold text-slate-700 mb-2"
               >
                 Password
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 " />
                 </div>
                 <input
                   id="password"
@@ -176,18 +207,18 @@ const SignIn: React.FC = () => {
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  className="block w-full pl-10 pr-12 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#29ABE2] focus:border-transparent transition-all"
+                  className="block w-full pl-12 pr-12 py-3.5 bg-white/60 border border-slate-200/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all shadow-sm hover:shadow-md backdrop-blur-sm font-medium text-slate-900 placeholder:text-slate-400"
                   placeholder="Enter your password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center group"
                 >
                   {showPassword ? (
-                    <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    <EyeOff className="h-5 w-5 text-slate-400 hover:text-slate-700 transition-colors" />
                   ) : (
-                    <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                    <Eye className="h-5 w-5 text-slate-400 hover:text-slate-700 transition-colors" />
                   )}
                 </button>
               </div>
@@ -197,22 +228,24 @@ const SignIn: React.FC = () => {
             <div className="flex items-center justify-end">
               <a
                 href="/auth/forgot-password"
-                className="text-sm font-medium text-[#29ABE2] hover:text-[#FF00FF] transition-colors"
+                className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
               >
                 Forgot your password?
               </a>
             </div>
 
             {/* Submit Button */}
-            <button
+            <motion.button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-linear-to-r from-[#29ABE2] to-[#FF00FF] hover:shadow-lg hover:shadow-[#29ABE2]/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29ABE2] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="group w-full flex justify-center items-center gap-2 py-3.5 px-4 border border-transparent rounded-xl shadow-lg text-base font-semibold text-white bg-slate-900 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-xl hover:shadow-slate-900/40 shadow-slate-900/25"
             >
               {loading ? (
-                <div className="flex items-center">
+                <>
                   <svg
-                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                    className="animate-spin h-5 w-5 text-white"
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
@@ -231,41 +264,47 @@ const SignIn: React.FC = () => {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     ></path>
                   </svg>
-                  Signing in...
-                </div>
+                  <span>Signing in...</span>
+                </>
               ) : (
-                "Sign in"
+                <>
+                  <span>Sign in</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </>
               )}
-            </button>
+            </motion.button>
           </form>
 
           {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
+              <div className="w-full border-t border-slate-200/60"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">
+              <span className="px-4 bg-white/80 text-slate-500 font-medium">
                 Or continue with
               </span>
             </div>
           </div>
 
           {/* Google Sign In Button */}
-          <div ref={googleButtonRef} className="w-full"></div>
+          <div className="w-full">
+            <div ref={googleButtonRef} className="w-full"></div>
+          </div>
 
           {/* Sign Up Link */}
-          <p className="text-center text-sm text-gray-600">
+          <p className="text-center text-sm text-slate-600">
             Don't have an account?{" "}
-            <a
+            <motion.a
               onClick={() => navigate("/signup")}
-              className="font-medium text-[#29ABE2] hover:text-[#FF00FF] transition-colors cursor-pointer"
+              whileHover={{ scale: 1.05 }}
+              className="font-semibold text-slate-900 hover:text-slate-700 transition-colors cursor-pointer inline-block"
             >
               Sign up
-            </a>
+            </motion.a>
           </p>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </div>
   );
 };

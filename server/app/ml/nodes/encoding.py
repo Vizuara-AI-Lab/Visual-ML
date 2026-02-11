@@ -1,6 +1,6 @@
 """
 Encoding Node - Encode categorical variables using various methods.
-Supports One-Hot, Label, Ordinal, and Target encoding with per-column configuration.
+Supports One-Hot and Label encoding with per-column configuration.
 """
 
 from typing import Type, Optional, Dict, Any, List
@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 from pydantic import Field
 from pathlib import Path
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder, OrdinalEncoder
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 import joblib
 import io
 import json
@@ -28,9 +28,7 @@ class ColumnEncodingConfig(BaseModel):
     """Configuration for encoding a single column."""
 
     column_name: str = Field(..., description="Name of the column to encode")
-    encoding_method: str = Field(
-        ..., description="Encoding method: onehot, label, ordinal, target, none"
-    )
+    encoding_method: str = Field(..., description="Encoding method: onehot, label, none")
     handle_unknown: str = Field(
         "error", description="How to handle unknown categories: error, ignore, use_encoded_value"
     )
@@ -38,9 +36,6 @@ class ColumnEncodingConfig(BaseModel):
         "error", description="How to handle missing values: error, most_frequent, create_category"
     )
     drop_first: bool = Field(False, description="Drop first category in one-hot encoding")
-    ordinal_categories: Optional[List[str]] = Field(
-        None, description="Ordered categories for ordinal encoding"
-    )
 
 
 class EncodingInput(NodeInput):
@@ -50,7 +45,6 @@ class EncodingInput(NodeInput):
     column_configs: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict, description="Per-column encoding configuration"
     )
-    target_column: Optional[str] = Field(None, description="Target column for target encoding")
 
 
 class EncodingOutput(NodeOutput):
@@ -79,8 +73,6 @@ class EncodingNode(BaseNode):
     Supports:
     - One-Hot Encoding: Create binary columns for each category
     - Label Encoding: Convert categories to integers
-    - Ordinal Encoding: Convert categories to ordered integers
-    - Target Encoding: Encode based on target variable mean
     """
 
     node_type = "encoding"
@@ -167,34 +159,6 @@ class EncodingNode(BaseNode):
                         "handle_missing": config.handle_missing,
                     }
 
-                elif config.encoding_method == "ordinal":
-                    df_encoded, encoder = self._ordinal_encode(
-                        df_encoded, column_name, config.ordinal_categories, config.handle_unknown
-                    )
-                    encoders[column_name] = {
-                        "type": "ordinal",
-                        "categories": config.ordinal_categories,
-                    }
-                    encoding_summary[column_name] = {
-                        "method": "ordinal",
-                        "categories": config.ordinal_categories,
-                        "handle_unknown": config.handle_unknown,
-                        "handle_missing": config.handle_missing,
-                    }
-
-                elif config.encoding_method == "target":
-                    if not input_data.target_column:
-                        raise ValueError("Target column required for target encoding")
-                    df_encoded, mapping = self._target_encode(
-                        df_encoded, column_name, input_data.target_column
-                    )
-                    encoders[column_name] = {"type": "target", "mapping": mapping}
-                    encoding_summary[column_name] = {
-                        "method": "target",
-                        "target_column": input_data.target_column,
-                        "handle_missing": config.handle_missing,
-                    }
-
             final_columns = len(df_encoded.columns)
 
             # Save encoded dataset
@@ -238,7 +202,7 @@ class EncodingNode(BaseNode):
     def _detect_column_types(self, df: pd.DataFrame) -> Dict[str, str]:
         """
         Detect column types for validation.
-        Returns: dict mapping column names to types (categorical_nominal, categorical_ordinal, numeric, high_cardinality)
+        Returns: dict mapping column names to types (categorical_nominal, numeric, high_cardinality)
         """
         column_types = {}
 
@@ -273,12 +237,7 @@ class EncodingNode(BaseNode):
         if encoding_method == "onehot" and unique_count > 50:
             warnings.append(
                 f"⚠️ Column '{column}': One-Hot encoding with {unique_count} categories will create many columns. "
-                "Consider using Target or Label encoding for high-cardinality features."
-            )
-
-        if encoding_method == "ordinal" and column_type != "categorical_ordinal":
-            warnings.append(
-                f"⚠️ Column '{column}': Ordinal encoding should only be used when categories have a natural order."
+                "Consider using Label encoding for high-cardinality features."
             )
 
         return warnings
@@ -391,35 +350,3 @@ class EncodingNode(BaseNode):
         le = LabelEncoder()
         df[column] = le.fit_transform(df[column].astype(str))
         return df, le
-
-    def _ordinal_encode(
-        self,
-        df: pd.DataFrame,
-        column: str,
-        categories: Optional[List[str]] = None,
-        handle_unknown: str = "error",
-    ) -> tuple[pd.DataFrame, Dict[str, int]]:
-        """Apply ordinal encoding."""
-        if categories:
-            # Use provided category order
-            mapping = {cat: idx for idx, cat in enumerate(categories)}
-        else:
-            # Sort categories alphabetically
-            sorted_categories = sorted(df[column].unique())
-            mapping = {cat: idx for idx, cat in enumerate(sorted_categories)}
-
-        df[column] = df[column].map(mapping)
-        return df, mapping
-
-    def _target_encode(
-        self, df: pd.DataFrame, column: str, target_column: str
-    ) -> tuple[pd.DataFrame, Dict[str, float]]:
-        """Apply target encoding."""
-        # Calculate mean target value for each category
-        target_means = df.groupby(column)[target_column].mean()
-        mapping = target_means.to_dict()
-
-        df[f"{column}_encoded"] = df[column].map(target_means)
-        df = df.drop(columns=[column])
-
-        return df, mapping
