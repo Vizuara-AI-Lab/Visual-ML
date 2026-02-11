@@ -1,9 +1,10 @@
-import { Play, Trash2, Save, Settings, ArrowLeft } from "lucide-react";
+import { Play, Trash2, Save, Settings, ArrowLeft, Share2 } from "lucide-react";
 
 interface ToolbarProps {
   onExecute: () => void;
   onClear: () => void;
   onSave: () => void;
+  onShare?: () => void;
   isExecuting: boolean;
   executionProgress?: {
     status: string;
@@ -19,6 +20,7 @@ export const Toolbar = ({
   onExecute,
   onClear,
   onSave,
+  onShare,
   isExecuting,
   executionProgress,
   projectName,
@@ -95,6 +97,17 @@ export const Toolbar = ({
           <Save className="w-4 h-4" />
           <span className="font-medium">Save</span>
         </button>
+
+        {onShare && (
+          <button
+            onClick={onShare}
+            className="px-4 py-2 hover:bg-blue-50 text-blue-600 hover:text-blue-700 rounded-lg flex items-center gap-2 transition-all border border-transparent hover:border-blue-200"
+            title="Share Project"
+          >
+            <Share2 className="w-4 h-4" />
+            <span className="font-medium">Share</span>
+          </button>
+        )}
 
         <button
           onClick={onClear}

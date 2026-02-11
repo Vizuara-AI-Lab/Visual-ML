@@ -78,6 +78,13 @@ class GenAIPipeline(Base):
         Integer, ForeignKey("genai_pipelines.id", ondelete="SET NULL"), nullable=True
     )
 
+    # Sharing and collaboration
+    is_public = Column(Boolean, nullable=False, default=False)
+    share_token = Column(String(255), nullable=True, unique=True, index=True)
+    allow_cloning = Column(Boolean, nullable=False, default=True)
+    view_count = Column(Integer, nullable=False, default=0)
+    clone_count = Column(Integer, nullable=False, default=0)
+
     # Timestamps
     createdAt = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
     updatedAt = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
