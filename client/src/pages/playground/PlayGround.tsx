@@ -316,10 +316,13 @@ export default function PlayGround() {
       if (error && typeof error === "object" && "response" in error) {
         const responseError = (error as any).response?.data;
 
-        if (responseError?.message) {
-          // Extract the actual error message
-          const errorMsg = responseError.message;
+        // FastAPI returns errors in "detail" field by default
+        const errorMsg =
+          responseError?.detail ||
+          responseError?.message ||
+          responseError?.error;
 
+        if (errorMsg) {
           // Handle specific error types with user-friendly messages
           if (errorMsg.includes("Missing values found")) {
             const columnMatch = errorMsg.match(/column '([^']+)'/);
@@ -350,8 +353,6 @@ export default function PlayGround() {
           if (responseError.suggestion && !errorSuggestion) {
             errorSuggestion = responseError.suggestion;
           }
-        } else if (responseError?.error) {
-          userFriendlyError = responseError.error;
         }
       } else if (error instanceof Error) {
         userFriendlyError = error.message;

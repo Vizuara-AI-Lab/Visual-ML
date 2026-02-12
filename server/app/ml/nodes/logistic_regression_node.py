@@ -9,7 +9,7 @@ import io
 from pydantic import Field
 from pathlib import Path
 from datetime import datetime
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.ml.algorithms.classification.logistic_regression import LogisticRegression
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
 from app.core.config import settings
@@ -24,11 +24,17 @@ class LogisticRegressionInput(NodeInput):
     """Input schema for Logistic Regression node."""
 
     train_dataset_id: str = Field(..., description="Training dataset ID")
-    test_dataset_id: Optional[str] = Field(None, description="Test dataset ID (auto-filled from split node)")
-    target_column: Optional[str] = Field(None, description="Name of target column (auto-filled from split node)")
+    test_dataset_id: Optional[str] = Field(
+        None, description="Test dataset ID (auto-filled from split node)"
+    )
+    target_column: Optional[str] = Field(
+        None, description="Name of target column (auto-filled from split node)"
+    )
 
     # UI control
-    show_advanced_options: bool = Field(False, description="Toggle for advanced options visibility in UI")
+    show_advanced_options: bool = Field(
+        False, description="Toggle for advanced options visibility in UI"
+    )
 
     # Hyperparameters (all optional with sensible defaults)
     fit_intercept: bool = Field(True, description="Calculate intercept for the model")
@@ -56,9 +62,11 @@ class LogisticRegressionOutput(NodeOutput):
 
     class_names: list = Field(..., description="Class names/labels")
     metadata: Dict[str, Any] = Field(..., description="Training metadata")
-    
+
     # Pass-through fields for downstream nodes (e.g., confusion_matrix)
-    test_dataset_id: Optional[str] = Field(None, description="Test dataset ID (passed from split node)")
+    test_dataset_id: Optional[str] = Field(
+        None, description="Test dataset ID (passed from split node)"
+    )
     target_column: Optional[str] = Field(None, description="Target column (passed from split node)")
 
 
@@ -81,6 +89,30 @@ class LogisticRegressionNode(BaseNode):
     """
 
     node_type = "logistic_regression"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.ML_ALGORITHM,
+            primary_output_field="model_id",
+            output_fields={
+                "model_id": "Unique model identifier",
+                "model_path": "Path to saved model file",
+                "training_metrics": "Training performance metrics",
+                "test_dataset_id": "Test dataset ID for evaluation",
+                "target_column": "Target column name",
+            },
+            requires_input=True,
+            can_branch=True,
+            produces_dataset=False,
+            max_inputs=1,
+            allowed_source_categories=[
+                NodeCategory.DATA_TRANSFORM,
+                NodeCategory.PREPROCESSING,
+                NodeCategory.FEATURE_ENGINEERING,
+            ],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         """Return input schema."""
@@ -153,7 +185,7 @@ class LogisticRegressionNode(BaseNode):
             # Validate target column
             if not input_data.target_column:
                 raise ValueError("Target column must be provided (auto-filled from split node)")
-            
+
             if input_data.target_column not in df_train.columns:
                 raise ValueError(f"Target column '{input_data.target_column}' not found")
 

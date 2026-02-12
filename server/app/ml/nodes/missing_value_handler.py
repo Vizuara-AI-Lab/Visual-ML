@@ -9,7 +9,7 @@ import numpy as np
 from pydantic import Field, field_validator
 from pathlib import Path
 from datetime import datetime
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
 from app.core.config import settings
 from app.core.logging import logger
@@ -123,6 +123,23 @@ class MissingValueHandlerNode(BaseNode):
     """
 
     node_type = "missing_value_handler"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.PREPROCESSING,
+            primary_output_field="preprocessed_dataset_id",
+            output_fields={
+                "preprocessed_dataset_id": "ID of the preprocessed dataset",
+                "preprocessed_path": "Path to preprocessed dataset file",
+                "columns": "Available column names after preprocessing",
+            },
+            requires_input=True,
+            can_branch=True,
+            produces_dataset=True,
+            allowed_source_categories=[NodeCategory.DATA_SOURCE, NodeCategory.PREPROCESSING],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         """Return input schema."""

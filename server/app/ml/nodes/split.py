@@ -10,7 +10,7 @@ import io
 from pydantic import Field, field_validator
 from pathlib import Path
 from sklearn.model_selection import train_test_split
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
 from app.core.config import settings
 from app.core.logging import logger
@@ -92,6 +92,32 @@ class SplitNode(BaseNode):
     """
 
     node_type = "split"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Define node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.DATA_TRANSFORM,
+            primary_output_field="train_dataset_id",
+            output_fields={
+                "train_dataset_id": "Identifier for the training dataset",
+                "test_dataset_id": "Identifier for the test dataset",
+                "train_size": "Number of samples in training set",
+                "test_size": "Number of samples in test set",
+                "target_column": "Name of the target column",
+                "columns": "All column names in the dataset",
+                "feature_columns": "Feature column names (excluding target)",
+            },
+            requires_input=True,
+            can_branch=True,
+            produces_dataset=True,
+            max_inputs=1,
+            allowed_source_categories=[
+                NodeCategory.DATA_SOURCE,
+                NodeCategory.PREPROCESSING,
+                NodeCategory.DATA_TRANSFORM,
+            ],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         """Return input schema."""

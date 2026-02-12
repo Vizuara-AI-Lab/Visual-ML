@@ -9,7 +9,7 @@ import io
 from pydantic import Field
 from pathlib import Path
 from datetime import datetime
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.ml.algorithms.regression.linear_regression import LinearRegression
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
 from app.core.config import settings
@@ -24,7 +24,9 @@ class LinearRegressionInput(NodeInput):
     """Input schema for Linear Regression node."""
 
     train_dataset_id: str = Field(..., description="Training dataset ID")
-    target_column: Optional[str] = Field(None, description="Name of target column (auto-filled from split node)")
+    target_column: Optional[str] = Field(
+        None, description="Name of target column (auto-filled from split node)"
+    )
 
     # Hyperparameters
     fit_intercept: bool = Field(True, description="Calculate intercept for the model")
@@ -69,6 +71,30 @@ class LinearRegressionNode(BaseNode):
     """
 
     node_type = "linear_regression"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.ML_ALGORITHM,
+            primary_output_field="model_id",
+            output_fields={
+                "model_id": "Unique model identifier",
+                "model_path": "Path to saved model file",
+                "training_metrics": "Training performance metrics",
+                "coefficients": "Model coefficients",
+                "intercept": "Model intercept",
+            },
+            requires_input=True,
+            can_branch=True,  # Can feed into multiple metric nodes
+            produces_dataset=False,  # Produces model, not dataset
+            max_inputs=1,
+            allowed_source_categories=[
+                NodeCategory.DATA_TRANSFORM,  # From split node
+                NodeCategory.PREPROCESSING,
+                NodeCategory.FEATURE_ENGINEERING,
+            ],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         """Return input schema."""
@@ -149,7 +175,7 @@ class LinearRegressionNode(BaseNode):
             # Validate target column
             if not input_data.target_column:
                 raise ValueError("Target column must be provided (auto-filled from split node)")
-            
+
             if input_data.target_column not in df_train.columns:
                 raise ValueError(f"Target column '{input_data.target_column}' not found")
 

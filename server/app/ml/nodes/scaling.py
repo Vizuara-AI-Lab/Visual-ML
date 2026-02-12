@@ -12,7 +12,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, No
 import joblib
 import io
 
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
 from app.core.config import settings
 from app.core.logging import logger
@@ -45,6 +45,7 @@ class ScalingOutput(NodeOutput):
     columns: List[str] = Field(..., description="All columns in the dataset (for downstream nodes)")
     scaling_method: str = Field(..., description="Scaling method used")
     scaling_summary: Dict[str, Any] = Field(..., description="Summary of scaling operations")
+    warnings: List[str] = Field(default_factory=list, description="Warnings about skipped columns")
 
 
 class ScalingNode(BaseNode):
@@ -59,6 +60,25 @@ class ScalingNode(BaseNode):
     """
 
     node_type = "scaling"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.PREPROCESSING,
+            primary_output_field="scaled_dataset_id",
+            output_fields={
+                "scaled_dataset_id": "ID of the scaled dataset",
+                "scaled_path": "Path to scaled dataset file",
+                "artifacts_path": "Path to scaler artifacts",
+                "scaled_columns": "Columns that were scaled",
+                "columns": "All columns in the dataset (for downstream nodes)",
+            },
+            requires_input=True,
+            can_branch=True,
+            produces_dataset=True,
+            allowed_source_categories=[NodeCategory.DATA_SOURCE, NodeCategory.PREPROCESSING],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         return ScalingInput
@@ -85,7 +105,7 @@ class ScalingNode(BaseNode):
             if input_data.columns is not None and len(input_data.columns) > 0:
                 columns_to_scale = input_data.columns
                 logger.info(f"Received columns for scaling: {columns_to_scale}")
-                
+
                 # WARN if all columns were sent - likely a frontend bug
                 if len(columns_to_scale) == len(df.columns):
                     logger.warning(
@@ -102,10 +122,13 @@ class ScalingNode(BaseNode):
             # Filter to ONLY numeric columns and warn about skipped ones
             numeric_columns = []
             skipped_columns = []
-            
+            warnings = []
+
             for col in columns_to_scale:
                 if col not in df.columns:
-                    logger.warning(f"Column {col} not found in dataset, skipping")
+                    warning_msg = f"Column '{col}' not found in dataset - skipping scaling"
+                    logger.warning(warning_msg)
+                    warnings.append(warning_msg)
                     skipped_columns.append(col)
                     continue
 
@@ -120,12 +143,14 @@ class ScalingNode(BaseNode):
                             # Has some valid numeric values
                             numeric_columns.append(col)
                         else:
-                            logger.warning(
-                                f"Column {col} is not numeric and has no valid numeric values, skipping"
-                            )
+                            warning_msg = f"Column '{col}' is not numeric and has no valid numeric values - skipping scaling"
+                            logger.warning(warning_msg)
+                            warnings.append(warning_msg)
                             skipped_columns.append(col)
                     except Exception:
-                        logger.warning(f"Column {col} is not numeric, skipping")
+                        warning_msg = f"Column '{col}' is not numeric - skipping scaling"
+                        logger.warning(warning_msg)
+                        warnings.append(warning_msg)
                         skipped_columns.append(col)
 
             if len(skipped_columns) > 0:
@@ -207,6 +232,7 @@ class ScalingNode(BaseNode):
                 columns=df_scaled.columns.tolist(),  # ALL columns for downstream nodes
                 scaling_method=input_data.method,
                 scaling_summary=scaling_summary,
+                warnings=warnings,
             )
 
         except Exception as e:
