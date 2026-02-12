@@ -4,28 +4,32 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeft,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   nodeCategories,
   type NodeDefinition,
 } from "../../config/nodeDefinitions";
+import { templates } from "../../config/templateConfig";
 
 interface SidebarProps {
   onNodeDragStart: (event: React.DragEvent, nodeType: string) => void;
+  onTemplateClick: (templateId: string) => void;
 }
 
-export const Sidebar = ({ onNodeDragStart }: SidebarProps) => {
+export const Sidebar = ({ onNodeDragStart, onTemplateClick }: SidebarProps) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(["data-sources", "ml-algorithms"]),
+    new Set(["templates", "data-sources", "ml-algorithms"]),
   );
 
   const toggleCategory = (categoryId: string) => {
     setExpandedCategories((prev) => {
       const next = new Set(prev);
       if (next.has(categoryId)) {
-        next.delete(categoryId);
+        next.delete(categoryId); 
       } else {
         next.add(categoryId);
       }
@@ -73,6 +77,50 @@ export const Sidebar = ({ onNodeDragStart }: SidebarProps) => {
           </div>
 
           <div className="p-3">
+            {/* Templates Section */}
+            <div className="mb-2">
+              <button
+                onClick={() => toggleCategory("templates")}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100/50 transition-colors text-left"
+              >
+                {expandedCategories.has("templates") ? (
+                  <ChevronDown className="w-4 h-4 text-slate-500" />
+                ) : (
+                  <ChevronRight className="w-4 h-4 text-slate-500" />
+                )}
+                <Zap className="w-5 h-5 text-slate-700" />
+                <span className="text-sm font-medium text-slate-800 flex-1">
+                  Templates
+                </span>
+                <span className="text-xs text-slate-500 bg-slate-50 px-2 py-0.5 rounded">
+                  {templates.length}
+                </span>
+              </button>
+
+              <AnimatePresence>
+                {expandedCategories.has("templates") && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-1 ml-2 space-y-1">
+                      {templates.map((template) => (
+                        <TemplateCard
+                          key={template.id}
+                          template={template}
+                          onClick={() => onTemplateClick(template.id)}
+                        />
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Node Categories */}
             {nodeCategories.map((category) => {
               const Icon = category.icon;
               const isExpanded = expandedCategories.has(category.id);
@@ -163,5 +211,48 @@ const NodeCard = ({ node, onDragStart }: NodeCardProps) => {
         </div>
       </div>
     </div>
+  );
+};
+
+interface TemplateCardProps {
+  template: {
+    id: string;
+    label: string;
+    description: string;
+    icon: LucideIcon;
+    color: string;
+  };
+  onClick: () => void;
+}
+
+const TemplateCard = ({ template, onClick }: TemplateCardProps) => {
+  const Icon = template.icon;
+
+  return (
+    <button
+      onClick={onClick}
+      className="group relative w-full px-3 py-3 rounded-lg border border-slate-200/60 bg-gradient-to-br from-white/90 to-white/60 hover:from-white hover:to-white/80 hover:border-slate-300 transition-all cursor-pointer shadow-sm hover:shadow-md text-left"
+      style={{
+        borderLeftWidth: "3px",
+        borderLeftColor: template.color,
+      }}
+    >
+      <div className="flex items-start gap-2">
+        <div
+          className="p-2 rounded-md shrink-0"
+          style={{ backgroundColor: `${template.color}20` }}
+        >
+          <Icon className="w-5 h-5" style={{ color: template.color }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h4 className="text-sm font-semibold text-slate-800">
+            {template.label}
+          </h4>
+          <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
+            {template.description}
+          </p>
+        </div>
+      </div>
+    </button>
   );
 };

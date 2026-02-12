@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import axiosInstance from "../../lib/axios";
+import Navbar from "../../landingpage/Navbar";
 
 interface UserProfile {
   id: number;
@@ -184,7 +185,8 @@ const Profile: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 pt-20">
+      <Navbar />
       {/* Background Pattern */}
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-40" />
@@ -250,7 +252,7 @@ const Profile: React.FC = () => {
               exit={{ opacity: 0, y: -10 }}
               className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3"
             >
-              <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-green-900">Success</p>
                 <p className="text-sm text-green-700">{success}</p>
@@ -285,7 +287,7 @@ const Profile: React.FC = () => {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-700">
+                      <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-slate-900 to-slate-700">
                         <User className="w-16 h-16 text-white" />
                       </div>
                     )}

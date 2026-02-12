@@ -9,10 +9,8 @@ import {
   Filter,
   Scale,
   Droplet,
-  Brain,
-  Network,
+ 
   Layers,
-  Zap,
   Upload,
   Eye,
   Table,
@@ -489,41 +487,41 @@ export const nodeCategories: NodeCategory[] = [
           // column_configs handled by custom UI in FeatureEngineeringConfigPanel
         ],
       },
-      {
-        type: "transformation",
-        label: "Transformation",
-        description: "Apply mathematical transformations",
-        category: "feature-engineering",
-        icon: Zap,
-        color: "#8B5CF6",
-        defaultConfig: {
-          dataset_id: "",
-          transformation_type: "log",
-          columns: [],
-          degree: 2,
-        },
-        configFields: [
-          {
-            name: "dataset_id",
-            label: "Dataset Source",
-            type: "text",
-            required: true,
-            autoFill: true,
-            description: "Connect to a data source node",
-          },
-          {
-            name: "transformation_type",
-            label: "Transformation Type",
-            type: "select",
-            options: [
-              { value: "log", label: "Log Transform" },
-              { value: "sqrt", label: "Square Root" },
-              { value: "power", label: "Power Transform (Box-Cox)" },
-            ],
-            defaultValue: "log",
-          },
-        ],
-      },
+      // {
+      //   type: "transformation",
+      //   label: "Transformation",
+      //   description: "Apply mathematical transformations",
+      //   category: "feature-engineering",
+      //   icon: Zap,
+      //   color: "#8B5CF6",
+      //   defaultConfig: {
+      //     dataset_id: "",
+      //     transformation_type: "log",
+      //     columns: [],
+      //     degree: 2,
+      //   },
+      //   configFields: [
+      //     {
+      //       name: "dataset_id",
+      //       label: "Dataset Source",
+      //       type: "text",
+      //       required: true,
+      //       autoFill: true,
+      //       description: "Connect to a data source node",
+      //     },
+      //     {
+      //       name: "transformation_type",
+      //       label: "Transformation Type",
+      //       type: "select",
+      //       options: [
+      //         { value: "log", label: "Log Transform" },
+      //         { value: "sqrt", label: "Square Root" },
+      //         { value: "power", label: "Power Transform (Box-Cox)" },
+      //       ],
+      //       defaultValue: "log",
+      //     },
+      //   ],
+      // },
       {
         type: "scaling",
         label: "Scaling / Normalization",

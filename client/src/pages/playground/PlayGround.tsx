@@ -150,6 +150,73 @@ export default function PlayGround() {
     event.dataTransfer.effectAllowed = "move";
   };
 
+  const handleTemplateClick = async (templateId: string) => {
+    const { getTemplateById } = await import("../../config/templateConfig");
+    const { getNodeByType } = await import("../../config/nodeDefinitions");
+    const template = getTemplateById(templateId);
+
+    if (!template) {
+      console.error("Template not found:", templateId);
+      return;
+    }
+
+    // Generate unique IDs for nodes
+    const nodeIdMap = new Map<number, string>();
+    const newNodes = template.nodes
+      .map((templateNode, index: number) => {
+        const nodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        nodeIdMap.set(index, nodeId);
+
+        const nodeDef = getNodeByType(templateNode.type);
+        if (!nodeDef) {
+          console.error(
+            `Node definition not found for type: ${templateNode.type}`,
+          );
+          return null;
+        }
+
+        return {
+          id: nodeId,
+          type: templateNode.type, // Use the actual node type (e.g., 'upload_file')
+          position: templateNode.position,
+          data: {
+            label: nodeDef.label,
+            type: nodeDef.type,
+            config: JSON.parse(JSON.stringify(nodeDef.defaultConfig)),
+            isConfigured: false,
+            color: nodeDef.color,
+            icon: nodeDef.icon,
+          },
+        };
+      })
+      .filter(Boolean) as any[]; // Filter out nulls
+
+    // Generate edges based on template connections
+    const newEdges = template.edges.map((edge) => {
+      const sourceId = nodeIdMap.get(edge.sourceIndex);
+      const targetId = nodeIdMap.get(edge.targetIndex);
+
+      return {
+        id: `edge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        source: sourceId!,
+        target: targetId!,
+        type: "smoothstep",
+        animated: true,
+      };
+    });
+
+    // Add nodes and edges to the canvas using the store
+    const { setNodes, setEdges } = usePlaygroundStore.getState();
+    setNodes((prevNodes) => [...prevNodes, ...newNodes]);
+    setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+
+    toast.success(`${template.label} template loaded!`, {
+      duration: 2000,
+      position: "top-right",
+      icon: "✅",
+    });
+  };
+
   const handleExecute = async () => {
     try {
       setIsExecuting(true);
@@ -407,7 +474,10 @@ export default function PlayGround() {
 
       <div className="flex-1 flex overflow-hidden">
         <ReactFlowProvider>
-          <Sidebar onNodeDragStart={onNodeDragStart} />
+          <Sidebar
+            onNodeDragStart={onNodeDragStart}
+            onTemplateClick={handleTemplateClick}
+          />
           <Canvas onNodeClick={handleNodeClick} />
         </ReactFlowProvider>
 
