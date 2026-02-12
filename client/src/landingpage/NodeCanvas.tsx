@@ -140,7 +140,7 @@ const NodeCanvas: React.FC = () => {
   };
 
   return (
-    <div className=\"absolute inset-0 w-full h-full bg-white/50 backdrop-blur-sm rounded-2xl border border-gray-200 shadow-xl overflow-hidden\">
+    <div className="absolute inset-0 w-full h-full bg-white/50 backdrop-blur-sm rounded-2xl border border-gray-200 shadow-xl overflow-hidden">
       <div className="absolute top-6 left-6 z-10 flex gap-2">
         {palette.map((item, idx) => (
           <div
