@@ -9,7 +9,6 @@ import {
   Filter,
   Scale,
   Droplet,
- 
   Layers,
   Upload,
   Eye,

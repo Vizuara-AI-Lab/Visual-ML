@@ -11,7 +11,7 @@ from pathlib import Path
 from sklearn.feature_selection import VarianceThreshold
 import io
 
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
 from app.core.config import settings
 from app.core.logging import logger
@@ -76,6 +76,28 @@ class FeatureSelectionNode(BaseNode):
     """
 
     node_type = "feature_selection"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.FEATURE_ENGINEERING,
+            primary_output_field="selected_dataset_id",
+            output_fields={
+                "selected_dataset_id": "ID of dataset with selected features",
+                "selected_path": "Path to selected dataset file",
+                "selected_feature_names": "Names of selected features",
+                "removed_feature_names": "Names of removed features",
+            },
+            requires_input=True,
+            can_branch=True,
+            produces_dataset=True,
+            allowed_source_categories=[
+                NodeCategory.DATA_SOURCE,
+                NodeCategory.PREPROCESSING,
+                NodeCategory.FEATURE_ENGINEERING,
+            ],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         return FeatureSelectionInput

@@ -6,7 +6,7 @@ from typing import Type, Optional, Dict, Any, List, Union
 from pydantic import Field, field_validator
 import pandas as pd
 import io
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.core.logging import logger
 from app.db.session import SessionLocal
 from app.models.dataset import Dataset
@@ -241,6 +241,29 @@ class TableViewNode(BaseViewNode):
 
     node_type = "table_view"
 
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.VIEW,
+            primary_output_field=None,  # View nodes don't produce datasets
+            output_fields={
+                "data": "Table data as list of records",
+                "columns": "Column names",
+                "total_rows": "Total number of rows",
+            },
+            requires_input=True,
+            can_branch=False,  # View nodes are terminal
+            produces_dataset=False,
+            max_inputs=1,  # Only one input connection
+            allowed_source_categories=[
+                NodeCategory.DATA_SOURCE,
+                NodeCategory.PREPROCESSING,
+                NodeCategory.DATA_TRANSFORM,
+                NodeCategory.FEATURE_ENGINEERING,
+            ],
+        )
+
     def get_input_schema(self) -> Type[NodeInput]:
         return TableViewInput
 
@@ -309,6 +332,29 @@ class DataPreviewNode(BaseViewNode):
 
     node_type = "data_preview"
 
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.VIEW,
+            primary_output_field=None,
+            output_fields={
+                "head_data": "First rows of dataset",
+                "tail_data": "Last rows of dataset",
+                "total_rows": "Total number of rows",
+            },
+            requires_input=True,
+            can_branch=False,
+            produces_dataset=False,
+            max_inputs=1,
+            allowed_source_categories=[
+                NodeCategory.DATA_SOURCE,
+                NodeCategory.PREPROCESSING,
+                NodeCategory.DATA_TRANSFORM,
+                NodeCategory.FEATURE_ENGINEERING,
+            ],
+        )
+
     def get_input_schema(self) -> Type[NodeInput]:
         return DataPreviewInput
 
@@ -351,6 +397,28 @@ class StatisticsViewNode(BaseViewNode):
     """Statistics View Node - Show statistical summary."""
 
     node_type = "statistics_view"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.VIEW,
+            primary_output_field=None,
+            output_fields={
+                "statistics": "Statistical summary of dataset",
+                "view_type": "Type of view (statistics)",
+            },
+            requires_input=True,
+            can_branch=False,
+            produces_dataset=False,
+            max_inputs=1,
+            allowed_source_categories=[
+                NodeCategory.DATA_SOURCE,
+                NodeCategory.PREPROCESSING,
+                NodeCategory.DATA_TRANSFORM,
+                NodeCategory.FEATURE_ENGINEERING,
+            ],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         return StatisticsViewInput
@@ -399,6 +467,28 @@ class ColumnInfoNode(BaseViewNode):
     """Column Info Node - Show column information."""
 
     node_type = "column_info"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.VIEW,
+            primary_output_field=None,
+            output_fields={
+                "column_info": "Information about each column",
+                "view_type": "Type of view (column_info)",
+            },
+            requires_input=True,
+            can_branch=False,
+            produces_dataset=False,
+            max_inputs=1,
+            allowed_source_categories=[
+                NodeCategory.DATA_SOURCE,
+                NodeCategory.PREPROCESSING,
+                NodeCategory.DATA_TRANSFORM,
+                NodeCategory.FEATURE_ENGINEERING,
+            ],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         return ColumnInfoInput
@@ -450,6 +540,29 @@ class ChartViewNode(BaseViewNode):
     """Chart View Node - Visualize data with charts."""
 
     node_type = "chart_view"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.VIEW,
+            primary_output_field=None,
+            output_fields={
+                "chart_data": "Chart visualization data",
+                "chart_type": "Type of chart",
+                "view_type": "Type of view (chart)",
+            },
+            requires_input=True,
+            can_branch=False,
+            produces_dataset=False,
+            max_inputs=1,
+            allowed_source_categories=[
+                NodeCategory.DATA_SOURCE,
+                NodeCategory.PREPROCESSING,
+                NodeCategory.DATA_TRANSFORM,
+                NodeCategory.FEATURE_ENGINEERING,
+            ],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         return ChartViewInput

@@ -9,7 +9,7 @@ import io
 from pydantic import Field
 from pathlib import Path
 from datetime import datetime
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.ml.algorithms.classification.decision_tree import DecisionTreeClassifier
 from app.ml.algorithms.regression.decision_tree_regressor import DecisionTreeRegressor
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
@@ -82,6 +82,30 @@ class DecisionTreeNode(BaseNode):
     """
 
     node_type = "decision_tree"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.ML_ALGORITHM,
+            primary_output_field="model_id",
+            output_fields={
+                "model_id": "Unique model identifier",
+                "model_path": "Path to saved model file",
+                "training_metrics": "Training performance metrics",
+                "tree_depth": "Actual tree depth",
+                "n_leaves": "Number of leaf nodes",
+            },
+            requires_input=True,
+            can_branch=True,
+            produces_dataset=False,
+            max_inputs=1,
+            allowed_source_categories=[
+                NodeCategory.DATA_TRANSFORM,
+                NodeCategory.PREPROCESSING,
+                NodeCategory.FEATURE_ENGINEERING,
+            ],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         """Return input schema."""

@@ -10,6 +10,7 @@ import { Canvas } from "../../components/playground/Canvas";
 import { ConfigModal } from "../../components/playground/ConfigModal";
 import { ChatbotModal } from "../../components/playground/ChatbotModal";
 import { ViewNodeModal } from "../../components/playground/ViewNodeModal";
+import { ShareModal } from "../../components/playground/ShareModal";
 import { Toolbar } from "../../components/playground/Toolbar";
 import { ResultsPanel } from "../../components/playground/ResultsPanel";
 import { usePlaygroundStore } from "../../store/playgroundStore";
@@ -26,6 +27,7 @@ export default function PlayGround() {
   const [viewNodeId, setViewNodeId] = useState<string | null>(null);
   const [chatbotNodeId, setChatbotNodeId] = useState<string | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
 
   const [executionProgress, setExecutionProgress] = useState<{
     status: string;
@@ -381,10 +383,13 @@ export default function PlayGround() {
       if (error && typeof error === "object" && "response" in error) {
         const responseError = (error as any).response?.data;
 
-        if (responseError?.message) {
-          // Extract the actual error message
-          const errorMsg = responseError.message;
+        // FastAPI returns errors in "detail" field by default
+        const errorMsg =
+          responseError?.detail ||
+          responseError?.message ||
+          responseError?.error;
 
+        if (errorMsg) {
           // Handle specific error types with user-friendly messages
           if (errorMsg.includes("Missing values found")) {
             const columnMatch = errorMsg.match(/column '([^']+)'/);
@@ -415,8 +420,6 @@ export default function PlayGround() {
           if (responseError.suggestion && !errorSuggestion) {
             errorSuggestion = responseError.suggestion;
           }
-        } else if (responseError?.error) {
-          userFriendlyError = responseError.error;
         }
       } else if (error instanceof Error) {
         userFriendlyError = error.message;
@@ -459,6 +462,27 @@ export default function PlayGround() {
     );
   };
 
+  const handleShare = () => {
+    if (!projectId) {
+      toast.error("No project selected. Please create a project first.");
+      return;
+    }
+
+    // Auto-save before sharing
+    const state = getProjectState();
+    saveProject.mutate(
+      { id: projectId, state },
+      {
+        onSuccess: () => {
+          setShareModalOpen(true);
+        },
+        onError: () => {
+          toast.error("Please save the project before sharing");
+        },
+      },
+    );
+  };
+
   return (
     <div className="h-screen flex flex-col bg-gray-950">
       <Toaster />
@@ -466,6 +490,7 @@ export default function PlayGround() {
         onExecute={handleExecute}
         onClear={handleClear}
         onSave={handleSave}
+        onShare={projectId ? handleShare : undefined}
         isExecuting={usePlaygroundStore.getState().isExecuting}
         executionProgress={executionProgress}
         projectName={projectData?.name}
@@ -497,6 +522,13 @@ export default function PlayGround() {
       <ChatbotModal
         nodeId={chatbotNodeId}
         onClose={() => setChatbotNodeId(null)}
+      />
+
+      <ShareModal
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        projectId={projectId ? parseInt(projectId) : 0}
+        projectName={projectData?.name || "Untitled Project"}
       />
     </div>
   );

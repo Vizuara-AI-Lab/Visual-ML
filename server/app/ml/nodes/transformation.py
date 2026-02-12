@@ -11,7 +11,7 @@ from pathlib import Path
 from sklearn.preprocessing import PowerTransformer
 import io
 
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
 from app.core.config import settings
 from app.core.logging import logger
@@ -54,6 +54,24 @@ class TransformationNode(BaseNode):
 
     node_type = "transformation"
 
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.PREPROCESSING,
+            primary_output_field="transformed_dataset_id",
+            output_fields={
+                "transformed_dataset_id": "ID of the transformed dataset",
+                "transformed_path": "Path to transformed dataset file",
+                "transformed_columns": "Columns that were transformed",
+                "new_columns": "New columns created by transformation",
+            },
+            requires_input=True,
+            can_branch=True,
+            produces_dataset=True,
+            allowed_source_categories=[NodeCategory.DATA_SOURCE, NodeCategory.PREPROCESSING],
+        )
+
     def get_input_schema(self) -> Type[NodeInput]:
         return TransformationInput
 
@@ -91,7 +109,11 @@ class TransformationNode(BaseNode):
 
             for column in input_data.columns:
                 if column not in df.columns:
-                    logger.warning(f"Column {column} not found in dataset")
+                    warning_msg = (
+                        f"Column '{column}' not found in dataset - skipping transformation"
+                    )
+                    logger.warning(warning_msg)
+                    conversion_warnings.append(warning_msg)
                     continue
 
                 # Check if already numeric

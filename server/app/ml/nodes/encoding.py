@@ -14,7 +14,7 @@ import joblib
 import io
 import json
 
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
 from app.core.config import settings
 from app.core.logging import logger
@@ -44,6 +44,9 @@ class EncodingInput(NodeInput):
     dataset_id: str = Field(..., description="Dataset ID to process")
     column_configs: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict, description="Per-column encoding configuration"
+    )
+    columns: Optional[List[str]] = Field(
+        None, description="Available columns from upstream node (auto-filled by DAG)"
     )
 
 
@@ -77,6 +80,28 @@ class EncodingNode(BaseNode):
 
     node_type = "encoding"
 
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.PREPROCESSING,
+            primary_output_field="encoded_dataset_id",
+            output_fields={
+                "encoded_dataset_id": "ID of the encoded dataset",
+                "encoded_path": "Path to encoded dataset file",
+                "artifacts_path": "Path to encoding artifacts (encoders)",
+                "columns": "All columns in the encoded dataset (for downstream nodes)",
+            },
+            requires_input=True,
+            can_branch=True,
+            produces_dataset=True,
+            allowed_source_categories=[
+                NodeCategory.DATA_SOURCE,
+                NodeCategory.PREPROCESSING,
+                NodeCategory.DATA_TRANSFORM,
+            ],
+        )
+
     def get_input_schema(self) -> Type[NodeInput]:
         return EncodingInput
 
@@ -86,6 +111,12 @@ class EncodingNode(BaseNode):
     async def _execute(self, input_data: EncodingInput) -> EncodingOutput:
         """Execute encoding with per-column configuration."""
         try:
+            # DEBUG: Log all input fields
+            logger.info(
+                f"[ENCODING DEBUG] Input data: dataset_id={input_data.dataset_id}, "
+                f"columns={getattr(input_data, 'columns', 'NOT FOUND')}"
+            )
+
             logger.info(f"Starting encoding for dataset: {input_data.dataset_id}")
 
             # Load dataset
@@ -109,7 +140,9 @@ class EncodingNode(BaseNode):
             # Process each column configuration
             for column_name, config_dict in input_data.column_configs.items():
                 if column_name not in df.columns:
-                    logger.warning(f"Column {column_name} not found in dataset")
+                    warning_msg = f"Column '{column_name}' not found in dataset - skipping encoding"
+                    logger.warning(warning_msg)
+                    warnings.append(warning_msg)
                     continue
 
                 # Parse configuration

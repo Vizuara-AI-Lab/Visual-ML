@@ -21,6 +21,7 @@ from app.api.v1 import (
     auth_student,
     genai,
     tasks,
+    sharing,
 )
 from pathlib import Path
 
@@ -153,6 +154,9 @@ app.include_router(
 app.include_router(secrets.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["API Secrets"])
 app.include_router(genai.router, prefix=settings.API_V1_PREFIX)
 app.include_router(projects.router, prefix=settings.API_V1_PREFIX)
+app.include_router(
+    sharing.router, prefix=settings.API_V1_PREFIX + "/projects", tags=["Project Sharing"]
+)
 
 
 if __name__ == "__main__":

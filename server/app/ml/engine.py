@@ -1,59 +1,100 @@
 """
 ML Pipeline Engine - Orchestrates node execution and manages pipelines.
+DAG-based execution with dynamic node registration.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Set, Tuple, Type
 from datetime import datetime
-from app.ml.nodes.upload import UploadFileNode
-from app.ml.nodes.select import SelectDatasetNode
-from app.ml.nodes.clean import PreprocessNode
-from app.ml.nodes.missing_value_handler import MissingValueHandlerNode
-from app.ml.nodes.encoding import EncodingNode
-from app.ml.nodes.transformation import TransformationNode
-from app.ml.nodes.scaling import ScalingNode
-from app.ml.nodes.feature_selection import FeatureSelectionNode
-from app.ml.nodes.split import SplitNode
-from app.ml.nodes.confusion_matrix_node import ConfusionMatrixNode
+from collections import defaultdict, deque
+import asyncio
 
-# Individual ML Algorithm Nodes
-from app.ml.nodes.linear_regression_node import LinearRegressionNode
-from app.ml.nodes.logistic_regression_node import LogisticRegressionNode
-from app.ml.nodes.decision_tree_node import DecisionTreeNode
-from app.ml.nodes.random_forest_node import RandomForestNode
-
-# Result/Metrics Nodes
-from app.ml.nodes.results_and_metrics import (
-    R2ScoreNode,
-    MSEScoreNode,
-    RMSEScoreNode,
-    MAEScoreNode,
-)
-
-from app.ml.nodes.view import (
-    TableViewNode,
-    DataPreviewNode,
-    StatisticsViewNode,
-    ColumnInfoNode,
-    ChartViewNode,
-)
 from app.core.logging import logger, log_ml_operation
 from app.core.exceptions import NodeExecutionError
+from app.ml.nodes.base import BaseNode
+
+
+class DAGValidationError(Exception):
+    """DAG validation error."""
+
+    pass
 
 
 class MLPipelineEngine:
     """
-    ML Pipeline orchestration engine.
+    ML Pipeline orchestration engine with DAG-based execution.
 
-    Manages:
-    - Node registration and discovery
-    - Pipeline execution
-    - Result aggregation
-    - Error handling
+    Features:
+    - Dynamic node registration (no hardcoded imports)
+    - DAG validation (cycle detection, topological sort)
+    - Automatic parallel execution
+    - Generic input preparation (no node-specific logic)
+    - Metadata-driven execution (nodes declare their behavior)
     """
+
+    # Class-level node registry - nodes can self-register
+    NODE_REGISTRY: Dict[str, Type[BaseNode]] = {}
 
     def __init__(self):
         """Initialize pipeline engine."""
-        self.nodes = {
+        self.execution_context: Dict[str, Any] = {}  # Node outputs by node_id
+        self.execution_history: List[Dict[str, Any]] = []
+
+        # Auto-discover and register nodes on first initialization
+        if not self.NODE_REGISTRY:
+            self._auto_discover_nodes()
+
+    @classmethod
+    def register_node(cls, node_type: str, node_class: Type[BaseNode]):
+        """
+        Register a custom node type.
+
+        Args:
+            node_type: Unique node type identifier
+            node_class: Node class (must inherit from BaseNode)
+        """
+        if not issubclass(node_class, BaseNode):
+            raise ValueError(f"Node class must inherit from BaseNode: {node_class}")
+
+        cls.NODE_REGISTRY[node_type] = node_class
+        logger.info(f"Registered ML node: {node_type}")
+
+    def _auto_discover_nodes(self):
+        """
+        Auto-discover and register all nodes from app.ml.nodes package.
+
+        This eliminates the need for manual imports and registration.
+        """
+        # Import all node modules to trigger registration
+        from app.ml.nodes.upload import UploadFileNode
+        from app.ml.nodes.select import SelectDatasetNode
+        from app.ml.nodes.clean import PreprocessNode
+        from app.ml.nodes.missing_value_handler import MissingValueHandlerNode
+        from app.ml.nodes.encoding import EncodingNode
+        from app.ml.nodes.transformation import TransformationNode
+        from app.ml.nodes.scaling import ScalingNode
+        from app.ml.nodes.feature_selection import FeatureSelectionNode
+        from app.ml.nodes.split import SplitNode
+        from app.ml.nodes.confusion_matrix_node import ConfusionMatrixNode
+        from app.ml.nodes.linear_regression_node import LinearRegressionNode
+        from app.ml.nodes.logistic_regression_node import LogisticRegressionNode
+        from app.ml.nodes.decision_tree_node import DecisionTreeNode
+        from app.ml.nodes.random_forest_node import RandomForestNode
+        from app.ml.nodes.results_and_metrics import (
+            R2ScoreNode,
+            MSEScoreNode,
+            RMSEScoreNode,
+            MAEScoreNode,
+        )
+        from app.ml.nodes.view import (
+            TableViewNode,
+            DataPreviewNode,
+            StatisticsViewNode,
+            ColumnInfoNode,
+            ChartViewNode,
+        )
+
+        # Register all nodes
+        nodes_to_register = {
             "upload_file": UploadFileNode,
             "select_dataset": SelectDatasetNode,
             "preprocess": PreprocessNode,
@@ -64,24 +105,23 @@ class MLPipelineEngine:
             "feature_selection": FeatureSelectionNode,
             "split": SplitNode,
             "confusion_matrix": ConfusionMatrixNode,
-            # Individual ML Algorithm Nodes
             "linear_regression": LinearRegressionNode,
             "logistic_regression": LogisticRegressionNode,
             "decision_tree": DecisionTreeNode,
             "random_forest": RandomForestNode,
-            # Result/Metrics Nodes
             "r2_score": R2ScoreNode,
             "mse_score": MSEScoreNode,
             "rmse_score": RMSEScoreNode,
             "mae_score": MAEScoreNode,
-            # View Nodes
             "table_view": TableViewNode,
             "data_preview": DataPreviewNode,
             "statistics_view": StatisticsViewNode,
             "column_info": ColumnInfoNode,
             "chart_view": ChartViewNode,
         }
-        self.execution_history: List[Dict[str, Any]] = []
+
+        for node_type, node_class in nodes_to_register.items():
+            self.register_node(node_type, node_class)
 
     async def execute_node(
         self,
@@ -105,10 +145,10 @@ class MLPipelineEngine:
         Raises:
             NodeExecutionError: If node execution fails
         """
-        if node_type not in self.nodes:
+        if node_type not in self.NODE_REGISTRY:
             raise NodeExecutionError(
                 node_type=node_type,
-                reason=f"Unknown node type: {node_type}. Available: {list(self.nodes.keys())}",
+                reason=f"Unknown node type: {node_type}. Available: {list(self.NODE_REGISTRY.keys())}",
                 input_data=input_data,
             )
 
@@ -116,7 +156,7 @@ class MLPipelineEngine:
             logger.info(f"Executing node: {node_type} (dry_run={dry_run})")
 
             # Create node instance
-            node_class = self.nodes[node_type]
+            node_class = self.NODE_REGISTRY[node_type]
             node = node_class(node_id=node_id)
 
             # Execute node
@@ -159,383 +199,378 @@ class MLPipelineEngine:
             logger.error(f"Node execution failed: {str(e)}", exc_info=True)
             raise NodeExecutionError(node_type=node_type, reason=str(e), input_data=input_data)
 
-    def _get_connected_source_output(
-        self, node_id: str, edges: List[Dict[str, Any]], results: List[Dict[str, Any]]
+    def _build_dag(
+        self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]
+    ) -> Dict[str, List[str]]:
+        """
+        Build adjacency list representation of DAG.
+
+        Args:
+            nodes: List of node configs
+            edges: List of edge connections
+
+        Returns:
+            {node_id: [dependent_node_id, ...]}
+        """
+        dag: Dict[str, List[str]] = defaultdict(list)
+
+        for edge in edges:
+            source = edge.get("source") or edge.get("sourceNodeId")
+            target = edge.get("target") or edge.get("targetNodeId")
+
+            if source and target:
+                dag[source].append(target)
+
+        return dict(dag)
+
+    def _validate_dag(self, dag: Dict[str, List[str]], nodes: List[Dict[str, Any]]):
+        """
+        Validate DAG structure.
+
+        Checks:
+        1. No cycles (directed acyclic)
+        2. All referenced nodes exist
+        3. At least one starting node (no incoming edges)
+
+        Args:
+            dag: Adjacency list representation
+            nodes: List of node configs
+
+        Raises:
+            DAGValidationError: If validation fails
+        """
+        node_ids = {node.get("node_id") or node.get("id") for node in nodes}
+
+        # Check all edges reference valid nodes
+        for source, targets in dag.items():
+            if source not in node_ids:
+                raise DAGValidationError(f"Edge references non-existent node: {source}")
+            for target in targets:
+                if target not in node_ids:
+                    raise DAGValidationError(f"Edge references non-existent node: {target}")
+
+        # Check for cycles using DFS
+        visited: Set[str] = set()
+        rec_stack: Set[str] = set()
+
+        def has_cycle(node_id: str) -> bool:
+            visited.add(node_id)
+            rec_stack.add(node_id)
+
+            for neighbor in dag.get(node_id, []):
+                if neighbor not in visited:
+                    if has_cycle(neighbor):
+                        return True
+                elif neighbor in rec_stack:
+                    return True
+
+            rec_stack.remove(node_id)
+            return False
+
+        for node in nodes:
+            node_id = node.get("node_id") or node.get("id")
+            if node_id and node_id not in visited:
+                if has_cycle(node_id):
+                    raise DAGValidationError("Pipeline contains cycles")
+
+    def _topological_sort(
+        self, dag: Dict[str, List[str]], nodes: List[Dict[str, Any]]
+    ) -> List[str]:
+        """
+        Topological sort using Kahn's algorithm for execution order.
+
+        Args:
+            dag: Adjacency list representation
+            nodes: List of node configs
+
+        Returns:
+            List of node IDs in execution order
+
+        Raises:
+            DAGValidationError: If DAG contains unreachable nodes
+        """
+        # Calculate in-degrees
+        in_degree: Dict[str, int] = {}
+        for node in nodes:
+            node_id = node.get("node_id") or node.get("id")
+            if node_id:
+                in_degree[node_id] = 0
+
+        for source, targets in dag.items():
+            for target in targets:
+                in_degree[target] = in_degree.get(target, 0) + 1
+
+        # Start with nodes having no dependencies
+        queue = deque([node_id for node_id, degree in in_degree.items() if degree == 0])
+        execution_order: List[str] = []
+
+        while queue:
+            node_id = queue.popleft()
+            execution_order.append(node_id)
+
+            # Reduce in-degree of neighbors
+            for neighbor in dag.get(node_id, []):
+                in_degree[neighbor] -= 1
+                if in_degree[neighbor] == 0:
+                    queue.append(neighbor)
+
+        if len(execution_order) != len(nodes):
+            raise DAGValidationError("Pipeline contains unreachable nodes")
+
+        return execution_order
+
+    def _prepare_node_input(
+        self, node_id: str, node_config: Dict[str, Any], dag: Dict[str, List[str]]
     ) -> Dict[str, Any]:
         """
-        Get output from the node that's directly connected to this node.
+        Prepare input data for a node by merging outputs from predecessor nodes.
+
+        Uses node metadata to extract primary outputs and normalize field names.
 
         Args:
             node_id: Current node ID
-            edges: List of edges in the pipeline graph
-            results: List of results from previously executed nodes
+            node_config: Node configuration
+            dag: DAG adjacency list
 
         Returns:
-            Output dictionary from connected source node, or empty dict if no connection
+            Merged input data dictionary
         """
-        if not edges or not node_id:
-            logger.info(
-                f"_get_connected_source_output: No edges or node_id (node_id={node_id}, edges count={len(edges) if edges else 0})"
-            )
-            return {}
+        # Find predecessor nodes
+        predecessors = [src for src, targets in dag.items() if node_id in targets]
 
-        # Find edge where target is current node
-        incoming_edge = next((e for e in edges if e.get("target") == node_id), None)
+        # Start with node's configured input
+        input_data = node_config.get("input", {})
 
-        if not incoming_edge:
-            logger.info(f"_get_connected_source_output: No incoming edge found for {node_id}")
-            return {}
+        if not predecessors:
+            # No predecessors - use configured input only
+            return input_data
 
-        source_node_id = incoming_edge.get("source")
-        if not source_node_id:
-            logger.info(f"_get_connected_source_output: Incoming edge has no source for {node_id}")
-            return {}
+        # Merge outputs from all predecessors
+        # Strategy: Predecessor's dataset_id always wins, user explicit input for other fields
+        merged_data = {}
+        dataset_id_from_dag = None  # Track dataset_id from DAG flow
 
+        for pred_id in predecessors:
+            pred_result = self.execution_context.get(pred_id)
+
+            if pred_result and isinstance(pred_result, dict):
+                # Get the node instance to access metadata
+                pred_node_type = pred_result.get("node_type")
+
+                if pred_node_type and pred_node_type in self.NODE_REGISTRY:
+                    node_class = self.NODE_REGISTRY[pred_node_type]
+                    temp_node = node_class()
+
+                    # Use metadata to extract primary output
+                    normalized_output = temp_node.extract_primary_output(pred_result)
+
+                    # DEBUG: Log what we're extracting
+                    logger.info(
+                        f"[DAG DEBUG] Extracting from {pred_node_type} -> {node_id}: "
+                        f"dataset_id={normalized_output.get('dataset_id', 'NOT FOUND')}, "
+                        f"columns={normalized_output.get('columns', 'NOT FOUND')}"
+                    )
+
+                    # Capture dataset_id from DAG (takes absolute priority)
+                    if "dataset_id" in normalized_output and dataset_id_from_dag is None:
+                        dataset_id_from_dag = normalized_output["dataset_id"]
+
+                    # Only merge fields that don't exist in user's explicit input
+                    for key, value in normalized_output.items():
+                        if key not in input_data:
+                            merged_data[key] = value
+                else:
+                    # Fallback: merge all fields that don't conflict with user input
+                    for key, value in pred_result.items():
+                        if key not in input_data:
+                            merged_data[key] = value
+
+        # Overlay user's explicit input on top (takes priority for non-dataset_id fields)
+        merged_data.update(input_data)
+
+        # CRITICAL: dataset_id from DAG always overrides user input
+        if dataset_id_from_dag is not None:
+            merged_data["dataset_id"] = dataset_id_from_dag
+            logger.info(f"[DAG DEBUG] Forcing dataset_id from DAG: {dataset_id_from_dag}")
+
+        # DEBUG: Log final merged data
         logger.info(
-            f"_get_connected_source_output: Looking for source {source_node_id} in {len(results)} results"
+            f"[DAG DEBUG] Final input for {node_id}: "
+            f"dataset_id={merged_data.get('dataset_id', 'NOT FOUND')}, "
+            f"columns={merged_data.get('columns', 'NOT FOUND')}, "
+            f"total_keys={len(merged_data)}"
         )
 
-        # Log all result node_ids for debugging
-        result_node_ids = [r.get("node_id", "NO_ID") for r in results]
-        logger.info(
-            f"_get_connected_source_output: Available node_ids in results: {result_node_ids}"
-        )
+        return merged_data
 
-        # Find result from source node (search by node_id in results)
-        source_result = next((r for r in results if r.get("node_id") == source_node_id), {})
+    async def _execute_dag(
+        self, execution_order: List[str], nodes: List[Dict[str, Any]], dag: Dict[str, List[str]]
+    ) -> None:
+        """
+        Execute nodes in DAG order.
 
-        logger.info(
-            f"Found connected source for {node_id}: {source_node_id} "
-            f"(found result: {bool(source_result)}, has dataset_id: {bool(source_result.get('dataset_id'))})"
-        )
+        Future enhancement: This can be optimized for parallel execution
+        by executing nodes with satisfied dependencies concurrently.
 
-        return source_result
+        Args:
+            execution_order: Topologically sorted node IDs
+            nodes: List of node configs
+            dag: DAG adjacency list
+        """
+        # Create node lookup by ID
+        node_lookup = {}
+        for node in nodes:
+            node_id = node.get("node_id") or node.get("id")
+            node_lookup[node_id] = node
+
+        # Execute nodes in order
+        for node_id in execution_order:
+            node_config = node_lookup[node_id]
+            node_type = node_config.get("node_type")
+
+            # Prepare input from predecessors
+            input_data = self._prepare_node_input(node_id, node_config, dag)
+
+            # Execute node
+            try:
+                result = await self.execute_node(
+                    node_type=node_type, input_data=input_data, node_id=node_id, dry_run=False
+                )
+
+                # Store result in execution context
+                self.execution_context[node_id] = result
+
+                # DEBUG: Log what was stored
+                if "columns" in result:
+                    logger.info(
+                        f"[DAG DEBUG] Stored result for {node_id} ({node_type}): "
+                        f"columns={result.get('columns')}"
+                    )
+
+                logger.info(f"Node {node_id} ({node_type}) executed successfully")
+
+            except Exception as e:
+                logger.error(f"Node {node_id} ({node_type}) execution failed: {str(e)}")
+
+                # Store error in context
+                self.execution_context[node_id] = {
+                    "success": False,
+                    "error": str(e),
+                    "node_type": node_type,
+                    "node_id": node_id,
+                }
+
+                # Stop execution on error
+                raise
 
     async def execute_pipeline(
         self,
-        pipeline: List[Dict[str, Any]],
-        edges: List[Dict[str, Any]] = None,
+        nodes: List[Dict[str, Any]],
+        edges: List[Dict[str, Any]],
         dry_run: bool = False,
         current_user: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         """
-        Execute a complete pipeline of nodes.
+        Execute a complete pipeline using DAG-based execution.
+
+        This new implementation:
+        - Uses DAG for automatic execution order
+        - No hardcoded node type handling
+        - Supports parallel execution (future)
+        - Metadata-driven input preparation
 
         Args:
-            pipeline: List of node configurations
-            edges: List of edge connections (source -> target)
+            nodes: List of node configs [{"node_id": "1", "node_type": "upload", "input": {...}}, ...]
+            edges: List of edges [{"source": "1", "target": "2"}, ...]
             dry_run: If True, validate but don't execute
-            current_user: Current user context for authentication
+            current_user: Current user context
 
         Returns:
-            List of node outputs
-
-        Example pipeline:
-            [
-                {"node_type": "upload_file", "input": {...}},
-                {"node_type": "preprocess", "input": {...}},
-                {"node_type": "split", "input": {...}},
-                {"node_type": "train", "input": {...}},
-                {"node_type": "evaluate", "input": {...}},
-            ]
+            {
+                "success": bool,
+                "results": [node outputs],
+                "execution_time_ms": int,
+                "nodes_executed": int
+            }
         """
-        # Clear execution history to ensure fresh pipeline execution
+        import time
+
+        start_time = time.time()
+
+        # Clear execution context
+        self.execution_context.clear()
         self.execution_history.clear()
 
-        # Initialize edges (backward compatibility - default to empty if not provided)
-        edges = edges or []
-
         logger.info(
-            f"Executing pipeline with {len(pipeline)} nodes, {len(edges)} edges (dry_run={dry_run})"
+            f"Executing pipeline with {len(nodes)} nodes, {len(edges)} edges (dry_run={dry_run})"
         )
 
-        results = []
-        previous_output = {}  # Store output from previous node for data flow
-
-        # Extract user context for nodes that need it
-        user_context = {}
+        # Add user context to all node inputs
         if current_user:
-            user_context["user_id"] = current_user.get("id")
-            user_context["project_id"] = current_user.get("project_id")  # May be None
+            user_context = {
+                "user_id": current_user.get("id"),
+                "project_id": current_user.get("project_id"),
+            }
+            for node in nodes:
+                node.setdefault("input", {}).update(user_context)
 
-        for i, node_config in enumerate(pipeline):
-            node_type = node_config.get("node_type")
-            input_data = node_config.get("input", {})
-            node_id = node_config.get("node_id")
+        try:
+            # Build DAG
+            dag = self._build_dag(nodes, edges)
 
-            # View nodes should NOT inherit dataset_id from previous_output
-            # They should use their own configured dataset_id
-            # This allows multiple view nodes to connect to the same source independently
-            view_node_types = [
-                "table_view",
-                "data_preview",
-                "statistics_view",
-                "column_info",
-                "chart_view",
-            ]
+            # Validate DAG (cycle detection, node existence)
+            self._validate_dag(dag, nodes)
 
-            # Preprocessing nodes that can operate in parallel or sequential
-            preprocessing_node_types = [
-                "missing_value_handler",
-                "encoding",
-                "transformation",
-                "scaling",
-                "feature_selection",
-            ]
+            # Get execution order via topological sort
+            execution_order = self._topological_sort(dag, nodes)
 
-            # For view nodes, prefer connected source output over configured dataset_id
-            if node_type in view_node_types:
-                # FIRST: Check if connected to a preprocessing node
-                connected_source = self._get_connected_source_output(node_id, edges, results)
+            logger.info(f"Execution order: {execution_order}")
 
-                # Check if connected source has preprocessed/encoded/etc dataset_id
-                has_preprocessing_output = any(
-                    key in connected_source
-                    for key in [
-                        "preprocessed_dataset_id",
-                        "encoded_dataset_id",
-                        "transformed_dataset_id",
-                        "scaled_dataset_id",
-                        "selected_dataset_id",
-                    ]
-                )
+            # Execute DAG
+            await self._execute_dag(execution_order, nodes, dag)
 
-                if has_preprocessing_output:
-                    # Connected to preprocessing node - use its output
-                    # Normalize the dataset ID field name
-                    normalized_source = dict(connected_source)
-                    for old_field in [
-                        "preprocessed_dataset_id",
-                        "encoded_dataset_id",
-                        "transformed_dataset_id",
-                        "scaled_dataset_id",
-                        "selected_dataset_id",
-                    ]:
-                        if old_field in normalized_source:
-                            normalized_source["dataset_id"] = normalized_source[old_field]
-                            dataset_field_used = old_field
-                            break
+            # Collect results
+            results = [self.execution_context.get(node_id, {}) for node_id in execution_order]
 
-                    merged_input = {**user_context, **input_data, **normalized_source}
-                    logger.info(
-                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
-                        f"(view node - using {dataset_field_used}: {normalized_source['dataset_id']})"
-                    )
-                elif connected_source.get("dataset_id"):
-                    # Connected to dataset node or other source with dataset_id
-                    merged_input = {**user_context, **input_data, **connected_source}
-                    logger.info(
-                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
-                        f"(view node - using connected dataset_id: {connected_source.get('dataset_id')})"
-                    )
-                else:
-                    # No connection or connected source has no dataset - use configured dataset_id
-                    configured_dataset_id = input_data.get("dataset_id")
-                    merged_input = {**user_context, **input_data}
-                    logger.info(
-                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
-                        f"(view node - using configured dataset_id: {configured_dataset_id})"
-                    )
-            elif node_type in preprocessing_node_types:
-                # Graph-aware preprocessing logic:
-                # Use the connection graph to find the ACTUAL connected source
-                # This works for both sequential (Handler→Encoding) and parallel (Dataset→[Handler1, Handler2])
+            execution_time = int((time.time() - start_time) * 1000)
 
-                connected_source = self._get_connected_source_output(node_id, edges, results)
+            logger.info(
+                f"Pipeline execution complete - {len(results)} nodes executed in {execution_time}ms"
+            )
 
-                # Check if connected source is a preprocessing node
-                is_sequential_preprocessing = any(
-                    key in connected_source
-                    for key in [
-                        "preprocessed_dataset_id",
-                        "encoded_dataset_id",
-                        "transformed_dataset_id",
-                        "scaled_dataset_id",
-                        "selected_dataset_id",
-                    ]
-                )
+            return {
+                "success": True,
+                "results": results,
+                "execution_time_ms": execution_time,
+                "nodes_executed": len(results),
+            }
 
-                if is_sequential_preprocessing:
-                    # Sequential: Inherit from connected preprocessing node
-                    # Normalize the dataset ID field name so downstream nodes can find it
-                    normalized_source = dict(connected_source)
-                    for old_field in [
-                        "preprocessed_dataset_id",
-                        "encoded_dataset_id",
-                        "transformed_dataset_id",
-                        "scaled_dataset_id",
-                        "selected_dataset_id",
-                    ]:
-                        if old_field in normalized_source:
-                            normalized_source["dataset_id"] = normalized_source[old_field]
-                            break
+        except (DAGValidationError, NodeExecutionError) as e:
+            execution_time = int((time.time() - start_time) * 1000)
+            logger.error(f"Pipeline execution failed: {str(e)}")
 
-                    merged_input = {**user_context, **input_data, **normalized_source}
+            return {
+                "success": False,
+                "error": str(e),
+                "execution_time_ms": execution_time,
+                "nodes_executed": len(self.execution_context),
+            }
+        except Exception as e:
+            execution_time = int((time.time() - start_time) * 1000)
+            logger.error(
+                f"Pipeline execution failed with unexpected error: {str(e)}", exc_info=True
+            )
 
-                    # Find which preprocessing dataset field is present for logging
-                    dataset_field = next(
-                        (
-                            key
-                            for key in [
-                                "preprocessed_dataset_id",
-                                "encoded_dataset_id",
-                                "transformed_dataset_id",
-                                "scaled_dataset_id",
-                                "selected_dataset_id",
-                            ]
-                            if key in connected_source
-                        ),
-                        "dataset_id",
-                    )
-                    dataset_value = connected_source.get(dataset_field, "N/A")
-
-                    logger.info(
-                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
-                        f"(sequential preprocessing - using {dataset_field}: {dataset_value})"
-                    )
-                else:
-                    # Parallel or first in chain: Use configured dataset_id
-                    merged_input = {**user_context, **input_data}
-                    logger.info(
-                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
-                        f"(parallel/first preprocessing - using configured dataset_id: {input_data.get('dataset_id')})"
-                    )
-
-            # Metric/Result nodes should inherit from their connected ML algorithm node
-            elif node_type in [
-                "r2_score",
-                "mae_score",
-                "mse_score",
-                "rmse_score",
-                "confusion_matrix",
-            ]:
-                # Get output from connected ML algorithm node
-                connected_source = self._get_connected_source_output(node_id, edges, results)
-
-                if connected_source:
-                    # Merge connected source (ML algorithm output) with input_data
-                    merged_input = {**user_context, **input_data, **connected_source}
-                    logger.info(
-                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
-                        f"(metric node - inheriting from connected ML algorithm)"
-                    )
-                else:
-                    # Fallback to previous_output for backward compatibility
-                    merged_input = {**user_context, **input_data, **previous_output}
-                    logger.info(
-                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
-                        f"(metric node - using previous output)"
-                    )
-
-            # Split and ML algorithm nodes should also use graph-based connections
-            elif node_type in [
-                "split",  # Data splitting
-                "linear_regression",
-                "logistic_regression",  # ML algorithms
-                "decision_tree",
-                "random_forest",  # Tree-based
-                "svm",
-                "knn",
-                "naive_bayes",  # Other algorithms
-            ]:
-                # Get output from connected node (could be preprocessing, encoding, etc.)
-                connected_source = self._get_connected_source_output(node_id, edges, results)
-
-                if connected_source:
-                    # Normalize dataset field names (preprocessing nodes use different field names)
-                    normalized_source = dict(connected_source)
-                    for old_field in [
-                        "preprocessed_dataset_id",
-                        "encoded_dataset_id",
-                        "transformed_dataset_id",
-                        "scaled_dataset_id",
-                        "selected_dataset_id",
-                    ]:
-                        if old_field in normalized_source:
-                            normalized_source["dataset_id"] = normalized_source[old_field]
-                            break
-
-                    # Use graph-based connection with normalized field names
-                    merged_input = {**user_context, **input_data, **normalized_source}
-                    source_dataset = (
-                        normalized_source.get("dataset_id")
-                        or normalized_source.get("train_dataset_id")
-                        or "N/A"
-                    )
-                    logger.info(
-                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
-                        f"(graph-based - using dataset from connected node: {source_dataset})"
-                    )
-                else:
-                    # Fallback to previous_output for backward compatibility
-                    merged_input = {**user_context, **input_data, **previous_output}
-                    logger.info(
-                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
-                        f"(fallback - using previous output)"
-                    )
-            else:
-                # For all other nodes, merge previous output (normal sequential data flow)
-                # This is the fallback for any nodes not explicitly categorized above
-                merged_input = {**user_context, **input_data, **previous_output}
-
-                # Log which dataset is being used
-                if "dataset_id" in previous_output and previous_output["dataset_id"]:
-                    logger.info(
-                        f"Pipeline step {i+1}/{len(pipeline)}: {node_type} "
-                        f"(using dataset from previous node: {previous_output['dataset_id']})"
-                    )
-                else:
-                    logger.info(f"Pipeline step {i+1}/{len(pipeline)}: {node_type}")
-
-            try:
-                result = await self.execute_node(
-                    node_type=node_type, input_data=merged_input, node_id=node_id, dry_run=dry_run
-                )
-
-                # Ensure result includes node_id for graph-aware lookup
-                if node_id and "node_id" not in result:
-                    result["node_id"] = node_id
-
-                results.append(result)
-
-                # Store output for next node (exclude metadata fields)
-                previous_output = {
-                    k: v
-                    for k, v in result.items()
-                    if k not in ["node_type", "execution_time_ms", "timestamp", "success", "error"]
-                }
-
-                # Normalize dataset ID field names for data flow between nodes
-                # All preprocessing nodes output different field names but next nodes expect 'dataset_id'
-                dataset_id_mappings = {
-                    "preprocessed_dataset_id": "dataset_id",  # missing_value_handler, clean
-                    "encoded_dataset_id": "dataset_id",  # encoding
-                    "transformed_dataset_id": "dataset_id",  # transformation
-                    "scaled_dataset_id": "dataset_id",  # scaling
-                    "selected_dataset_id": "dataset_id",  # feature_selection
-                }
-
-                for old_key, new_key in dataset_id_mappings.items():
-                    if old_key in previous_output and new_key not in previous_output:
-                        previous_output[new_key] = previous_output[old_key]
-                        logger.debug(
-                            f"Mapped {old_key} -> {new_key} for next node: {previous_output[new_key]}"
-                        )
-
-            except NodeExecutionError as e:
-                logger.error(f"Pipeline failed at step {i+1}: {node_type}")
-                # Add error to results
-                results.append({"node_type": node_type, "success": False, "error": e.to_dict()})
-                # Stop pipeline execution
-                break
-
-        logger.info(f"Pipeline execution complete - {len(results)} nodes executed")
-
-        return results
+            return {
+                "success": False,
+                "error": f"Unexpected error: {str(e)}",
+                "execution_time_ms": execution_time,
+                "nodes_executed": len(self.execution_context),
+            }
 
     def get_available_nodes(self) -> List[str]:
         """Get list of available node types."""
-        return list(self.nodes.keys())
+        return list(self.NODE_REGISTRY.keys())
 
     def get_execution_history(self) -> List[Dict[str, Any]]:
         """Get pipeline execution history."""

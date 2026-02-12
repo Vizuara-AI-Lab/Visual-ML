@@ -11,7 +11,7 @@ from pydantic import Field
 from pathlib import Path
 from datetime import datetime
 from sklearn.metrics import confusion_matrix, accuracy_score
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.ml.algorithms.classification.logistic_regression import LogisticRegression
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
 from app.core.config import settings
@@ -70,6 +70,29 @@ class ConfusionMatrixNode(BaseNode):
     """
 
     node_type = "confusion_matrix"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Define node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.METRIC,
+            primary_output_field="confusion_matrix",
+            output_fields={
+                "confusion_matrix": "2D confusion matrix array",
+                "class_labels": "List of class labels",
+                "total_samples": "Total number of test samples",
+                "accuracy": "Overall accuracy score",
+                "true_positives": "True positives per class",
+                "false_positives": "False positives per class",
+                "true_negatives": "True negatives per class",
+                "false_negatives": "False negatives per class",
+            },
+            requires_input=True,
+            can_branch=False,
+            produces_dataset=False,
+            max_inputs=1,
+            allowed_source_categories=[NodeCategory.ML_ALGORITHM],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         """Return input schema."""

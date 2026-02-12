@@ -1,5 +1,12 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, CheckCircle, XCircle, AlertCircle, TrendingUp } from "lucide-react";
+import {
+  X,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  TrendingUp,
+  AlertTriangle,
+} from "lucide-react";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 
 interface ResultsPanelProps {
@@ -92,27 +99,75 @@ export const ResultsPanel = ({ isOpen, onClose }: ResultsPanelProps) => {
               <div className="space-y-4">
                 {/* Success/Error Banner */}
                 {executionResult.success ? (
-                  <div className="flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="text-sm font-medium text-green-800">
-                        Execution Successful
-                      </h4>
-                      <p className="text-xs text-green-700 mt-1">
-                        All nodes executed without errors
-                      </p>
+                  <>
+                    <div className="flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <CheckCircle className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-sm font-medium text-green-800">
+                          Execution Successful
+                        </h4>
+                        <p className="text-xs text-green-700 mt-1">
+                          All nodes executed without errors
+                        </p>
+                      </div>
                     </div>
-                  </div>
+
+                    {/* Global warnings summary */}
+                    {(() => {
+                      const allWarnings: Array<{
+                        nodeId: string;
+                        warnings: string[];
+                      }> = [];
+                      if (executionResult.nodeResults) {
+                        Object.entries(executionResult.nodeResults).forEach(
+                          ([nodeId, result]) => {
+                            const nodeResult = result as {
+                              output?: Record<string, unknown>;
+                            };
+                            const warnings = nodeResult.output?.warnings as
+                              | string[]
+                              | undefined;
+                            if (warnings && warnings.length > 0) {
+                              allWarnings.push({ nodeId, warnings });
+                            }
+                          },
+                        );
+                      }
+
+                      if (allWarnings.length > 0) {
+                        const totalWarnings = allWarnings.reduce(
+                          (sum, item) => sum + item.warnings.length,
+                          0,
+                        );
+                        return (
+                          <div className="flex items-start gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <h4 className="text-sm font-medium text-yellow-800">
+                                Pipeline completed with {totalWarnings} warning
+                                {totalWarnings !== 1 ? "s" : ""}
+                              </h4>
+                              <p className="text-xs text-yellow-700 mt-1">
+                                Some operations were skipped or adjusted. Check
+                                individual node results below for details.
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </>
                 ) : (
                   <div className="space-y-3">
                     <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
                       <XCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
                       <div className="flex-1">
-                        <h4 className="text-sm font-medium text-red-800">
+                        <h4 className="text-sm font-semibold text-red-800 mb-1">
                           Execution Failed
                         </h4>
                         {executionResult.error && (
-                          <p className="text-sm text-red-700 mt-2">
+                          <p className="text-sm text-red-700 mt-2 font-medium leading-relaxed">
                             {executionResult.error}
                           </p>
                         )}
@@ -178,9 +233,15 @@ export const ResultsPanel = ({ isOpen, onClose }: ResultsPanelProps) => {
                           ([nodeId, result]) => {
                             const nodeResult = result as {
                               success: boolean;
-                              output?: unknown;
+                              output?: Record<string, unknown>;
                               error?: string;
                             };
+
+                            // Extract warnings from output if they exist
+                            const warnings = nodeResult.output?.warnings as
+                              | string[]
+                              | undefined;
+
                             return (
                               <div
                                 key={nodeId}
@@ -196,6 +257,31 @@ export const ResultsPanel = ({ isOpen, onClose }: ResultsPanelProps) => {
                                     <XCircle className="w-4 h-4 text-red-600" />
                                   )}
                                 </div>
+
+                                {/* Warnings Display */}
+                                {warnings && warnings.length > 0 && (
+                                  <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                    <div className="flex items-start gap-2">
+                                      <AlertTriangle className="w-4 h-4 text-yellow-600 shrink-0 mt-0.5" />
+                                      <div className="flex-1">
+                                        <h5 className="text-xs font-semibold text-yellow-800 mb-1">
+                                          Warnings ({warnings.length})
+                                        </h5>
+                                        <ul className="space-y-1">
+                                          {warnings.map((warning, idx) => (
+                                            <li
+                                              key={idx}
+                                              className="text-xs text-yellow-700"
+                                            >
+                                              • {warning}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
                                 {nodeResult.output && (
                                   <pre className="text-xs text-slate-800 bg-slate-50 p-2 rounded overflow-x-auto">
                                     {JSON.stringify(nodeResult.output, null, 2)}

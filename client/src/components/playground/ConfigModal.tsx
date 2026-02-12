@@ -259,13 +259,37 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
         selected_feature_names: sourceResult?.selected_feature_names,
       });
 
-      // Priority 1: Check config.columns (for dataset nodes like upload_file, select_dataset)
-      if (sourceConfig?.columns && Array.isArray(sourceConfig.columns)) {
+      // Define preprocessing nodes where config.columns is a SELECTION, not all available columns
+      const preprocessingNodesWithColumnSelection = [
+        "scaling",
+        "transformation",
+        "feature_selection",
+      ];
+
+      // Priority 1: Check config.columns ONLY for dataset source nodes
+      // (for preprocessing nodes, config.columns is what user selected to process, not all available)
+      const isDatasetSourceNode = ["upload_file", "select_dataset"].includes(
+        node.type,
+      );
+
+      if (
+        isDatasetSourceNode &&
+        sourceConfig?.columns &&
+        Array.isArray(sourceConfig.columns)
+      ) {
+        console.log(
+          `  ✅ Found columns from dataset source (${node.type}):`,
+          sourceConfig.columns,
+        );
         return sourceConfig.columns as string[];
       }
 
       // Priority 2: Check result.columns (for executed nodes like preprocessing, view nodes)
       if (sourceResult?.columns && Array.isArray(sourceResult.columns)) {
+        console.log(
+          `  ✅ Found columns from result (${node.type}):`,
+          sourceResult.columns,
+        );
         return sourceResult.columns as string[];
       }
 

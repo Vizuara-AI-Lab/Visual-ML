@@ -11,7 +11,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import StandardScaler
 import joblib
 from pathlib import Path
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
 from app.core.config import settings
 from app.core.logging import logger
@@ -90,6 +90,26 @@ class PreprocessNode(BaseNode):
     """
 
     node_type = "preprocess"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Define node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.PREPROCESSING,
+            primary_output_field="preprocessed_dataset_id",
+            output_fields={
+                "preprocessed_dataset_id": "Identifier for the preprocessed dataset",
+                "preprocessed_path": "Path to preprocessed dataset file",
+                "original_rows": "Number of rows before preprocessing",
+                "final_rows": "Number of rows after preprocessing",
+                "feature_names": "List of feature column names after preprocessing",
+            },
+            requires_input=True,
+            can_branch=True,
+            produces_dataset=True,
+            max_inputs=1,
+            allowed_source_categories=[NodeCategory.DATA_SOURCE, NodeCategory.PREPROCESSING],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         """Return input schema."""

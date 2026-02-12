@@ -357,7 +357,7 @@ async def get_current_student(
     if current_user.get("role") != UserRole.STUDENT.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Student access required")
 
-    # Check if account is active 
+    # Check if account is active
     if not current_user.get("isActive", True):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -383,6 +383,33 @@ async def get_current_student(
     logger.debug(f"get_current_student (JWT ONLY) took {duration_ms:.2f}ms")
 
     return student
+
+
+async def get_optional_current_student(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Optional[Any]:
+    """
+    Dependency to optionally get current student (allows anonymous access).
+    Returns student if authenticated, None if not authenticated.
+
+    Used for endpoints that allow both authenticated and anonymous access.
+
+    Args:
+        request: FastAPI request object
+        db: Database session
+
+    Returns:
+        Student-like object from JWT if authenticated, None otherwise
+    """
+    try:
+        # Try to get current user from token
+        current_user = await get_current_user(request)
+        # Then validate student access
+        return await get_current_student(request, current_user, db)
+    except (HTTPException, JWTError):
+        # Anonymous access allowed
+        return None
 
 
 async def get_current_admin(

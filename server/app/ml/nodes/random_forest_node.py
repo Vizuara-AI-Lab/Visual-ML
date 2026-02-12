@@ -9,7 +9,7 @@ import io
 from pydantic import Field
 from pathlib import Path
 from datetime import datetime
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.ml.algorithms.classification.random_forest import RandomForestClassifier
 from app.ml.algorithms.regression.random_forest_regressor import RandomForestRegressor
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
@@ -83,6 +83,29 @@ class RandomForestNode(BaseNode):
     """
 
     node_type = "random_forest"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.ML_ALGORITHM,
+            primary_output_field="model_id",
+            output_fields={
+                "model_id": "Unique model identifier",
+                "model_path": "Path to saved model file",
+                "training_metrics": "Training performance metrics",
+                "n_estimators": "Number of trees in forest",
+            },
+            requires_input=True,
+            can_branch=True,
+            produces_dataset=False,
+            max_inputs=1,
+            allowed_source_categories=[
+                NodeCategory.DATA_TRANSFORM,
+                NodeCategory.PREPROCESSING,
+                NodeCategory.FEATURE_ENGINEERING,
+            ],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         """Return input schema."""
