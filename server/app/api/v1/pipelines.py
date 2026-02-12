@@ -127,10 +127,10 @@ async def execute_pipeline(
 
         # Execute pipeline - returns full DAG result dict
         dag_result = await ml_service.execute_pipeline(
-            pipeline=pipeline_config, 
+            pipeline=pipeline_config,
             edges=edges_config,
-            dry_run=request.dry_run, 
-            current_user=current_user
+            dry_run=request.dry_run,
+            current_user=current_user,
         )
 
         execution_time = (datetime.utcnow() - start_time).total_seconds()
@@ -142,10 +142,7 @@ async def execute_pipeline(
 
         # If DAG failed, raise HTTP error with the error message
         if not success and error_message:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_message
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_message)
 
         return PipelineExecuteResponse(
             success=success,
