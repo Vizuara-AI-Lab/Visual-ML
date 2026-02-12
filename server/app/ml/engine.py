@@ -370,7 +370,10 @@ class MLPipelineEngine:
                             normalized_source["dataset_id"] = normalized_source[old_field]
                             break
 
-                    merged_input = {**user_context, **input_data, **normalized_source}
+                    # CRITICAL FIX: Merge order matters!
+                    # normalized_source first (dataset metadata), then input_data (user config)
+                    # This ensures user's column selection isn't overwritten by dataset metadata
+                    merged_input = {**user_context, **normalized_source, **input_data}
 
                     # Find which preprocessing dataset field is present for logging
                     dataset_field = next(

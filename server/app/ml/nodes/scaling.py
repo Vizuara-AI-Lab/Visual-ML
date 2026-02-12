@@ -42,6 +42,7 @@ class ScalingOutput(NodeOutput):
     artifacts_path: Optional[str] = Field(None, description="Path to scaler artifact")
 
     scaled_columns: List[str] = Field(..., description="Columns that were scaled")
+    columns: List[str] = Field(..., description="All columns in the dataset (for downstream nodes)")
     scaling_method: str = Field(..., description="Scaling method used")
     scaling_summary: Dict[str, Any] = Field(..., description="Summary of scaling operations")
 
@@ -83,7 +84,14 @@ class ScalingNode(BaseNode):
             # Determine columns to scale
             if input_data.columns is not None and len(input_data.columns) > 0:
                 columns_to_scale = input_data.columns
-                logger.info(f"Scaling selected columns: {columns_to_scale}")
+                logger.info(f"Received columns for scaling: {columns_to_scale}")
+                
+                # WARN if all columns were sent - likely a frontend bug
+                if len(columns_to_scale) == len(df.columns):
+                    logger.warning(
+                        f"WARNING: All {len(df.columns)} columns were sent for scaling. "
+                        f"This might be a frontend bug. Will filter to numeric only."
+                    )
             else:
                 # Scale all numeric columns
                 columns_to_scale = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -91,39 +99,59 @@ class ScalingNode(BaseNode):
                     f"No columns specified, auto-detecting numeric columns: {columns_to_scale}"
                 )
 
-            # ONLY validate and process the selected columns
+            # Filter to ONLY numeric columns and warn about skipped ones
+            numeric_columns = []
+            skipped_columns = []
+            
             for col in columns_to_scale:
                 if col not in df.columns:
-                    raise ValueError(f"Column {col} not found in dataset")
+                    logger.warning(f"Column {col} not found in dataset, skipping")
+                    skipped_columns.append(col)
+                    continue
 
-                # Try to convert to numeric if not already numeric
-                if not pd.api.types.is_numeric_dtype(df_scaled[col]):
-                    logger.warning(f"Column {col} is not numeric, attempting conversion")
+                # Check if column is numeric or can be converted
+                if pd.api.types.is_numeric_dtype(df_scaled[col]):
+                    numeric_columns.append(col)
+                else:
+                    # Try to convert to numeric
                     try:
-                        # Convert to numeric, coercing errors to NaN
-                        df_scaled[col] = pd.to_numeric(df_scaled[col], errors="coerce")
-
-                        # Check if we have any valid numeric values
-                        if df_scaled[col].isna().all():
-                            raise ValueError(
-                                f"Column {col} has no valid numeric values after conversion"
+                        test_conversion = pd.to_numeric(df_scaled[col], errors="coerce")
+                        if not test_conversion.isna().all():
+                            # Has some valid numeric values
+                            numeric_columns.append(col)
+                        else:
+                            logger.warning(
+                                f"Column {col} is not numeric and has no valid numeric values, skipping"
                             )
+                            skipped_columns.append(col)
+                    except Exception:
+                        logger.warning(f"Column {col} is not numeric, skipping")
+                        skipped_columns.append(col)
 
-                        # Drop rows with NaN in this column
-                        rows_before = len(df_scaled)
-                        df_scaled = df_scaled.dropna(subset=[col])
-                        rows_dropped = rows_before - len(df_scaled)
+            if len(skipped_columns) > 0:
+                logger.info(f"Skipped non-numeric columns: {skipped_columns}")
 
-                        if rows_dropped > 0:
-                            logger.info(
-                                f"Dropped {rows_dropped} rows with non-numeric values in column {col}"
-                            )
+            if len(numeric_columns) == 0:
+                raise ValueError(
+                    "No valid numeric columns to scale. Please select at least one numeric column."
+                )
 
-                    except Exception as e:
-                        raise ValueError(
-                            f"Column {col} is not numeric and could not be converted. "
-                            f"Please clean the data or use encoding for categorical columns. Error: {str(e)}"
-                        )
+            columns_to_scale = numeric_columns
+            logger.info(f"Final columns to scale (numeric only): {columns_to_scale}")
+
+            # Convert non-numeric columns to numeric where needed
+            rows_before = len(df_scaled)
+            for col in columns_to_scale:
+                if not pd.api.types.is_numeric_dtype(df_scaled[col]):
+                    df_scaled[col] = pd.to_numeric(df_scaled[col], errors="coerce")
+                    # Drop rows with NaN in this column
+                    df_scaled = df_scaled.dropna(subset=[col])
+
+            rows_dropped = rows_before - len(df_scaled)
+            if rows_dropped > 0:
+                logger.info(
+                    f"Dropped {rows_dropped} rows with non-numeric values in scaling columns"
+                )
 
             # Select scaler
             if input_data.method == "standard":
@@ -176,6 +204,7 @@ class ScalingNode(BaseNode):
                 scaled_path=str(scaled_path),
                 artifacts_path=str(artifacts_path),
                 scaled_columns=columns_to_scale,
+                columns=df_scaled.columns.tolist(),  # ALL columns for downstream nodes
                 scaling_method=input_data.method,
                 scaling_summary=scaling_summary,
             )

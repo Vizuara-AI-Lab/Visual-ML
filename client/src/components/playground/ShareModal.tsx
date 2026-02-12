@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Copy, Check, Link2, Eye, Users, Settings } from "lucide-react";
+import { env } from "../../lib/env";
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -40,7 +41,7 @@ export const ShareModal = ({
   const fetchShareStatus = async () => {
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/v1/projects/${projectId}/share-stats`,
+        `${env.API_URL}/projects/${projectId}/share-stats`,
         {
           credentials: "include",
         },
@@ -66,7 +67,7 @@ export const ShareModal = ({
     setError(null);
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/v1/projects/${projectId}/share`,
+        `${env.API_URL}/projects/${projectId}/share`,
         {
           method: "POST",
           headers: {
@@ -101,7 +102,7 @@ export const ShareModal = ({
     setError(null);
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/v1/projects/${projectId}/share`,
+        `${env.API_URL}/projects/${projectId}/share`,
         {
           method: "DELETE",
           credentials: "include",
