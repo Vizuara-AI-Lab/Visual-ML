@@ -349,6 +349,9 @@ class MLPipelineEngine:
         # Strategy: Predecessor's dataset_id always wins, user explicit input for other fields
         merged_data = {}
         dataset_id_from_dag = None  # Track dataset_id from DAG flow
+        target_column_from_dag = None  # Track target_column from split node
+        feature_columns_from_dag = None  # Track feature_columns from split node
+        columns_from_dag = None  # Track columns from upstream
 
         for pred_id in predecessors:
             pred_result = self.execution_context.get(pred_id)
@@ -368,12 +371,22 @@ class MLPipelineEngine:
                     logger.info(
                         f"[DAG DEBUG] Extracting from {pred_node_type} -> {node_id}: "
                         f"dataset_id={normalized_output.get('dataset_id', 'NOT FOUND')}, "
+                        f"target_column={normalized_output.get('target_column', 'NOT FOUND')}, "
                         f"columns={normalized_output.get('columns', 'NOT FOUND')}"
                     )
 
-                    # Capture dataset_id from DAG (takes absolute priority)
+                    # Capture critical fields from DAG (take absolute priority)
                     if "dataset_id" in normalized_output and dataset_id_from_dag is None:
                         dataset_id_from_dag = normalized_output["dataset_id"]
+
+                    if "target_column" in normalized_output and target_column_from_dag is None:
+                        target_column_from_dag = normalized_output["target_column"]
+
+                    if "feature_columns" in normalized_output and feature_columns_from_dag is None:
+                        feature_columns_from_dag = normalized_output["feature_columns"]
+
+                    if "columns" in normalized_output and columns_from_dag is None:
+                        columns_from_dag = normalized_output["columns"]
 
                     # Only merge fields that don't exist in user's explicit input
                     for key, value in normalized_output.items():
@@ -385,18 +398,38 @@ class MLPipelineEngine:
                         if key not in input_data:
                             merged_data[key] = value
 
-        # Overlay user's explicit input on top (takes priority for non-dataset_id fields)
+        # Overlay user's explicit input on top (takes priority for non-critical fields)
         merged_data.update(input_data)
 
-        # CRITICAL: dataset_id from DAG always overrides user input
+        # CRITICAL: Override empty/falsy values with DAG values for auto-fillable fields
         if dataset_id_from_dag is not None:
             merged_data["dataset_id"] = dataset_id_from_dag
+            # Also map to train_dataset_id for ML algorithm nodes that expect this field
+            if not merged_data.get("train_dataset_id"):
+                merged_data["train_dataset_id"] = dataset_id_from_dag
             logger.info(f"[DAG DEBUG] Forcing dataset_id from DAG: {dataset_id_from_dag}")
+
+        # Override empty target_column with value from split node
+        if target_column_from_dag is not None and not merged_data.get("target_column"):
+            merged_data["target_column"] = target_column_from_dag
+            logger.info(
+                f"[DAG DEBUG] Auto-filling target_column from DAG: {target_column_from_dag}"
+            )
+
+        # Override empty feature_columns
+        if feature_columns_from_dag is not None and not merged_data.get("feature_columns"):
+            merged_data["feature_columns"] = feature_columns_from_dag
+
+        # Override empty columns
+        if columns_from_dag is not None and not merged_data.get("columns"):
+            merged_data["columns"] = columns_from_dag
 
         # DEBUG: Log final merged data
         logger.info(
             f"[DAG DEBUG] Final input for {node_id}: "
             f"dataset_id={merged_data.get('dataset_id', 'NOT FOUND')}, "
+            f"train_dataset_id={merged_data.get('train_dataset_id', 'NOT FOUND')}, "
+            f"target_column={merged_data.get('target_column', 'NOT FOUND')}, "
             f"columns={merged_data.get('columns', 'NOT FOUND')}, "
             f"total_keys={len(merged_data)}"
         )

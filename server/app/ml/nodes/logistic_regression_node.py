@@ -193,6 +193,34 @@ class LogisticRegressionNode(BaseNode):
             X_train = df_train.drop(columns=[input_data.target_column])
             y_train = df_train[input_data.target_column]
 
+            # Validate that target is suitable for classification
+            n_unique = y_train.nunique()
+            unique_values_sample = y_train.unique()[:10].tolist()
+            
+            logger.info(f"Target column '{input_data.target_column}' has {n_unique} unique values")
+            
+            # Check if target has too many unique values (likely continuous/regression problem)
+            if n_unique > 20:
+                raise NodeExecutionError(
+                    node_type=self.node_type,
+                    reason=f"Target column '{input_data.target_column}' has {n_unique} unique values, which is too many for classification. Logistic Regression is for categorical targets (typically 2-20 classes). For continuous targets, use Linear Regression instead. Sample values: {unique_values_sample}",
+                    input_data=input_data.model_dump()
+                )
+            
+            # Warn if target has only one class
+            if n_unique == 1:
+                raise NodeExecutionError(
+                    node_type=self.node_type,
+                    reason=f"Target column '{input_data.target_column}' has only 1 unique value. Cannot train a classification model with a single class. Please check your data split or target column.",
+                    input_data=input_data.model_dump()
+                )
+            
+            # Log classification type
+            if n_unique == 2:
+                logger.info(f"Binary classification detected (classes: {unique_values_sample})")
+            else:
+                logger.info(f"Multi-class classification detected ({n_unique} classes)")
+
             # Initialize and train model
             model = LogisticRegression(
                 C=input_data.C,
