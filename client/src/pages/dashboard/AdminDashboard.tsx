@@ -97,7 +97,7 @@ const AdminDashboard: React.FC = () => {
             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-lg shadow-red-500/25">
               <span className="text-white text-3xl">⚠️</span>
             </div>
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-2">
+            <h2 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-2">
               Error
             </h2>
             <p className="text-slate-600 mb-6">
@@ -130,7 +130,7 @@ const AdminDashboard: React.FC = () => {
                   <Sparkles className="w-5 h-5 text-white" />
                   <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-white/20 to-transparent" />
                 </div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+                <h1 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
                   Admin Dashboard
                 </h1>
               </div>
@@ -319,14 +319,14 @@ const AdminDashboard: React.FC = () => {
           className="bg-white/80 backdrop-blur-xl rounded-2xl border border-slate-200/60 shadow-xl shadow-slate-900/5 ring-1 ring-slate-900/5 overflow-hidden"
         >
           <div className="p-6 border-b border-slate-200/60">
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+            <h2 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
               Students ({students.length})
             </h2>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50 border-b border-slate-200/60">
+              <thead className="bg-linear-to-r from-slate-50 to-slate-100/50 border-b border-slate-200/60">
                 <tr>
                   <th className="p-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wide">
                     ID

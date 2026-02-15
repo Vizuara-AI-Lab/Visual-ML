@@ -134,7 +134,7 @@ const SignIn: React.FC = () => {
           transition={{ duration: 0.6, delay: 0.1 }}
           className="text-center"
         >
-          <h2 className="text-4xl font-bold bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+          <h2 className="text-4xl font-bold bg-linear-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
             Welcome back
           </h2>
           <p className="mt-3 text-base text-slate-600">

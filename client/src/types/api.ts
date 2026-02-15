@@ -3,6 +3,7 @@
 export interface Student {
   id: number;
   emailId: string;
+  fullName: string;
   role: string;
   authProvider: "LOCAL" | "GOOGLE";
   collegeOrSchool?: string;

@@ -48,10 +48,7 @@ const Features: React.FC = () => {
       title: "Deploy With One Click",
       description:
         "Transform your ML pipelines into production-ready APIs instantly. Auto-generate documentation, monitoring dashboards, and scalable infrastructure. From prototype to production in minutes.",
-      highlights: [
-        "One-click deployment",
-        "Built-in monitoring"
-      ],
+      highlights: ["One-click deployment", "Built-in monitoring"],
       gradient: "from-purple-500/20 to-pink-500/20",
     },
   ];
@@ -129,7 +126,7 @@ const Features: React.FC = () => {
                 {/* Badge */}
                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-xl border border-slate-200/60 rounded-full">
                   <div
-                    className={`w-2 h-2 rounded-full bg-gradient-to-r ${activeFeature.gradient.replace("/20", "")}`}
+                    className={`w-2 h-2 rounded-full bg-linear-to-r ${activeFeature.gradient.replace("/20", "")}`}
                   />
                   <span className="text-sm font-medium text-slate-700">
                     {activeFeature.badge}
@@ -177,8 +174,6 @@ const Features: React.FC = () => {
                     </motion.div>
                   ))}
                 </div>
-
-                
               </motion.div>
             </AnimatePresence>
           </div>

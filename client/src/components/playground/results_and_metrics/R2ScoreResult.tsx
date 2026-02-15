@@ -36,7 +36,7 @@ export function R2ScoreResult({ result }: R2ScoreProps) {
         </h4>
         <div className="space-y-3">
           <div className="flex items-center gap-3">
-            <div className="w-24 h-8 bg-gradient-to-r from-green-500 to-green-600 rounded flex items-center justify-center text-white text-xs font-semibold">
+            <div className="w-24 h-8 bg-linear-to-r from-green-500 to-green-600 rounded flex items-center justify-center text-white text-xs font-semibold">
               0.90 - 1.0
             </div>
             <span className="text-sm text-gray-700">
@@ -44,7 +44,7 @@ export function R2ScoreResult({ result }: R2ScoreProps) {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="w-24 h-8 bg-gradient-to-r from-blue-500 to-blue-600 rounded flex items-center justify-center text-white text-xs font-semibold">
+            <div className="w-24 h-8 bg-linear-to-r from-blue-500 to-blue-600 rounded flex items-center justify-center text-white text-xs font-semibold">
               0.70 - 0.90
             </div>
             <span className="text-sm text-gray-700">
@@ -52,7 +52,7 @@ export function R2ScoreResult({ result }: R2ScoreProps) {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="w-24 h-8 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded flex items-center justify-center text-white text-xs font-semibold">
+            <div className="w-24 h-8 bg-linear-to-r from-yellow-500 to-yellow-600 rounded flex items-center justify-center text-white text-xs font-semibold">
               0.50 - 0.70
             </div>
             <span className="text-sm text-gray-700">
@@ -60,7 +60,7 @@ export function R2ScoreResult({ result }: R2ScoreProps) {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="w-24 h-8 bg-gradient-to-r from-orange-500 to-orange-600 rounded flex items-center justify-center text-white text-xs font-semibold">
+            <div className="w-24 h-8 bg-linear-to-r from-orange-500 to-orange-600 rounded flex items-center justify-center text-white text-xs font-semibold">
               0.30 - 0.50
             </div>
             <span className="text-sm text-gray-700">
@@ -68,7 +68,7 @@ export function R2ScoreResult({ result }: R2ScoreProps) {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="w-24 h-8 bg-gradient-to-r from-red-500 to-red-600 rounded flex items-center justify-center text-white text-xs font-semibold">
+            <div className="w-24 h-8 bg-linear-to-r from-red-500 to-red-600 rounded flex items-center justify-center text-white text-xs font-semibold">
               &lt; 0.30
             </div>
             <span className="text-sm text-gray-700">

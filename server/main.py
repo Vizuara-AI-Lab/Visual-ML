@@ -23,6 +23,7 @@ from app.api.v1 import (
     tasks,
     sharing,
 )
+from app.mentor import router as mentor_router
 from pathlib import Path
 
 
@@ -143,6 +144,9 @@ app.include_router(auth_student.router, prefix=settings.API_V1_PREFIX)
 app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
 app.include_router(datasets.router, prefix=settings.API_V1_PREFIX)
 app.include_router(tasks.router, prefix=settings.API_V1_PREFIX)  # Task status/management
+
+# AI Mentor routes
+app.include_router(mentor_router.router, prefix=settings.API_V1_PREFIX)
 
 # GenAI routes
 app.include_router(

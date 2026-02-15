@@ -19,6 +19,13 @@ import type { NodeType, BaseNodeData } from "../../types/pipeline";
 import { useProjectState } from "../../hooks/queries/useProjectState";
 import { useSaveProject } from "../../hooks/mutations/useSaveProject";
 import { validatePipeline } from "../../utils/validation";
+import { MentorAssistant, mentorApi } from "../../features/mentor";
+import { useAuthStore } from "../../store/authStore";
+import { useMentorContext } from "../../features/mentor";
+import {
+  useMentorStore,
+  type MentorAction,
+} from "../../features/mentor/store/mentorStore";
 
 export default function PlayGround() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -48,7 +55,17 @@ export default function PlayGround() {
     executionResult,
     currentProjectId,
     updateNode,
+    addNode,
   } = usePlaygroundStore();
+
+  const { user } = useAuthStore();
+  const { preferences } = useMentorStore();
+
+  // Enable AI mentor context awareness
+  useMentorContext({
+    enabled: preferences.enabled,
+    debounceMs: 1000,
+  });
 
   // Handle node click - show view data modal for view nodes, config for others
   const handleNodeClick = (nodeId: string) => {
@@ -483,6 +500,66 @@ export default function PlayGround() {
     );
   };
 
+  // Handle adding a node from mentor suggestions
+  const handleAddNodeFromMentor = async (nodeType: string) => {
+    console.log("[handleAddNodeFromMentor] Adding node type:", nodeType);
+    try {
+      const { getNodeByType } = await import("../../config/nodeDefinitions");
+      const nodeDef = getNodeByType(nodeType as NodeType);
+
+      if (!nodeDef) {
+        console.error(
+          "[handleAddNodeFromMentor] Node definition not found for:",
+          nodeType,
+        );
+        toast.error(`Node type "${nodeType}" not found`);
+        return;
+      }
+
+      console.log(
+        "[handleAddNodeFromMentor] Node definition found:",
+        nodeDef.label,
+      );
+
+      // Create a new node with a unique ID
+      const nodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Calculate position - center of viewport with slight offset for each new node
+      const position = {
+        x: 300 + nodes.length * 20, // Offset to avoid overlap
+        y: 200 + nodes.length * 20,
+      };
+
+      const newNode = {
+        id: nodeId,
+        type: nodeDef.type,
+        position,
+        data: {
+          label: nodeDef.label,
+          type: nodeDef.type,
+          config: JSON.parse(JSON.stringify(nodeDef.defaultConfig)),
+          isConfigured: false,
+          color: nodeDef.color,
+          icon: nodeDef.icon,
+        },
+      };
+
+      addNode(newNode);
+      toast.success(`Added ${nodeDef.label} to canvas`, {
+        icon: "✨",
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error("Error adding node from mentor:", error);
+      toast.error("Failed to add node");
+    }
+  };
+
+  // Handle execute pipeline action from mentor
+  const handleExecutePipeline = () => {
+    handleExecute();
+  };
+
   return (
     <div className="h-screen flex flex-col bg-gray-950">
       <Toaster />
@@ -529,6 +606,112 @@ export default function PlayGround() {
         onClose={() => setShareModalOpen(false)}
         projectId={projectId ? parseInt(projectId) : 0}
         projectName={projectData?.name || "Untitled Project"}
+      />
+
+      <MentorAssistant
+        userName={user?.fullName || user?.emailId || "there"}
+        onAction={async (action: MentorAction) => {
+          console.log("[Mentor] Action clicked:", action);
+
+          // Handle mentor suggestion actions
+          if (action.type === "show_guide") {
+            const modelType = action.payload?.model_type as string;
+
+            // Check if this is the initial guide request or dataset guidance
+            if (action.payload?.action) {
+              // This is a dataset guidance action
+              try {
+                const guidanceResponse = await mentorApi.getDatasetGuidance(
+                  action.payload.action as string,
+                  modelType,
+                  action.payload.next_message as string,
+                );
+
+                if (
+                  guidanceResponse.success &&
+                  guidanceResponse.suggestions.length > 0
+                ) {
+                  useMentorStore
+                    .getState()
+                    .showSuggestion(guidanceResponse.suggestions[0]);
+                }
+              } catch (error) {
+                console.error(
+                  "[Mentor] Error fetching dataset guidance:",
+                  error,
+                );
+                toast.error("Failed to load guidance");
+              }
+            } else {
+              // Initial guide request - show model introduction
+              if (modelType) {
+                try {
+                  const introResponse =
+                    await mentorApi.getModelIntroduction(modelType);
+
+                  if (
+                    introResponse.success &&
+                    introResponse.suggestions.length > 0
+                  ) {
+                    useMentorStore
+                      .getState()
+                      .showSuggestion(introResponse.suggestions[0]);
+                    toast.success(
+                      `Learning about ${modelType.replace(/_/g, " ")}`,
+                    );
+                  }
+                } catch (error) {
+                  console.error("[Mentor] Error fetching introduction:", error);
+                  toast.error("Failed to load introduction");
+                }
+              }
+            }
+          } else if (action.type === "learn_more") {
+            // Handle learn_more actions (dataset options that show more info)
+            if (action.payload?.action && action.payload?.model_type) {
+              try {
+                const guidanceResponse = await mentorApi.getDatasetGuidance(
+                  action.payload.action as string,
+                  action.payload.model_type as string,
+                  (action.payload.next_message as string) || "",
+                );
+
+                if (
+                  guidanceResponse.success &&
+                  guidanceResponse.suggestions.length > 0
+                ) {
+                  useMentorStore
+                    .getState()
+                    .showSuggestion(guidanceResponse.suggestions[0]);
+                }
+              } catch (error) {
+                console.error("[Mentor] Error fetching guidance:", error);
+                toast.error("Failed to load guidance");
+              }
+            } else if (action.payload?.url) {
+              console.log("[Mentor] Opening learn more:", action.payload.url);
+              window.open(action.payload.url as string, "_blank");
+            }
+          } else if (action.type === "add_node") {
+            // Check for both node_type and model_type in payload
+            const nodeType = (action.payload?.node_type ||
+              action.payload?.model_type) as string;
+            if (nodeType) {
+              console.log("[Mentor] Adding node:", nodeType);
+              handleAddNodeFromMentor(nodeType);
+            } else {
+              console.warn(
+                "[Mentor] No node_type or model_type in payload:",
+                action.payload,
+              );
+            }
+          } else if (action.type === "execute") {
+            console.log("[Mentor] Executing pipeline");
+            handleExecutePipeline();
+          } else {
+            console.log("[Mentor] Unknown action type:", action.type);
+          }
+        }}
       />
     </div>
   );

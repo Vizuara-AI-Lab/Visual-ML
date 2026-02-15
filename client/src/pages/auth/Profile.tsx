@@ -17,6 +17,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import axiosInstance from "../../lib/axios";
 import Navbar from "../../landingpage/Navbar";
+import { MentorSettings } from "../../components/MentorSettings";
 
 interface UserProfile {
   id: number;
@@ -214,7 +215,7 @@ const Profile: React.FC = () => {
             </div>
 
             {profile.isPremium && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-400 to-yellow-500 text-white rounded-xl shadow-lg">
+              <div className="flex items-center gap-2 px-4 py-2 bg-linear-to-r from-amber-400 to-yellow-500 text-white rounded-xl shadow-lg">
                 <Crown className="w-5 h-5" />
                 <span className="font-semibold">Premium</span>
               </div>
@@ -491,6 +492,9 @@ const Profile: React.FC = () => {
                 </div>
               </form>
             </div>
+
+            {/* AI Mentor Settings Card */}
+            <MentorSettings />
           </div>
         </div>
       </div>

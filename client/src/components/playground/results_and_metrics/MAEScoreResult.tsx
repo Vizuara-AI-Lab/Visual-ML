@@ -36,7 +36,7 @@ export function MAEScoreResult({ result }: MAEScoreProps) {
         </h4>
         <div className="space-y-3">
           <div className="flex items-center gap-3">
-            <div className="w-24 h-8 bg-gradient-to-r from-green-500 to-green-600 rounded flex items-center justify-center text-white text-xs font-semibold">
+            <div className="w-24 h-8 bg-linear-to-r from-green-500 to-green-600 rounded flex items-center justify-center text-white text-xs font-semibold">
               &lt; 0.5
             </div>
             <span className="text-sm text-gray-700">
@@ -44,13 +44,13 @@ export function MAEScoreResult({ result }: MAEScoreProps) {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="w-24 h-8 bg-gradient-to-r from-blue-500 to-blue-600 rounded flex items-center justify-center text-white text-xs font-semibold">
+            <div className="w-24 h-8 bg-linear-to-r from-blue-500 to-blue-600 rounded flex items-center justify-center text-white text-xs font-semibold">
               0.5 - 2.0
             </div>
             <span className="text-sm text-gray-700">Good - Low error</span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="w-24 h-8 bg-gradient-to-r from-yellow-500 to-yellow-600 rounded flex items-center justify-center text-white text-xs font-semibold">
+            <div className="w-24 h-8 bg-linear-to-r from-yellow-500 to-yellow-600 rounded flex items-center justify-center text-white text-xs font-semibold">
               2.0 - 5.0
             </div>
             <span className="text-sm text-gray-700">
@@ -58,7 +58,7 @@ export function MAEScoreResult({ result }: MAEScoreProps) {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="w-24 h-8 bg-gradient-to-r from-orange-500 to-orange-600 rounded flex items-center justify-center text-white text-xs font-semibold">
+            <div className="w-24 h-8 bg-linear-to-r from-orange-500 to-orange-600 rounded flex items-center justify-center text-white text-xs font-semibold">
               5.0 - 10
             </div>
             <span className="text-sm text-gray-700">
@@ -66,7 +66,7 @@ export function MAEScoreResult({ result }: MAEScoreProps) {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <div className="w-24 h-8 bg-gradient-to-r from-red-500 to-red-600 rounded flex items-center justify-center text-white text-xs font-semibold">
+            <div className="w-24 h-8 bg-linear-to-r from-red-500 to-red-600 rounded flex items-center justify-center text-white text-xs font-semibold">
               &gt; 10
             </div>
             <span className="text-sm text-gray-700">

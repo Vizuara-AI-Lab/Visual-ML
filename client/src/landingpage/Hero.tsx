@@ -25,7 +25,7 @@ const Hero: React.FC = () => {
                 <span className="block bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
                   Machine Learning
                 </span>
-                <span className="block mt-2 bg-gradient-to-r from-slate-400 via-slate-300 to-slate-400 bg-clip-text text-transparent">
+                <span className="block mt-2 bg-linear-to-r from-slate-400 via-slate-300 to-slate-400 bg-clip-text text-transparent">
                   Made Visual
                 </span>
               </h1>

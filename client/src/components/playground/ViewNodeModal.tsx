@@ -803,7 +803,7 @@ function TransformationResults({ result }: { result: any }) {
   return (
     <div className="space-y-6">
       {/* Status Banner */}
-      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
+      <div className="bg-linear-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center">
             <span className="text-white text-xl">✓</span>
@@ -1035,7 +1035,7 @@ function ScalingResults({ result }: { result: any }) {
   return (
     <div className="space-y-6">
       {/* Status Banner */}
-      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4">
+      <div className="bg-linear-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
             <span className="text-white text-xl">✓</span>

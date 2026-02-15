@@ -70,7 +70,7 @@ const AdminLogin: React.FC = () => {
             </svg>
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/20 to-transparent" />
           </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-2">
+          <h1 className="text-3xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-2">
             Admin Portal
           </h1>
           <p className="text-slate-600">Only for the admin </p>

@@ -127,12 +127,12 @@ const StudentDashboard: React.FC = () => {
                   <Sparkles className="w-4 h-4 text-white" />
                   <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-white/20 to-transparent" />
                 </div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+                <h1 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
                   Visual ML
                 </h1>
               </div>
               {user?.isPremium && (
-                <span className="px-3 py-1 bg-gradient-to-r from-violet-100 to-violet-50 text-violet-700 text-xs font-semibold rounded-full border border-violet-200 shadow-sm">
+                <span className="px-3 py-1 bg-linear-to-r from-violet-100 to-violet-50 text-violet-700 text-xs font-semibold rounded-full border border-violet-200 shadow-sm">
                   ✨ Premium
                 </span>
               )}
@@ -280,7 +280,7 @@ const StudentDashboard: React.FC = () => {
         >
           <div className="p-6 border-b border-slate-200/60">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+              <h2 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
                 My Projects
               </h2>
               <button
@@ -407,7 +407,7 @@ const StudentDashboard: React.FC = () => {
             className="mt-8 bg-white/80 backdrop-blur-xl rounded-2xl border border-slate-200/60 shadow-xl shadow-slate-900/5 ring-1 ring-slate-900/5"
           >
             <div className="p-6 border-b border-slate-200/60">
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+              <h2 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
                 Recent Runs
               </h2>
             </div>

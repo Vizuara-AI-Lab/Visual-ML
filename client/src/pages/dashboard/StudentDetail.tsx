@@ -65,7 +65,7 @@ const StudentDetail: React.FC = () => {
             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-lg shadow-red-500/25">
               <span className="text-white text-3xl">⚠️</span>
             </div>
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-2">
+            <h2 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-2">
               Error
             </h2>
             <p className="text-slate-600 mb-6">
@@ -99,7 +99,7 @@ const StudentDetail: React.FC = () => {
               >
                 <ArrowLeft className="w-5 h-5 text-slate-600 group-hover:text-slate-900 group-hover:-translate-x-1 transition-all" />
               </button>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+              <h1 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
                 Student Details
               </h1>
             </div>
@@ -200,7 +200,7 @@ const StudentDetail: React.FC = () => {
                     <button
                       onClick={togglePremium}
                       disabled={updateStudentMutation.isPending}
-                      className="group w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl font-medium transition-all shadow-lg shadow-amber-500/25 hover:shadow-xl hover:shadow-amber-500/40 disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                      className="group w-full py-3 px-4 bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl font-medium transition-all shadow-lg shadow-amber-500/25 hover:shadow-xl hover:shadow-amber-500/40 disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 flex items-center justify-center gap-2"
                     >
                       <Crown className="w-4 h-4" />
                       {student.isPremium ? "Revoke Premium" : "Grant Premium"}
@@ -210,8 +210,8 @@ const StudentDetail: React.FC = () => {
                       disabled={updateStudentMutation.isPending}
                       className={`group w-full py-3 px-4 text-white rounded-xl font-medium transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 flex items-center justify-center gap-2 ${
                         student.isActive
-                          ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-red-500/25 hover:shadow-xl hover:shadow-red-500/40"
-                          : "bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/40"
+                          ? "bg-linear-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-red-500/25 hover:shadow-xl hover:shadow-red-500/40"
+                          : "bg-linear-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-emerald-500/25 hover:shadow-xl hover:shadow-emerald-500/40"
                       }`}
                     >
                       <Shield className="w-4 h-4" />
@@ -233,7 +233,7 @@ const StudentDetail: React.FC = () => {
             className="lg:col-span-2"
           >
             <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl shadow-slate-900/10 p-6 border border-slate-200/60 ring-1 ring-slate-900/5">
-              <h3 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-6">
+              <h3 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-6">
                 Student Information
               </h3>
 

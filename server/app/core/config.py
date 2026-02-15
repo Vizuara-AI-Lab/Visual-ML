@@ -97,6 +97,11 @@ class Settings(BaseSettings):
     ADMIN_EMAIL: str = "admin@visualml.com"
     ADMIN_PASSWORD: str = "change-this-password"
 
+    # Inworld TTS (AI Mentor)
+    INWORLD_API_KEY: Optional[str] = None
+    INWORLD_WORKSPACE_ID: Optional[str] = None
+    INWORLD_CHARACTER_ID: Optional[str] = None
+
     # Auth Settings
     PASSWORD_MIN_LENGTH: int = 8
     RESET_TOKEN_EXPIRE_MINUTES: int = 30

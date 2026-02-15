@@ -60,7 +60,7 @@ const Navbar: React.FC = () => {
                   <Sparkles className="w-4 h-4 text-white" />
                   <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-white/20 to-transparent" />
                 </div>
-                <span className="text-xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+                <span className="text-xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
                   Visual ML
                 </span>
               </div>
@@ -87,7 +87,7 @@ const Navbar: React.FC = () => {
                       {item.badge}
                     </span>
                   )}
-                  <motion.div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-gradient-to-r from-slate-900 to-slate-700 group-hover:w-3/4 transition-all duration-300" />
+                  <motion.div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-linear-to-r from-slate-900 to-slate-700 group-hover:w-3/4 transition-all duration-300" />
                 </motion.button>
               ))}
             </motion.div>
@@ -120,7 +120,7 @@ const Navbar: React.FC = () => {
                   Get started
                   <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                 </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-slate-800 to-slate-700 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute inset-0 bg-linear-to-r from-slate-800 to-slate-700 opacity-0 group-hover:opacity-100 transition-opacity" />
               </motion.button>
             </motion.div>
 
