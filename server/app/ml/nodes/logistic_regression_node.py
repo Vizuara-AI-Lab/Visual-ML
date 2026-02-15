@@ -3,8 +3,9 @@ Logistic Regression Node - Individual node wrapper for Logistic Regression algor
 Supports binary and multi-class classification with configurable hyperparameters.
 """
 
-from typing import Type, Optional, Dict, Any
+from typing import Type, Optional, Dict, Any, List
 import pandas as pd
+import numpy as np
 import io
 from pydantic import Field
 from pathlib import Path
@@ -68,6 +69,20 @@ class LogisticRegressionOutput(NodeOutput):
         None, description="Test dataset ID (passed from split node)"
     )
     target_column: Optional[str] = Field(None, description="Target column (passed from split node)")
+
+    # Learning activity data (all Optional for backward compatibility)
+    class_distribution: Optional[Dict[str, Any]] = Field(
+        None, description="Training data class distribution"
+    )
+    metric_explainer: Optional[Dict[str, Any]] = Field(
+        None, description="Metric explanations with real data examples"
+    )
+    sigmoid_data: Optional[Dict[str, Any]] = Field(
+        None, description="Sigmoid curve data for visualization"
+    )
+    quiz_questions: Optional[List[Dict[str, Any]]] = Field(
+        None, description="Auto-generated quiz questions about logistic regression"
+    )
 
 
 class LogisticRegressionNode(BaseNode):
@@ -250,6 +265,40 @@ class LogisticRegressionNode(BaseNode):
 
             logger.info(f"Model saved to {model_path}")
 
+            metrics = training_metadata.get("training_metrics", {})
+            class_names_list = model.class_names
+
+            # Generate learning activity data (non-blocking)
+            class_distribution = None
+            try:
+                class_distribution = self._generate_class_distribution(
+                    y_train, class_names_list, input_data.target_column
+                )
+            except Exception as e:
+                logger.warning(f"Class distribution generation failed: {e}")
+
+            metric_explainer = None
+            try:
+                metric_explainer = self._generate_metric_explainer(
+                    metrics, class_names_list, len(X_train)
+                )
+            except Exception as e:
+                logger.warning(f"Metric explainer generation failed: {e}")
+
+            sigmoid_data = None
+            try:
+                sigmoid_data = self._generate_sigmoid_data()
+            except Exception as e:
+                logger.warning(f"Sigmoid data generation failed: {e}")
+
+            quiz_questions = None
+            try:
+                quiz_questions = self._generate_logistic_regression_quiz(
+                    metrics, class_names_list, input_data.target_column, len(X_train)
+                )
+            except Exception as e:
+                logger.warning(f"Logistic regression quiz generation failed: {e}")
+
             return LogisticRegressionOutput(
                 node_type=self.node_type,
                 execution_time_ms=int(training_time * 1000),
@@ -257,14 +306,17 @@ class LogisticRegressionNode(BaseNode):
                 model_path=str(model_path),
                 training_samples=len(X_train),
                 n_features=X_train.shape[1],
-                n_classes=len(model.class_names),
-                training_metrics=training_metadata.get("training_metrics", {}),
+                n_classes=len(class_names_list),
+                training_metrics=metrics,
                 training_time_seconds=training_time,
-                class_names=model.class_names,
+                class_names=class_names_list,
                 metadata=model.training_metadata,
-                # Pass through split node fields for downstream nodes
                 test_dataset_id=input_data.test_dataset_id,
                 target_column=input_data.target_column,
+                class_distribution=class_distribution,
+                metric_explainer=metric_explainer,
+                sigmoid_data=sigmoid_data,
+                quiz_questions=quiz_questions,
             )
 
         except Exception as e:
@@ -272,3 +324,228 @@ class LogisticRegressionNode(BaseNode):
             raise NodeExecutionError(
                 node_type=self.node_type, reason=str(e), input_data=input_data.model_dump()
             )
+
+    # --- Learning Activity Helpers ---
+
+    def _generate_class_distribution(
+        self, y_train: pd.Series, class_names: list, target_column: str
+    ) -> Dict[str, Any]:
+        """Class distribution bar chart data with balance analysis."""
+        total = len(y_train)
+        counts = y_train.value_counts()
+
+        classes = []
+        for cls in class_names:
+            count = int(counts.get(cls, 0))
+            pct = round(count / total * 100, 1) if total > 0 else 0
+            classes.append({
+                "name": str(cls),
+                "count": count,
+                "percentage": pct,
+                "bar_width_pct": round(count / counts.max() * 100, 1) if counts.max() > 0 else 0,
+            })
+
+        # Balance analysis
+        max_count = counts.max()
+        min_count = counts.min()
+        imbalance_ratio = round(float(max_count / min_count), 2) if min_count > 0 else float("inf")
+        is_balanced = imbalance_ratio <= 1.5
+
+        return {
+            "target_column": target_column,
+            "total_samples": total,
+            "n_classes": len(class_names),
+            "classes": classes,
+            "is_balanced": is_balanced,
+            "imbalance_ratio": imbalance_ratio,
+            "balance_message": (
+                "Classes are roughly balanced - good for training!"
+                if is_balanced
+                else f"Classes are imbalanced (ratio {imbalance_ratio}:1). The model may favor the majority class."
+            ),
+        }
+
+    def _generate_metric_explainer(
+        self, metrics: Dict[str, Any], class_names: list, n_samples: int
+    ) -> Dict[str, Any]:
+        """Metric explanation cards with real numbers and analogies."""
+        explanations = []
+
+        accuracy = metrics.get("accuracy")
+        if accuracy is not None:
+            acc_pct = round(float(accuracy) * 100, 1)
+            correct = int(round(float(accuracy) * n_samples))
+            wrong = n_samples - correct
+            explanations.append({
+                "metric": "Accuracy",
+                "value": round(float(accuracy), 4),
+                "value_pct": acc_pct,
+                "analogy": f"Out of {n_samples} predictions, {correct} were correct and {wrong} were wrong.",
+                "when_useful": "Good when classes are balanced. Misleading when one class dominates.",
+                "color": "blue",
+            })
+
+        precision = metrics.get("precision") or metrics.get("weighted_precision")
+        if precision is not None:
+            prec_pct = round(float(precision) * 100, 1)
+            explanations.append({
+                "metric": "Precision",
+                "value": round(float(precision), 4),
+                "value_pct": prec_pct,
+                "analogy": f"When the model says 'positive', it is right {prec_pct}% of the time. Like a careful doctor who only diagnoses a disease when very sure.",
+                "when_useful": "Important when false positives are costly (e.g., spam filter marking real emails as spam).",
+                "color": "green",
+            })
+
+        recall = metrics.get("recall") or metrics.get("weighted_recall")
+        if recall is not None:
+            rec_pct = round(float(recall) * 100, 1)
+            explanations.append({
+                "metric": "Recall",
+                "value": round(float(recall), 4),
+                "value_pct": rec_pct,
+                "analogy": f"Of all actual positives, the model catches {rec_pct}%. Like a security guard who catches {rec_pct}% of intruders.",
+                "when_useful": "Important when missing real cases is costly (e.g., disease screening, fraud detection).",
+                "color": "orange",
+            })
+
+        f1 = metrics.get("f1_score") or metrics.get("weighted_f1")
+        if f1 is not None:
+            f1_pct = round(float(f1) * 100, 1)
+            explanations.append({
+                "metric": "F1 Score",
+                "value": round(float(f1), 4),
+                "value_pct": f1_pct,
+                "analogy": f"The balance between precision and recall is {f1_pct}%. A high F1 means the model is both careful and thorough.",
+                "when_useful": "Best single metric when you need both precision and recall to be good.",
+                "color": "purple",
+            })
+
+        return {
+            "metrics": explanations,
+            "n_classes": len(class_names),
+            "class_names": [str(c) for c in class_names],
+            "n_samples": n_samples,
+        }
+
+    def _generate_sigmoid_data(self) -> Dict[str, Any]:
+        """Pre-computed sigmoid curve points for visualization."""
+        x_vals = np.linspace(-8, 8, 81).tolist()
+        y_vals = [round(1.0 / (1.0 + np.exp(-x)), 4) for x in x_vals]
+
+        # Key annotation points
+        annotations = [
+            {"x": -8, "y": round(1.0 / (1.0 + np.exp(8)), 4), "label": "Very unlikely (class 0)"},
+            {"x": -2, "y": round(1.0 / (1.0 + np.exp(2)), 4), "label": "Leaning class 0"},
+            {"x": 0, "y": 0.5, "label": "Decision boundary (50/50)"},
+            {"x": 2, "y": round(1.0 / (1.0 + np.exp(-2)), 4), "label": "Leaning class 1"},
+            {"x": 8, "y": round(1.0 / (1.0 + np.exp(-8)), 4), "label": "Very likely (class 1)"},
+        ]
+
+        return {
+            "x_values": x_vals,
+            "y_values": y_vals,
+            "annotations": annotations,
+            "x_label": "Model Output (z = w*x + b)",
+            "y_label": "Probability of Class 1",
+            "description": "The sigmoid function squashes any number into a probability between 0 and 1. This is how logistic regression converts raw scores into class predictions.",
+            "formula": "P(class=1) = 1 / (1 + e^(-z))",
+            "threshold_explanation": "If probability >= 0.5, predict class 1. Otherwise, predict class 0.",
+        }
+
+    def _generate_logistic_regression_quiz(
+        self, metrics: Dict[str, Any], class_names: list,
+        target_column: str, n_samples: int
+    ) -> List[Dict[str, Any]]:
+        """Auto-generate quiz questions about logistic regression concepts."""
+        import random as _random
+        questions = []
+        q_id = 0
+
+        # Q1: Classification vs regression
+        q_id += 1
+        questions.append({
+            "id": f"q{q_id}",
+            "question": "What type of problem does logistic regression solve?",
+            "options": [
+                "Classification (predicting categories)",
+                "Regression (predicting continuous numbers)",
+                "Clustering (grouping similar items)",
+                "Dimensionality reduction",
+            ],
+            "correct_answer": 0,
+            "explanation": f"Despite its name, logistic regression is a classification algorithm. It predicts which category (class) a sample belongs to. Here it predicts '{target_column}' which has {len(class_names)} classes: {', '.join(str(c) for c in class_names[:5])}.",
+            "difficulty": "easy",
+        })
+
+        # Q2: Sigmoid interpretation
+        q_id += 1
+        questions.append({
+            "id": f"q{q_id}",
+            "question": "The sigmoid function outputs 0.85. What does this mean?",
+            "options": [
+                "85% probability of belonging to the positive class",
+                "The model is 85% accurate",
+                "85% of the data was used for training",
+                "The feature has 85% importance",
+            ],
+            "correct_answer": 0,
+            "explanation": "The sigmoid function converts the model's raw score into a probability between 0 and 1. An output of 0.85 means the model is 85% confident the sample belongs to class 1 (positive class).",
+            "difficulty": "medium",
+        })
+
+        # Q3: Based on actual metrics - accuracy interpretation
+        accuracy = metrics.get("accuracy")
+        if accuracy is not None:
+            acc_pct = round(float(accuracy) * 100, 1)
+            correct = int(round(float(accuracy) * n_samples))
+            q_id += 1
+            questions.append({
+                "id": f"q{q_id}",
+                "question": f"The model accuracy is {round(float(accuracy), 4)} on {n_samples} training samples. How many did it classify correctly?",
+                "options": [
+                    f"About {correct} samples",
+                    f"About {n_samples} samples",
+                    f"About {n_samples - correct} samples",
+                    f"About {int(n_samples * 0.5)} samples",
+                ],
+                "correct_answer": 0,
+                "explanation": f"Accuracy = correct predictions / total predictions. With accuracy {round(float(accuracy), 4)} on {n_samples} samples: {round(float(accuracy), 4)} x {n_samples} = ~{correct} correct predictions.",
+                "difficulty": "medium",
+            })
+
+        # Q4: Precision vs recall
+        q_id += 1
+        questions.append({
+            "id": f"q{q_id}",
+            "question": "A hospital wants to screen patients for a rare disease. Which metric matters most?",
+            "options": [
+                "Recall - catch as many sick patients as possible",
+                "Precision - only flag patients who are definitely sick",
+                "Accuracy - get the most overall correct predictions",
+                "F1 Score - balance between precision and recall",
+            ],
+            "correct_answer": 0,
+            "explanation": "For disease screening, missing a sick patient (false negative) is dangerous. High recall ensures we catch most actual cases, even if some healthy people get flagged for follow-up tests. Better safe than sorry!",
+            "difficulty": "hard",
+        })
+
+        # Q5: Decision boundary
+        q_id += 1
+        n_cls = len(class_names)
+        questions.append({
+            "id": f"q{q_id}",
+            "question": f"This model has {n_cls} classes. What does the 'decision boundary' do?",
+            "options": [
+                f"Separates the {n_cls} classes in the feature space",
+                "Limits how many features the model can use",
+                "Sets the maximum number of training iterations",
+                "Defines the minimum sample size per class",
+            ],
+            "correct_answer": 0,
+            "explanation": f"The decision boundary is an imaginary line (or surface) that separates different classes. Points on one side are predicted as one class, points on the other side as another. With {n_cls} classes, logistic regression creates boundaries between them.",
+            "difficulty": "medium",
+        })
+
+        _random.shuffle(questions)
+        return questions[:5]

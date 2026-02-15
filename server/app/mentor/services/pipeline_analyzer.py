@@ -26,7 +26,7 @@ class PipelineAnalyzer:
         "random_forest",
     }
     RESULT_NODES = {"metrics", "confusion_matrix", "feature_importance", "predictions"}
-    VIEW_NODES = {"view_data", "chart_view"}
+    VIEW_NODES = {"view_data", "chart_view", "column_info", "data_preview", "statistics_view"}
 
     def analyze_pipeline(
         self,
@@ -249,6 +249,13 @@ class PipelineAnalyzer:
             return next_steps
 
         if has_data_source and not has_ml_model:
+            # First priority: suggest Column Info to understand the dataset
+            has_column_info = "column_info" in node_types
+            if not has_column_info:
+                next_steps.append(
+                    "Add Column Info node to understand your dataset columns, data types, and missing values"
+                )
+
             # Suggest data preparation
             if dataset_metadata:
                 missing_values = dataset_metadata.get("missing_values", {})

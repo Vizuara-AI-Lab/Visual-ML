@@ -143,6 +143,11 @@ class RecommendationEngine:
                 expertise_level,
             )
 
+            # Generate TTS-friendly text (no markdown/bullets)
+            voice_text = "Here's what I recommend next: " + ". ".join(
+                pipeline_analysis["next_steps"][:3]
+            )
+
             suggestions.append(
                 MentorSuggestion(
                     id=str(uuid.uuid4()),
@@ -150,6 +155,7 @@ class RecommendationEngine:
                     priority=SuggestionPriority.INFO,
                     title="Recommended Next Steps",
                     message=message,
+                    voice_text=voice_text,
                     actions=self._generate_next_step_actions(pipeline_analysis["next_steps"]),
                     timestamp=datetime.utcnow().isoformat(),
                 )
@@ -428,7 +434,15 @@ class RecommendationEngine:
         for step in next_steps[:3]:  # Limit to 3 actions
             step_lower = step.lower()
 
-            if "upload" in step_lower:
+            if "column info" in step_lower:
+                actions.append(
+                    MentorAction(
+                        label="Add Column Info",
+                        type="add_node",
+                        payload={"node_type": "column_info"},
+                    )
+                )
+            elif "upload" in step_lower:
                 actions.append(
                     MentorAction(
                         label="Upload Dataset",
@@ -482,13 +496,23 @@ class RecommendationEngine:
         """Generate detailed introduction and explanation for a specific model type."""
 
         if model_type == "linear_regression":
-            intro = LINEAR_REGRESSION_GUIDE["introduction"]
             dataset_phase = LINEAR_REGRESSION_GUIDE["dataset_phase"]
 
-            # Create the introduction message
-            message = f"{intro['explanation']}\n\n{intro['visual_example']}\n\n---\n\n"
-            message += f"**{dataset_phase['title']}**\n\n"
-            message += "Before we start building, I need to know:"
+            # Short and simple introduction message
+            message = (
+                "**Linear Regression** predicts continuous numbers like prices, scores, or temperatures. "
+                "It finds the best-fitting line through your data to make predictions.\n\n"
+                "👉 **Let's get started!** Look at the **Data Source** section on the left sidebar, "
+                "drag a **Select Dataset** node onto the canvas and choose your dataset."
+            )
+
+            # TTS-friendly version (no markdown, no emojis)
+            voice_text = (
+                "Linear Regression predicts continuous numbers like prices, scores, or temperatures. "
+                "It finds the best fitting line through your data to make predictions. "
+                "Let's get started! Look at the Data Source section on the left side, "
+                "drag a Select Dataset node onto the canvas and choose your dataset."
+            )
 
             # Create actions for dataset options
             actions = []
@@ -516,6 +540,7 @@ class RecommendationEngine:
                 priority=SuggestionPriority.INFO,
                 title=LINEAR_REGRESSION_GUIDE["title"],
                 message=message,
+                voice_text=voice_text,
                 actions=actions,
                 timestamp=datetime.utcnow().isoformat(),
                 dismissible=False,

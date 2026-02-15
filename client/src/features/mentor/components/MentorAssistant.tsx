@@ -4,7 +4,7 @@
  * Main floating AI mentor panel that appears in the playground
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -50,6 +50,46 @@ export const MentorAssistant: React.FC<MentorAssistantProps> = ({
 
   const { playText, pause, resume, stop, isSpeaking } = useAudioPlayer();
   const [isLoading, setIsLoading] = React.useState(false);
+  const pendingGreetingRef = useRef<string | null>(null);
+
+  // Play queued greeting audio on first user interaction
+  useEffect(() => {
+    const playPendingGreeting = () => {
+      if (pendingGreetingRef.current) {
+        const text = pendingGreetingRef.current;
+        pendingGreetingRef.current = null;
+        console.log("[Mentor] User interacted, playing queued greeting audio");
+        playText(text, true);
+      }
+      document.removeEventListener("click", playPendingGreeting);
+      document.removeEventListener("keydown", playPendingGreeting);
+    };
+
+    document.addEventListener("click", playPendingGreeting, { once: true });
+    document.addEventListener("keydown", playPendingGreeting, { once: true });
+
+    return () => {
+      document.removeEventListener("click", playPendingGreeting);
+      document.removeEventListener("keydown", playPendingGreeting);
+    };
+  }, [playText]);
+
+  // Auto-play TTS when a new non-greeting suggestion appears (e.g. model introduction)
+  const prevSuggestionIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      currentSuggestion &&
+      currentSuggestion.id !== prevSuggestionIdRef.current &&
+      currentSuggestion.type !== "greeting"
+    ) {
+      prevSuggestionIdRef.current = currentSuggestion.id;
+      const text = currentSuggestion.voice_text || currentSuggestion.message;
+      console.log("[Mentor] Auto-playing TTS for new suggestion:", currentSuggestion.type);
+      playText(text, true);
+    } else if (currentSuggestion) {
+      prevSuggestionIdRef.current = currentSuggestion.id;
+    }
+  }, [currentSuggestion, playText]);
 
   // Initial greeting on mount
   useEffect(() => {
@@ -72,14 +112,9 @@ export const MentorAssistant: React.FC<MentorAssistantProps> = ({
         );
         showSuggestion(greetingSuggestion);
 
-        // Auto-play greeting if voice-first mode
-        console.log("[Mentor] Voice mode:", preferences.voice_mode);
-        if (preferences.voice_mode === "voice_first") {
-          console.log("[Mentor] Auto-playing greeting audio");
-          playText(greetingSuggestion.message);
-        } else {
-          console.log("[Mentor] Voice-first disabled, not auto-playing");
-        }
+        // Queue greeting audio — plays on first user interaction to avoid browser autoplay block
+        console.log("[Mentor] Queuing greeting audio for playback");
+        pendingGreetingRef.current = greetingSuggestion.message;
       }
     } catch (error) {
       console.error("Error getting greeting:", error);

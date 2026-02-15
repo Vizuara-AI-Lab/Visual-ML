@@ -53,7 +53,7 @@ class DatasetAnalyzer:
         logger.info(f"Analyzing dataset: {dataset_id}")
 
         # Classify columns
-        numeric_cols, categorical_cols = self._classify_columns(dtypes)
+        numeric_cols, categorical_cols = self._classify_columns(dtypes, columns, preview_data)
 
         # Detect data quality issues
         warnings = self._generate_warnings(
@@ -93,7 +93,12 @@ class DatasetAnalyzer:
             recommendations=recommendations,
         )
 
-    def _classify_columns(self, dtypes: Dict[str, str]) -> Tuple[List[str], List[str]]:
+    def _classify_columns(
+        self,
+        dtypes: Dict[str, str],
+        columns: Optional[List[str]] = None,
+        preview_data: Optional[List[Dict[str, Any]]] = None,
+    ) -> Tuple[List[str], List[str]]:
         """Classify columns as numeric or categorical."""
         numeric_types = ["int64", "float64", "int32", "float32", "number", "integer", "float"]
 
@@ -106,6 +111,16 @@ class DatasetAnalyzer:
                 numeric_cols.append(col)
             else:
                 categorical_cols.append(col)
+
+        # Fallback: if dtypes is empty but we have columns and preview data, infer types
+        if not dtypes and columns and preview_data:
+            logger.info("dtypes empty, inferring column types from preview data")
+            for col in columns:
+                values = [row.get(col) for row in preview_data if row.get(col) is not None]
+                if values and all(isinstance(v, (int, float)) for v in values):
+                    numeric_cols.append(col)
+                else:
+                    categorical_cols.append(col)
 
         return numeric_cols, categorical_cols
 

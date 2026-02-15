@@ -3,8 +3,9 @@ Linear Regression Node - Individual node wrapper for Linear Regression algorithm
 Supports training linear regression models with configurable hyperparameters.
 """
 
-from typing import Type, Optional, Dict, Any
+from typing import Type, Optional, Dict, Any, List
 import pandas as pd
+import numpy as np
 import io
 from pydantic import Field
 from pathlib import Path
@@ -50,6 +51,20 @@ class LinearRegressionOutput(NodeOutput):
     intercept: float = Field(..., description="Model intercept")
 
     metadata: Dict[str, Any] = Field(..., description="Training metadata")
+
+    # Learning activity data (all Optional for backward compatibility)
+    coefficient_analysis: Optional[Dict[str, Any]] = Field(
+        None, description="Feature coefficient analysis for visualization"
+    )
+    prediction_playground: Optional[Dict[str, Any]] = Field(
+        None, description="Data for interactive prediction playground"
+    )
+    equation_data: Optional[Dict[str, Any]] = Field(
+        None, description="Regression equation breakdown"
+    )
+    quiz_questions: Optional[List[Dict[str, Any]]] = Field(
+        None, description="Auto-generated quiz questions about linear regression"
+    )
 
 
 class LinearRegressionNode(BaseNode):
@@ -219,6 +234,44 @@ class LinearRegressionNode(BaseNode):
 
             logger.info(f"Model saved to {model_path}")
 
+            coefficients = training_metadata.get("coefficients", [])
+            intercept = training_metadata.get("intercept", 0.0)
+            feature_names = X_train.columns.tolist()
+            metrics = training_metadata.get("training_metrics", {})
+
+            # Generate learning activity data (non-blocking)
+            coefficient_analysis = None
+            try:
+                coefficient_analysis = self._generate_coefficient_analysis(
+                    feature_names, coefficients, X_train
+                )
+            except Exception as e:
+                logger.warning(f"Coefficient analysis generation failed: {e}")
+
+            prediction_playground = None
+            try:
+                prediction_playground = self._generate_prediction_playground(
+                    feature_names, coefficients, intercept, X_train
+                )
+            except Exception as e:
+                logger.warning(f"Prediction playground generation failed: {e}")
+
+            equation_data = None
+            try:
+                equation_data = self._generate_equation_data(
+                    feature_names, coefficients, intercept, input_data.target_column
+                )
+            except Exception as e:
+                logger.warning(f"Equation data generation failed: {e}")
+
+            quiz_questions = None
+            try:
+                quiz_questions = self._generate_linear_regression_quiz(
+                    feature_names, coefficients, intercept, metrics, input_data.target_column
+                )
+            except Exception as e:
+                logger.warning(f"Linear regression quiz generation failed: {e}")
+
             return LinearRegressionOutput(
                 node_type=self.node_type,
                 execution_time_ms=int(training_time * 1000),
@@ -226,18 +279,22 @@ class LinearRegressionNode(BaseNode):
                 model_path=str(model_path),
                 training_samples=len(X_train),
                 n_features=len(X_train.columns),
-                training_metrics=training_metadata.get("training_metrics", {}),
+                training_metrics=metrics,
                 training_time_seconds=training_time,
-                coefficients=training_metadata.get("coefficients", []),
-                intercept=training_metadata.get("intercept", 0.0),
+                coefficients=coefficients,
+                intercept=intercept,
                 metadata={
                     "target_column": input_data.target_column,
-                    "feature_names": X_train.columns.tolist(),
+                    "feature_names": feature_names,
                     "hyperparameters": {
                         "fit_intercept": input_data.fit_intercept,
                     },
                     "full_training_metadata": training_metadata,
                 },
+                coefficient_analysis=coefficient_analysis,
+                prediction_playground=prediction_playground,
+                equation_data=equation_data,
+                quiz_questions=quiz_questions,
             )
 
         except Exception as e:
@@ -245,3 +302,205 @@ class LinearRegressionNode(BaseNode):
             raise NodeExecutionError(
                 node_type=self.node_type, reason=str(e), input_data=input_data.model_dump()
             )
+
+    # --- Learning Activity Helpers ---
+
+    def _generate_coefficient_analysis(
+        self, feature_names: list, coefficients: list, X_train: pd.DataFrame
+    ) -> Dict[str, Any]:
+        """Feature coefficient analysis for bar chart visualization."""
+        if not coefficients or not feature_names:
+            return {"features": []}
+
+        coef_list = []
+        max_abs = max(abs(c) for c in coefficients) if coefficients else 1
+
+        for i, (name, coef) in enumerate(zip(feature_names, coefficients)):
+            coef_val = float(coef)
+            bar_width = abs(coef_val) / max_abs * 100 if max_abs > 0 else 0
+
+            feat_stats = {}
+            if name in X_train.columns:
+                col = X_train[name].dropna()
+                if len(col) > 0:
+                    feat_stats = {
+                        "mean": round(float(col.mean()), 4),
+                        "std": round(float(col.std()), 4),
+                        "min": round(float(col.min()), 4),
+                        "max": round(float(col.max()), 4),
+                    }
+
+            coef_list.append({
+                "name": name,
+                "coefficient": round(coef_val, 6),
+                "abs_coefficient": round(abs(coef_val), 6),
+                "direction": "positive" if coef_val > 0 else "negative",
+                "bar_width_pct": round(bar_width, 1),
+                "interpretation": f"For every 1 unit increase in {name}, the prediction {'increases' if coef_val > 0 else 'decreases'} by {abs(round(coef_val, 4))}",
+                "stats": feat_stats,
+            })
+
+        # Sort by absolute coefficient
+        coef_list.sort(key=lambda x: x["abs_coefficient"], reverse=True)
+        for rank, item in enumerate(coef_list, 1):
+            item["rank"] = rank
+
+        return {"features": coef_list, "total_features": len(coef_list)}
+
+    def _generate_prediction_playground(
+        self, feature_names: list, coefficients: list, intercept: float,
+        X_train: pd.DataFrame
+    ) -> Dict[str, Any]:
+        """Data for interactive prediction sliders."""
+        if not feature_names or not coefficients:
+            return {"features": [], "intercept": intercept}
+
+        features = []
+        for name, coef in zip(feature_names, coefficients):
+            if name in X_train.columns:
+                col = X_train[name].dropna()
+                if len(col) > 0:
+                    features.append({
+                        "name": name,
+                        "coefficient": round(float(coef), 6),
+                        "min": round(float(col.min()), 4),
+                        "max": round(float(col.max()), 4),
+                        "mean": round(float(col.mean()), 4),
+                        "step": round(float((col.max() - col.min()) / 50), 4) if col.max() != col.min() else 1,
+                    })
+
+        return {
+            "features": features[:10],
+            "intercept": round(float(intercept), 6),
+            "formula": "y = intercept + sum(coefficient_i * feature_i)",
+        }
+
+    def _generate_equation_data(
+        self, feature_names: list, coefficients: list, intercept: float,
+        target_column: str
+    ) -> Dict[str, Any]:
+        """Regression equation breakdown."""
+        terms = []
+        for name, coef in zip(feature_names, coefficients):
+            terms.append({
+                "feature": name,
+                "coefficient": round(float(coef), 4),
+                "sign": "+" if coef >= 0 else "-",
+            })
+
+        # Build equation string
+        eq_parts = [f"{round(float(intercept), 4)}"]
+        for t in terms:
+            sign = "+" if t["coefficient"] >= 0 else "-"
+            eq_parts.append(f"{sign} {abs(t['coefficient'])} x {t['feature']}")
+
+        equation_string = f"{target_column} = " + " ".join(eq_parts)
+
+        return {
+            "target": target_column,
+            "intercept": round(float(intercept), 4),
+            "terms": terms,
+            "equation_string": equation_string,
+        }
+
+    def _generate_linear_regression_quiz(
+        self, feature_names: list, coefficients: list, intercept: float,
+        metrics: Dict[str, float], target_column: str
+    ) -> List[Dict[str, Any]]:
+        """Auto-generate quiz questions about linear regression."""
+        import random as _random
+        questions = []
+        q_id = 0
+
+        # Q1: Coefficient interpretation
+        if coefficients and feature_names:
+            # Find most negative coefficient
+            neg_pairs = [(n, c) for n, c in zip(feature_names, coefficients) if c < 0]
+            if neg_pairs:
+                feat, coef = max(neg_pairs, key=lambda x: abs(x[1]))
+                q_id += 1
+                questions.append({
+                    "id": f"q{q_id}",
+                    "question": f"Feature '{feat}' has a coefficient of {round(float(coef), 4)}. What happens when '{feat}' increases by 1?",
+                    "options": [
+                        f"{target_column} decreases by {abs(round(float(coef), 4))}",
+                        f"{target_column} increases by {abs(round(float(coef), 4))}",
+                        f"{target_column} stays the same",
+                        "Cannot determine from the coefficient",
+                    ],
+                    "correct_answer": 0,
+                    "explanation": f"A negative coefficient ({round(float(coef), 4)}) means the feature and target move in opposite directions. When '{feat}' goes up by 1, '{target_column}' goes down by {abs(round(float(coef), 4))}.",
+                    "difficulty": "medium",
+                })
+
+        # Q2: Strongest feature
+        if len(coefficients) >= 2:
+            abs_coefs = [(n, abs(c)) for n, c in zip(feature_names, coefficients)]
+            strongest = max(abs_coefs, key=lambda x: x[1])
+            others = [x for x in abs_coefs if x[0] != strongest[0]]
+            _random.shuffle(others)
+            q_id += 1
+            options = [strongest[0]] + [o[0] for o in others[:3]]
+            _random.shuffle(options)
+            questions.append({
+                "id": f"q{q_id}",
+                "question": "Which feature has the strongest influence on the prediction?",
+                "options": options,
+                "correct_answer": options.index(strongest[0]),
+                "explanation": f"'{strongest[0]}' has the largest absolute coefficient ({round(strongest[1], 4)}), meaning it has the biggest impact on the prediction for each unit change.",
+                "difficulty": "easy",
+            })
+
+        # Q3: R² interpretation
+        r2 = metrics.get("r2_score", metrics.get("r2", None))
+        if r2 is not None:
+            r2_pct = round(float(r2) * 100, 1)
+            q_id += 1
+            questions.append({
+                "id": f"q{q_id}",
+                "question": f"The R² score is {round(float(r2), 4)}. What does this mean?",
+                "options": [
+                    f"The model explains {r2_pct}% of the variation in {target_column}",
+                    f"The model is {r2_pct}% accurate",
+                    f"The model makes errors {r2_pct}% of the time",
+                    f"The model uses {r2_pct}% of the features",
+                ],
+                "correct_answer": 0,
+                "explanation": f"R² (coefficient of determination) tells you what fraction of the target's variation your model captures. R²={round(float(r2), 4)} means {r2_pct}% of the changes in '{target_column}' are explained by the features.",
+                "difficulty": "medium",
+            })
+
+        # Q4: Intercept meaning
+        q_id += 1
+        questions.append({
+            "id": f"q{q_id}",
+            "question": f"The intercept is {round(float(intercept), 4)}. What does it represent?",
+            "options": [
+                f"The predicted {target_column} when all features are 0",
+                "The average of all coefficients",
+                "The maximum possible prediction",
+                "The error of the model",
+            ],
+            "correct_answer": 0,
+            "explanation": f"The intercept ({round(float(intercept), 4)}) is the baseline prediction — what the model predicts when every feature equals zero. Each feature then adds or subtracts from this baseline.",
+            "difficulty": "easy",
+        })
+
+        # Q5: What is linear regression
+        q_id += 1
+        questions.append({
+            "id": f"q{q_id}",
+            "question": "What does linear regression try to find?",
+            "options": [
+                "The best straight line (or plane) that fits the data",
+                "The most common value in the data",
+                "Groups of similar data points",
+                "The probability of each class",
+            ],
+            "correct_answer": 0,
+            "explanation": "Linear regression finds the line (or hyperplane in multiple dimensions) that minimizes the distance between actual values and predicted values. It assumes a linear relationship between features and target.",
+            "difficulty": "easy",
+        })
+
+        _random.shuffle(questions)
+        return questions[:5]

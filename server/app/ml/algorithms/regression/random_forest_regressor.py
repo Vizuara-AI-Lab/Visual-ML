@@ -128,7 +128,8 @@ class RandomForestRegressor:
             return self.training_metadata
 
         except Exception as e:
-            logger.error(f"Random Forest Regressor training failed: {str(e)}", exc_info=True)
+            error_msg = str(e).replace("{", "{{").replace("}", "}}")
+            logger.error(f"Random Forest Regressor training failed: {error_msg}", exc_info=True)
             raise ModelTrainingError(
                 algorithm="random_forest_regressor", reason=str(e), traceback=str(e.__traceback__)
             )

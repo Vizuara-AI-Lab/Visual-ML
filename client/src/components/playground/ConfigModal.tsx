@@ -951,6 +951,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                                     n_rows: selectedDataset.n_rows,
                                     n_columns: selectedDataset.n_columns,
                                     columns: selectedDataset.columns,
+                                    dtypes: selectedDataset.dtypes,
                                   }));
                                 }
                               }

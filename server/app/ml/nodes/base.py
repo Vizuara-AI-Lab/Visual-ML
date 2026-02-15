@@ -215,7 +215,8 @@ class BaseNode(ABC):
         except NodeExecutionError:
             raise
         except Exception as e:
-            logger.error(f"Node execution failed [{self.node_type}]: {str(e)}", exc_info=True)
+            error_msg = str(e).replace("{", "{{").replace("}", "}}")
+            logger.error(f"Node execution failed [{self.node_type}]: {error_msg}", exc_info=True)
             raise NodeExecutionError(node_type=self.node_type, reason=str(e), input_data=input_data)
 
     def get_metadata(self) -> Dict[str, Any]:

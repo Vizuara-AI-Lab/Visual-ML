@@ -5,6 +5,14 @@
 import { useState } from "react";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 import { ChartViewer } from "./ChartViewer";
+import { DataExplorer } from "./DataExplorer";
+import { MissingValueExplorer } from "./MissingValueExplorer";
+import { EncodingExplorer } from "./EncodingExplorer";
+import { ScalingExplorer } from "./ScalingExplorer";
+import { FeatureSelectionExplorer } from "./FeatureSelectionExplorer";
+import { SplitExplorer } from "./SplitExplorer";
+import { LinearRegressionExplorer } from "./LinearRegressionExplorer";
+import { LogisticRegressionExplorer } from "./LogisticRegressionExplorer";
 import {
   Download,
   Copy,
@@ -86,6 +94,10 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
     "rmse_score",
     "mae_score",
     "confusion_matrix",
+    // ML Algorithm & Split Nodes
+    "split",
+    "linear_regression",
+    "logistic_regression",
   ].includes(nodeType);
 
   if (!isViewNode) return null;
@@ -127,22 +139,12 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
               {nodeType === "chart_view" && renderChartView(nodeResult)}
               {nodeType === "missing_value_handler" &&
                 renderMissingValueHandler(nodeResult)}
-              {nodeType === "encoding" && (
-                <FeatureEngineeringResults
-                  result={nodeResult}
-                  nodeTypeName="Encoding"
-                />
-              )}
+              {nodeType === "encoding" && renderEncoding(nodeResult)}
               {nodeType === "transformation" && (
                 <TransformationResults result={nodeResult} />
               )}
-              {nodeType === "scaling" && <ScalingResults result={nodeResult} />}
-              {nodeType === "feature_selection" && (
-                <FeatureEngineeringResults
-                  result={nodeResult}
-                  nodeTypeName="Feature Selection"
-                />
-              )}
+              {nodeType === "scaling" && renderScaling(nodeResult)}
+              {nodeType === "feature_selection" && renderFeatureSelection(nodeResult)}
               {nodeType === "r2_score" && <R2ScoreResult result={nodeResult} />}
               {nodeType === "mse_score" && (
                 <MSEScoreResult result={nodeResult} />
@@ -156,6 +158,9 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
               {nodeType === "confusion_matrix" && (
                 <ConfusionMatrixResult result={nodeResult} />
               )}
+              {nodeType === "split" && renderSplit(nodeResult)}
+              {nodeType === "linear_regression" && renderLinearRegression(nodeResult)}
+              {nodeType === "logistic_regression" && renderLogisticRegression(nodeResult)}
             </div>
           )}
         </div>
@@ -519,10 +524,334 @@ function renderColumnInfo(result: any) {
 }
 
 function renderChartView(result: any) {
+  if (result?.exploration_data) {
+    return <DataExplorer result={result} />;
+  }
   return <ChartViewer result={result} />;
 }
 
 function renderMissingValueHandler(result: any) {
+  const hasActivityData =
+    result.strategy_comparison || result.quiz_questions || result.missing_heatmap;
+
+  if (hasActivityData) {
+    return (
+      <MissingValueExplorer
+        result={result}
+        renderResults={() => <MissingValueHandlerResults result={result} />}
+      />
+    );
+  }
+
+  return <MissingValueHandlerResults result={result} />;
+}
+
+function renderEncoding(result: any) {
+  const hasActivityData =
+    result.encoding_before_after || result.encoding_map || result.encoding_method_comparison || result.quiz_questions;
+
+  if (hasActivityData) {
+    return (
+      <EncodingExplorer
+        result={result}
+        renderResults={() => <FeatureEngineeringResults result={result} nodeTypeName="Encoding" />}
+      />
+    );
+  }
+
+  return <FeatureEngineeringResults result={result} nodeTypeName="Encoding" />;
+}
+
+function renderScaling(result: any) {
+  const hasActivityData =
+    result.scaling_before_after || result.scaling_method_comparison || result.scaling_outlier_analysis || result.quiz_questions;
+
+  if (hasActivityData) {
+    return (
+      <ScalingExplorer
+        result={result}
+        renderResults={() => <ScalingResults result={result} />}
+      />
+    );
+  }
+
+  return <ScalingResults result={result} />;
+}
+
+function renderFeatureSelection(result: any) {
+  const hasActivityData =
+    result.feature_score_details || result.feature_correlation_matrix || result.threshold_simulation_data || result.quiz_questions;
+
+  if (hasActivityData) {
+    return (
+      <FeatureSelectionExplorer
+        result={result}
+        renderResults={() => <FeatureEngineeringResults result={result} nodeTypeName="Feature Selection" />}
+      />
+    );
+  }
+
+  return <FeatureEngineeringResults result={result} nodeTypeName="Feature Selection" />;
+}
+
+function renderSplit(result: any) {
+  const hasActivityData =
+    result.split_visualization || result.class_balance || result.ratio_explorer || result.quiz_questions;
+
+  if (hasActivityData) {
+    return (
+      <SplitExplorer
+        result={result}
+        renderResults={() => <SplitResults result={result} />}
+      />
+    );
+  }
+
+  return <SplitResults result={result} />;
+}
+
+function renderLinearRegression(result: any) {
+  const hasActivityData =
+    result.coefficient_analysis || result.prediction_playground || result.equation_data || result.quiz_questions;
+
+  if (hasActivityData) {
+    return (
+      <LinearRegressionExplorer
+        result={result}
+        renderResults={() => <MLModelResults result={result} modelType="Linear Regression" />}
+      />
+    );
+  }
+
+  return <MLModelResults result={result} modelType="Linear Regression" />;
+}
+
+function renderLogisticRegression(result: any) {
+  const hasActivityData =
+    result.class_distribution || result.metric_explainer || result.sigmoid_data || result.quiz_questions;
+
+  if (hasActivityData) {
+    return (
+      <LogisticRegressionExplorer
+        result={result}
+        renderResults={() => <MLModelResults result={result} modelType="Logistic Regression" />}
+      />
+    );
+  }
+
+  return <MLModelResults result={result} modelType="Logistic Regression" />;
+}
+
+function SplitResults({ result }: { result: any }) {
+  const summary = result.split_summary || {};
+
+  return (
+    <div className="space-y-6">
+      {/* Status Banner */}
+      <div className="bg-gradient-to-r from-cyan-50 to-sky-50 border border-cyan-200 rounded-lg p-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-cyan-500 rounded-full flex items-center justify-center">
+            <span className="text-white text-xl">✓</span>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-cyan-900">Split Complete</h3>
+            <p className="text-sm text-cyan-700">
+              Dataset split into training and test sets
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Key Metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Train Size</div>
+          <div className="text-lg font-semibold text-gray-900">{result.train_size?.toLocaleString()}</div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Test Size</div>
+          <div className="text-lg font-semibold text-gray-900">{result.test_size?.toLocaleString()}</div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Target Column</div>
+          <div className="text-lg font-semibold text-gray-900">{result.target_column || "N/A"}</div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Features</div>
+          <div className="text-lg font-semibold text-gray-900">{result.feature_columns?.length || 0}</div>
+        </div>
+      </div>
+
+      {/* Split Summary */}
+      {summary && Object.keys(summary).length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-gray-900 mb-3">Split Configuration</h4>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            {summary.train_ratio !== undefined && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Train Ratio:</span>
+                <span className="font-semibold">{(summary.train_ratio * 100).toFixed(0)}%</span>
+              </div>
+            )}
+            {summary.test_ratio !== undefined && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Test Ratio:</span>
+                <span className="font-semibold">{(summary.test_ratio * 100).toFixed(0)}%</span>
+              </div>
+            )}
+            {summary.split_type && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Split Type:</span>
+                <span className="font-semibold capitalize">{summary.split_type}</span>
+              </div>
+            )}
+            {summary.random_seed !== undefined && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Random Seed:</span>
+                <span className="font-semibold">{summary.random_seed}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Dataset IDs */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-blue-900 mb-2">Output Datasets</h4>
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-700">Train Dataset:</span>
+            <code className="text-xs font-mono bg-white px-2 py-1 rounded border">{result.train_dataset_id || "N/A"}</code>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-700">Test Dataset:</span>
+            <code className="text-xs font-mono bg-white px-2 py-1 rounded border">{result.test_dataset_id || "N/A"}</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MLModelResults({ result, modelType }: { result: any; modelType: string }) {
+  const metrics = result.training_metrics || {};
+  const isClassification = modelType === "Logistic Regression";
+
+  return (
+    <div className="space-y-6">
+      {/* Status Banner */}
+      <div className={`bg-gradient-to-r ${isClassification ? "from-violet-50 to-purple-50 border-violet-200" : "from-emerald-50 to-green-50 border-emerald-200"} border rounded-lg p-4`}>
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 ${isClassification ? "bg-violet-500" : "bg-emerald-500"} rounded-full flex items-center justify-center`}>
+            <span className="text-white text-xl">✓</span>
+          </div>
+          <div>
+            <h3 className={`text-lg font-semibold ${isClassification ? "text-violet-900" : "text-emerald-900"}`}>
+              {modelType} Training Complete
+            </h3>
+            <p className={`text-sm ${isClassification ? "text-violet-700" : "text-emerald-700"}`}>
+              Model trained on {result.training_samples?.toLocaleString()} samples with {result.n_features} features
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Key Metrics */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <h4 className="text-sm font-semibold text-gray-900 mb-4">Training Metrics</h4>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Object.entries(metrics).map(([key, value]: [string, any]) => (
+            <div key={key} className="bg-gray-50 rounded-lg p-3 text-center">
+              <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+                {key.replace(/_/g, " ")}
+              </div>
+              <div className="text-xl font-bold text-gray-900">
+                {typeof value === "number" ? value.toFixed(4) : String(value)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Model Info */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Training Samples</div>
+          <div className="text-lg font-semibold text-gray-900">{result.training_samples?.toLocaleString()}</div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Features</div>
+          <div className="text-lg font-semibold text-gray-900">{result.n_features}</div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Training Time</div>
+          <div className="text-lg font-semibold text-gray-900">
+            {result.training_time_seconds !== undefined
+              ? `${result.training_time_seconds.toFixed(2)}s`
+              : "N/A"}
+          </div>
+        </div>
+      </div>
+
+      {/* Classification-specific: class names */}
+      {isClassification && result.class_names && result.class_names.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-gray-900 mb-3">
+            Classes ({result.n_classes})
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {result.class_names.map((cls: string, idx: number) => (
+              <span
+                key={idx}
+                className="px-3 py-1 bg-violet-50 text-violet-800 rounded-md text-sm font-medium border border-violet-200"
+              >
+                {cls}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Regression-specific: coefficients preview */}
+      {!isClassification && result.coefficients && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-gray-900 mb-3">
+            Model Coefficients
+          </h4>
+          <div className="text-sm">
+            <div className="flex justify-between items-center mb-2 p-2 bg-emerald-50 rounded">
+              <span className="font-medium">Intercept</span>
+              <span className="font-mono">{typeof result.intercept === "number" ? result.intercept.toFixed(4) : result.intercept}</span>
+            </div>
+            {Object.entries(result.coefficients).slice(0, 10).map(([feat, coef]: [string, any]) => (
+              <div key={feat} className="flex justify-between items-center p-2 border-b border-gray-100">
+                <span className="text-gray-700">{feat}</span>
+                <span className="font-mono text-gray-900">{typeof coef === "number" ? coef.toFixed(4) : coef}</span>
+              </div>
+            ))}
+            {Object.keys(result.coefficients).length > 10 && (
+              <p className="text-xs text-gray-500 mt-2">
+                + {Object.keys(result.coefficients).length - 10} more features...
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Model ID */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex justify-between items-center">
+          <div>
+            <div className="text-xs text-blue-700 uppercase tracking-wide mb-1">Model ID</div>
+            <code className="text-sm font-mono text-blue-900">{result.model_id || "N/A"}</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MissingValueHandlerResults({ result }: { result: any }) {
   const beforeStats = result.before_stats || {};
   const afterStats = result.after_stats || {};
   const operationLog = result.operation_log || [];

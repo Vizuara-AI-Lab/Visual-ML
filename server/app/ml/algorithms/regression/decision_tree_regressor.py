@@ -121,7 +121,8 @@ class DecisionTreeRegressor:
             return self.training_metadata
 
         except Exception as e:
-            logger.error(f"Decision Tree Regressor training failed: {str(e)}", exc_info=True)
+            error_msg = str(e).replace("{", "{{").replace("}", "}}")
+            logger.error(f"Decision Tree Regressor training failed: {error_msg}", exc_info=True)
             raise ModelTrainingError(
                 algorithm="decision_tree_regressor", reason=str(e), traceback=str(e.__traceback__)
             )

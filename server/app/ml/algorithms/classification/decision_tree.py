@@ -153,7 +153,8 @@ class DecisionTreeClassifier:
             return self.training_metadata
 
         except Exception as e:
-            logger.error(f"Decision Tree Classifier training failed: {str(e)}", exc_info=True)
+            error_msg = str(e).replace("{", "{{").replace("}", "}}")
+            logger.error(f"Decision Tree Classifier training failed: {error_msg}", exc_info=True)
             raise ModelTrainingError(
                 algorithm="decision_tree_classifier", reason=str(e), traceback=str(e.__traceback__)
             )

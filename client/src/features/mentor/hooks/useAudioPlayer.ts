@@ -88,15 +88,15 @@ export const useAudioPlayer = () => {
   );
 
   const playText = useCallback(
-    async (text: string) => {
+    async (text: string, force: boolean = false) => {
       console.log(
         "[TTS] Generating speech for:",
         text.substring(0, 50) + "...",
       );
-      console.log("[TTS] Voice mode:", preferences.voice_mode);
+      console.log("[TTS] Voice mode:", preferences.voice_mode, "force:", force);
 
-      // Check voice mode preference
-      if (preferences.voice_mode === "text_first") {
+      // Check voice mode preference (skip check if forced, e.g. for greetings)
+      if (!force && preferences.voice_mode === "text_first") {
         console.log("[TTS] Text-first mode - skipping auto-play");
         return;
       }

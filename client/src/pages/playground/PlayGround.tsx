@@ -88,8 +88,9 @@ export default function PlayGround() {
 
     // If it's a view node
     if (viewNodeTypes.includes(node.data.type)) {
-      // If configured and has execution results, show view modal
-      if (node.data.isConfigured && executionResult?.nodeResults?.[nodeId]) {
+      // If configured/executed and has execution results, show view modal
+      const nodeResult = executionResult?.nodeResults?.[nodeId];
+      if (nodeResult && (node.data.isConfigured || nodeResult.success)) {
         setViewNodeId(nodeId);
       } else {
         // Otherwise show config modal
@@ -691,6 +692,45 @@ export default function PlayGround() {
             } else if (action.payload?.url) {
               console.log("[Mentor] Opening learn more:", action.payload.url);
               window.open(action.payload.url as string, "_blank");
+            } else {
+              // "Get Suggestions" button — trigger pipeline analysis
+              try {
+                const pipelineData = {
+                  nodes: nodes.map((n) => ({
+                    id: n.id,
+                    type: n.data.type,
+                    config: n.data,
+                    position: n.position,
+                  })),
+                  edges: edges.map((e) => ({
+                    id: e.id,
+                    source: e.source,
+                    target: e.target,
+                  })),
+                };
+
+                const analysis =
+                  await mentorApi.analyzePipeline(pipelineData);
+
+                if (analysis.suggestions.length > 0) {
+                  analysis.suggestions.slice(0, 2).forEach((suggestion) => {
+                    useMentorStore
+                      .getState()
+                      .showSuggestion(suggestion);
+                  });
+                } else {
+                  toast("No suggestions right now — keep building!", {
+                    icon: "💡",
+                    duration: 2000,
+                  });
+                }
+              } catch (error) {
+                console.error(
+                  "[Mentor] Error fetching suggestions:",
+                  error,
+                );
+                toast.error("Failed to get suggestions");
+              }
             }
           } else if (action.type === "add_node") {
             // Check for both node_type and model_type in payload

@@ -150,6 +150,7 @@ class ChartViewOutput(NodeOutput):
     view_type: str = Field("chart", description="Type of view")
     chart_type: str = Field(..., description="Chart type")
     chart_data: Dict[str, Any] = Field(..., description="Chart configuration and data")
+    exploration_data: Optional[Dict[str, Any]] = Field(None, description="Data exploration data (distributions, correlations, summary)")
 
 
 # Base View Node class
@@ -609,6 +610,18 @@ class ChartViewNode(BaseViewNode):
             logger.error(f"Error generating chart data: {str(e)}")
             chart_data = {"error": str(e)}
 
+        # Generate exploration data (never blocks chart rendering)
+        exploration_data = None
+        try:
+            exploration_data = {
+                "summary": self._generate_summary_stats(df),
+                "distributions": self._generate_distributions(df),
+                "correlations": self._generate_correlations(df),
+            }
+        except Exception as e:
+            logger.warning(f"Error generating exploration data: {str(e)}")
+            exploration_data = None
+
         return ChartViewOutput(
             node_type=self.node_type,
             execution_time_ms=0,
@@ -616,6 +629,7 @@ class ChartViewNode(BaseViewNode):
             view_type="chart",
             chart_type=input_data.chart_type,
             chart_data=chart_data,
+            exploration_data=exploration_data,
         )
 
     def _get_y_columns(self, input_data: ChartViewInput, df: pd.DataFrame) -> List[str]:
@@ -844,4 +858,92 @@ class ChartViewNode(BaseViewNode):
             "column_name": col,
             "total_count": int(total),
             "categories_shown": len(value_counts),
+        }
+
+    def _generate_summary_stats(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Generate summary statistics for all columns."""
+        numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+        categorical_cols = df.select_dtypes(exclude=["number"]).columns.tolist()
+
+        columns_info = []
+        for col in df.columns[:30]:
+            info = {
+                "name": col,
+                "dtype": str(df[col].dtype),
+                "count": int(df[col].count()),
+                "missing": int(df[col].isna().sum()),
+                "unique": int(df[col].nunique()),
+            }
+
+            if col in numeric_cols:
+                info.update({
+                    "mean": round(float(df[col].mean()), 4) if not pd.isna(df[col].mean()) else 0.0,
+                    "std": round(float(df[col].std()), 4) if not pd.isna(df[col].std()) else 0.0,
+                    "min": round(float(df[col].min()), 4) if not pd.isna(df[col].min()) else 0.0,
+                    "max": round(float(df[col].max()), 4) if not pd.isna(df[col].max()) else 0.0,
+                    "median": round(float(df[col].median()), 4) if not pd.isna(df[col].median()) else 0.0,
+                    "q25": round(float(df[col].quantile(0.25)), 4) if not pd.isna(df[col].quantile(0.25)) else 0.0,
+                    "q75": round(float(df[col].quantile(0.75)), 4) if not pd.isna(df[col].quantile(0.75)) else 0.0,
+                })
+
+            columns_info.append(info)
+
+        return {
+            "total_rows": len(df),
+            "total_columns": len(df.columns),
+            "numeric_columns": numeric_cols[:20],
+            "categorical_columns": categorical_cols[:20],
+            "columns": columns_info,
+        }
+
+    def _generate_distributions(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Generate histogram distribution data for numeric columns."""
+        numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+        distributions = {}
+
+        for col in numeric_cols[:15]:
+            data = df[col].dropna()
+            if len(data) == 0:
+                continue
+
+            try:
+                n_bins = min(20, max(5, len(data) // 10))
+                counts_series, bin_edges = pd.cut(data, bins=n_bins, retbins=True, duplicates="drop")
+                hist_counts = counts_series.value_counts().sort_index()
+
+                labels = [
+                    f"{bin_edges[i]:.2f}-{bin_edges[i+1]:.2f}"
+                    for i in range(len(bin_edges) - 1)
+                ]
+
+                distributions[col] = {
+                    "labels": labels[:len(hist_counts)],
+                    "counts": hist_counts.tolist(),
+                    "bin_edges": [round(float(e), 4) for e in bin_edges],
+                }
+            except Exception as e:
+                logger.warning(f"Could not generate distribution for column {col}: {e}")
+                continue
+
+        return distributions
+
+    def _generate_correlations(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Generate correlation matrix for numeric columns."""
+        numeric_df = df.select_dtypes(include=["number"])
+
+        if len(numeric_df.columns) > 15:
+            numeric_df = numeric_df[numeric_df.columns[:15]]
+
+        if len(numeric_df.columns) < 2:
+            return {"columns": [], "matrix": []}
+
+        corr_matrix = numeric_df.corr()
+        corr_matrix = corr_matrix.fillna(0)
+
+        return {
+            "columns": corr_matrix.columns.tolist(),
+            "matrix": [
+                [round(float(val), 4) for val in row]
+                for row in corr_matrix.values
+            ],
         }
