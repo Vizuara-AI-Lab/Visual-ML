@@ -30,13 +30,13 @@ class DatasetAnalyzer:
         dtypes: Dict[str, str],
         n_rows: int,
         n_columns: int,
-        missing_values: Dict[str, int],
+        missing_values: Dict[str, int], 
         statistics: Optional[Dict[str, Any]] = None,
         preview_data: Optional[List[Dict[str, Any]]] = None,
     ) -> DatasetInsight:
         """
         Perform comprehensive dataset analysis.
-
+ 
         Args:
             dataset_id: Dataset identifier
             columns: List of column names
@@ -68,7 +68,7 @@ class DatasetAnalyzer:
         # Detect high cardinality columns
         high_cardinality = self._detect_high_cardinality(categorical_cols, preview_data, statistics)
 
-        # Detect columns needing scaling
+        # Detect columns needing scaling 
         scaling_needed = self._detect_scaling_needs(numeric_cols, statistics)
 
         # Suggest target column
