@@ -4,7 +4,7 @@ Select Dataset Node - Allows selecting from previously uploaded datasets.
 
 from typing import Optional, Dict, Any
 from pydantic import Field
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.core.logging import logger
 from app.db.session import SessionLocal
 from app.models.dataset import Dataset
@@ -46,6 +46,27 @@ class SelectDatasetNode(BaseNode):
     """
 
     node_type = "select_dataset"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.DATA_SOURCE,
+            primary_output_field="dataset_id",
+            output_fields={
+                "dataset_id": "Selected dataset identifier",
+                "filename": "Dataset filename",
+                "file_path": "Path to dataset file",
+                "columns": "Column names",
+                "n_rows": "Number of rows",
+                "n_columns": "Number of columns",
+            },
+            requires_input=False,  # Source nodes don't need input
+            can_branch=True,  # Can connect to multiple nodes
+            produces_dataset=True,
+            max_inputs=0,  # Source nodes have no inputs
+            allowed_source_categories=None,  # No restrictions (source node)
+        )
 
     def get_input_schema(self) -> type[NodeInput]:
         """Return input schema."""

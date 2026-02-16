@@ -1,94 +1,286 @@
-# Visual ML
-- We’re building a drag-and-drop ML learning playground where students can visually create end-to-end machine learning workflows:
-- **Upload Dataset → Clean Data → Split → Train Model → Evaluate → Share Results → Build Custom UI → Connect Hardware**
-- The platform will include **GenAI-powered features** with an integrated **LLM**, allowing users to either **upgrade to advanced models** or **plug in their own API key**.
-- To make learning faster, students can start with **ready-made templates**—for example, clicking **Linear Regression** instantly loads all the required nodes and steps for that pipeline.
-- We’ll also provide **workflow-style automation** for GenAI tasks, enabling students to generate outputs and run repeated actions with minimal effort.
-- Our core differentiators will be:
-  - **Custom UI builder for student projects**
-  - **Real hardware integration for hands-on learning**
-- The platform will include two separate experiences: an **Admin Dashboard** for managing registered users and their data, and a **Student Dashboard** for building, learning, and sharing projects.
-- Beyond ML, students will also learn **computational thinking** through block-based logic building, including **conditional statements and decision-making flows**, similar to Scratch-style programming.
+# Visual-ML
 
+A production-ready visual machine learning platform that enables users to build, train, and deploy ML models through an intuitive node-based interface. Perfect for students, educators, and ML practitioners who want to understand machine learning workflows visually.
 
-Because training inside API request = your server dies.
+## 🚀 Features
 
+### Core Capabilities
 
-## Terminal 1: Redis
-redis-server
-## Terminal 2: Celery Worker
-celery -A app.core.celery_app worker --loglevel=info
-## Terminal 3: Celery Beat (for scheduled tasks)
-celery -A app.core.celery_app beat --loglevel=info
-## Terminal 4: FastAPI
+- **Visual Pipeline Builder**: Drag-and-drop node-based ML pipeline creation using React Flow
+- **Multiple ML Algorithms**: Linear Regression, Logistic Regression, Decision Trees, Random Forest
+- **AI-Powered Mentor**: Integrated AI assistant using OpenAI, Anthropic, and Google Gemini for guidance
+- **Real-time Collaboration**: Share projects with unique tokens for collaboration
+- **Advanced Data Processing**: Complete preprocessing pipeline with encoding, scaling, and feature selection
+- **Interactive Visualizations**: Chart.js integration for data exploration and model evaluation
+- **Project Management**: Save, load, and manage multiple ML projects
+- **Admin Dashboard**: Monitor users and system analytics
+
+### ML Pipeline Components
+
+- Data Upload & Preview
+- Missing Value Handling
+- Data Cleaning & Transformation
+- Feature Encoding (Label, One-Hot, Target)
+- Feature Scaling (Standard, MinMax, Robust)
+- Feature Selection
+- Train/Test Split
+- Model Training (Linear/Logistic Regression, Decision Trees, Random Forest)
+- Predictions & Evaluation
+- Confusion Matrix & Metrics Visualization
+
+## 🏗️ Architecture
+
+### Frontend (`/client`)
+
+**Tech Stack:**
+
+- **Framework**: React 19 + TypeScript
+- **Build Tool**: Vite
+- **State Management**: Zustand
+- **Data Fetching**: TanStack Query (React Query)
+- **Routing**: React Router v7
+- **UI/Styling**: Tailwind CSS v4
+- **Visualizations**: Chart.js, React Flow (@xyflow/react)
+- **Animations**: Framer Motion
+- **Authentication**: Google OAuth 2.0
+
+**Key Features:**
+
+- Code-split lazy loading for optimal performance
+- Protected routes for student and admin access
+- Real-time toast notifications
+- Responsive design
+- ESLint + Husky for code quality
+
+### Backend (`/server`)
+
+**Tech Stack:**
+
+- **Framework**: FastAPI
+- **Database**: PostgreSQL with SQLAlchemy ORM
+- **Migrations**: Alembic
+- **Authentication**: JWT with Google OAuth
+- **Caching**: Redis
+- **Background Tasks**: Celery
+- **Storage**: AWS S3
+- **ML Libraries**: scikit-learn, pandas, numpy
+- **AI Integration**: OpenAI, Anthropic, Google Gemini (via DynaRoute)
+- **Logging**: Loguru
+
+**API Structure:**
+
+- `auth_student.py` - Student authentication & registration
+- `projects.py` - Project CRUD operations
+- `datasets.py` - Dataset upload and management
+- `pipelines.py` - ML pipeline execution (traditional)
+- `genai_pipelines.py` - AI-powered pipeline execution
+- `genai.py` - AI chatbot integration
+- `tasks.py` - Background task management
+- `sharing.py` - Project sharing functionality
+- `knowledge_base.py` - RAG-based knowledge system
+- `secrets.py` - Secure secrets management
+- `mentor/` - AI Mentor system with personalized guidance
+
+## 📦 Installation
+
+### Prerequisites
+
+- Node.js 18+ and npm/yarn
+- Python 3.10+
+- PostgreSQL 14+
+- Redis (for caching and background tasks)
+- AWS account (optional, for S3 storage)
+
+### Client Setup
+
+```bash
+cd client
+npm install
+npm run dev
+```
+
+The client will run on `http://localhost:5173`
+
+### Server Setup
+
+1. **Install Python dependencies:**
+
+```bash
+cd server
+uv sync
+```
+
+2. **Set up environment variables:**
+   Create a `.env` file in the `/server` directory with:
+
+```env
+# Database
+DATABASE_URL=postgresql://user:password@localhost/visual_ml
+
+# Security
+SECRET_KEY=your-secret-key-min-32-chars
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# AWS S3 (optional)
+USE_S3=true
+S3_BUCKET=your-bucket-name
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+
+# AI APIs
+OPENAI_API_KEY=your-openai-key
+ANTHROPIC_API_KEY=your-anthropic-key
+GOOGLE_API_KEY=your-gemini-key
+```
+
+3. **Run database migrations:**
+
+```bash
+alembic upgrade head
+```
+
+4. **Start the server:**
+
+```bash
 uvicorn main:app --reload
-
-
-
-{
-  "email": "user@example.com",
-  "password": "606280Sk$",
-  "name": "string"
-}
-
-Remove preview_data from the database model (or at least stop storing it)
-
-
-config model and nodal config model
-
-
-### 3. N+1 Query Problem Everywhere 💥
-
-**Evidence:**
-
-- File: [server/app/api/v1/projects.py](server/app/api/v1/projects.py#L285-L320)
-- File: [server/app/api/v1/genai_pipelines.py](server/app/api/v1/genai_pipelines.py#L117-L140)
-
-**Problem:**
-You query nodes and edges separately **AFTER** loading the pipeline:
-
-```python
-# Line 312-315 - N+1 QUERIES!
-nodes = db.query(GenAINode).filter(GenAINode.pipelineId == project_id).all()  # Query 1
-edges = db.query(GenAIEdge).filter(GenAIEdge.pipelineId == project_id).all()  # Query 2
 ```
 
-**Why It's Slow:**
-For 10 projects, this becomes **30 queries** instead of 1.
+The server will run on `http://localhost:8000`
 
-**Fix - Use SQLAlchemy Eager Loading:**
+API documentation available at `http://localhost:8000/docs`
 
-```python
-from sqlalchemy.orm import joinedload
+### Background Workers (Optional)
 
-# Single query with joined relationships
-project = (
-    db.query(GenAIPipeline)
-    .options(
-        joinedload(GenAIPipeline.nodes),
-        joinedload(GenAIPipeline.edges)
-    )
-    .filter(
-        GenAIPipeline.id == project_id,
-        GenAIPipeline.studentId == student.id
-    )
-    .first()
-)
+For background task processing:
+
+```bash
+celery -A app.workers.celery_app worker --loglevel=info
+celery -A app.workers.celery_app beat --loglevel=info
 ```
 
-**Impact:** Reduces **30 queries → 1 query** = **90% faster**.
+## 🗂️ Project Structure
 
----
+```
+Visual-ML/
+├── client/                    # React frontend
+│   ├── src/
+│   │   ├── app/              # Main app component & routing
+│   │   ├── components/       # Reusable UI components
+│   │   ├── pages/            # Page components (Auth, Dashboard, Playground)
+│   │   ├── features/         # Feature-specific components
+│   │   ├── store/            # Zustand state management
+│   │   ├── hooks/            # Custom React hooks
+│   │   ├── config/           # Configuration files
+│   │   ├── utils/            # Utility functions
+│   │   └── types/            # TypeScript type definitions
+│   ├── public/               # Static assets
+│   └── package.json
+│
+├── server/                   # FastAPI backend
+│   ├── app/
+│   │   ├── api/v1/          # API endpoints
+│   │   ├── core/            # Core configuration & security
+│   │   ├── db/              # Database configuration
+│   │   ├── models/          # SQLAlchemy models
+│   │   ├── schemas/         # Pydantic schemas
+│   │   ├── services/        # Business logic services
+│   │   ├── ml/              # ML pipeline engine & nodes
+│   │   │   ├── algorithms/  # ML algorithm implementations
+│   │   │   ├── nodes/       # Pipeline node definitions
+│   │   │   ├── providers/   # AI provider integrations
+│   │   │   ├── engine.py    # Pipeline execution engine
+│   │   │   └── genai_engine.py  # AI-powered pipeline engine
+│   │   ├── mentor/          # AI Mentor system
+│   │   ├── tasks/           # Celery background tasks
+│   │   ├── utils/           # Utility functions
+│   │   └── workers/         # Celery worker configuration
+│   ├── models/              # Trained model artifacts
+│   ├── uploads/             # Uploaded datasets
+│   ├── alembic/             # Database migrations
+│   ├── main.py              # FastAPI application entry
+│   └── pyproject.toml
+│
+└── readme.md                # This file
+```
+
+## 🎯 Usage
+
+### For Students
+
+1. **Sign Up/Sign In**: Create an account or use Google OAuth
+2. **Create Project**: Start a new ML project from the dashboard
+3. **Upload Data**: Upload your CSV dataset
+4. **Build Pipeline**: Use the visual node editor to:
+   - Preview and clean data
+   - Handle missing values
+   - Encode categorical features
+   - Scale numerical features
+   - Split train/test data
+   - Train ML models
+   - Evaluate results
+5. **Get AI Help**: Use the AI Mentor for guidance and explanations
+6. **Share Projects**: Generate share links for collaboration
+
+### For Administrators
+
+1. **Admin Login**: Access at `/admin/login`
+2. **Monitor Users**: View student analytics and activity
+3. **System Overview**: Monitor platform usage and performance
+
+## 🔒 Security Features
+
+- JWT-based authentication with refresh tokens
+- Google OAuth 2.0 integration
+- Password hashing with Argon2
+- CORS protection
+- Request validation with Pydantic
+- Rate limiting (configurable)
+- Secure secrets management
+- Environment-based configuration
+
+## 🚀 Production Deployment
+
+### Frontend
+
+- Pre-configured for Vercel deployment
+- Build: `npm run build`
+- Preview: `npm run preview`
+
+### Backend
+
+- WSGI server: Uvicorn with workers
+- Database: PostgreSQL with connection pooling
+- Caching: Redis for performance
+- Storage: AWS S3 for scalability
+- Environment: Set `ENVIRONMENT=production`
+
+**Recommended Stack:**
+
+- Frontend: Vercel
+- Backend: Railway, Render, or AWS
+- Database: Neon, Supabase, or AWS RDS
+- Cache/Queue: Redis Cloud or AWS ElastiCache
+- Storage: AWS S3
+
+## 📊 Key Technologies
+
+| Layer        | Technologies                                               |
+| ------------ | ---------------------------------------------------------- |
+| **Frontend** | React, TypeScript, Vite, TailwindCSS, React Query, Zustand |
+| **Backend**  | FastAPI, SQLAlchemy, Pydantic, Celery                      |
+| **Database** | PostgreSQL, Redis                                          |
+| **ML/AI**    | scikit-learn, pandas, numpy, OpenAI, Anthropic, Gemini     |
+| **DevOps**   | Alembic, Uvicorn, Docker-ready                             |
+| **Storage**  | AWS S3, Local filesystem                                   |
 
 
-[1] Data Source
-   ↓
-[2] View / Inspect
-   ↓
-[3] Preprocessing
-   ↓
-[4] Feature Engineering
-   ↓
-[5] Target & Split
-   ↓
-[6] Linear Regression Model
+
+## 📝 Developer
+This project was developed solely by Sachin Chaurasiya during his internship at Vizuara Technology.
+
+

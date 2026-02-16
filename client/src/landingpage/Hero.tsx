@@ -1,56 +1,71 @@
 import React from "react";
-import { Sparkles, Workflow, Share2 } from "lucide-react";
-import NodeCanvas from "./NodeCanvas";
+import { ArrowRight, Code2 } from "lucide-react";
+import { motion } from "framer-motion";
+import { useNavigate } from "react-router";
+import WorkflowCanvas from "./WorkflowCanvas";
 
 const Hero: React.FC = () => {
-  const highlights = [
-    { icon: Sparkles, text: "GenAI workflows" },
-    { icon: Workflow, text: "Custom UI builder" },
-    { icon: Share2, text: "Shareable pipelines" },
-  ];
+  const navigate = useNavigate();
 
   return (
-    <section className="relative pt-32 pb-20 px-6 lg:px-8 overflow-hidden">
-      <NodeCanvas />
-      <div className="max-w-7xl mx-auto relative z-10">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
-          <div className="space-y-8">
-            <div className="space-y-6">
-              <h1 className="text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
-                Build ML workflows visually.
+    <section className="relative min-h-screen bg-white overflow-hidden">
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]" />
+
+      <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
+        <div className="pt-32 pb-20 lg:pt-40 lg:pb-28">
+          {/* Main Content */}
+          <div className="max-w-4xl mx-auto text-center space-y-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="space-y-6"
+            >
+              <h1 className="text-6xl lg:text-7xl xl:text-8xl font-bold tracking-tight">
+                <span className="block bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+                  Machine Learning
+                </span>
+                <span className="block mt-2 bg-linear-to-r from-slate-400 via-slate-300 to-slate-400 bg-clip-text text-transparent">
+                  Made Visual
+                </span>
               </h1>
-              
-              <p className="text-xl text-gray-600 leading-relaxed">
-                Create powerful machine learning pipelines without code.
-                Leverage GenAI assistance to build, validate, and deploy
-                workflows. Export custom UIs and share your work instantly.
+              <p className="text-xl lg:text-2xl text-slate-600 max-w-3xl mx-auto leading-relaxed font-light">
+                Build production-ready ML pipelines with an intuitive
+                drag-and-drop interface. Enterprise-grade performance, zero
+                code.
               </p>
-            </div>
+            </motion.div>
 
-            <div className="flex flex-wrap gap-4">
-              <button className="px-6 py-3 bg-gray-900 text-white font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-sm">
-                Try the builder
+            {/* CTA Buttons */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4"
+            >
+              <button
+                onClick={() => navigate("/signup")}
+                className="group relative px-8 py-4 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition-all duration-300 flex items-center gap-2 shadow-lg shadow-slate-900/25 hover:shadow-xl hover:shadow-slate-900/40 hover:-translate-y-0.5"
+              >
+                <span>Get Started Free</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
-              <button className="px-6 py-3 bg-white text-gray-900 font-medium rounded-lg border border-gray-300 hover:border-gray-400 transition-colors">
-                Explore templates
+              <button className="px-8 py-4 text-slate-700 font-medium hover:text-slate-900 transition-colors flex items-center gap-2 bg-white/50 backdrop-blur-sm rounded-xl border border-slate-200/60 hover:bg-white/80 hover:border-slate-300/60">
+                <Code2 className="w-4 h-4" />
+                <span>Documentation</span>
               </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
-              {highlights.map((item, index) => (
-                <div key={index} className="flex items-center space-x-3">
-                  <div className="flex-shrink-0 w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <item.icon className="w-5 h-5 text-gray-900" />
-                  </div>
-                  <span className="text-sm font-medium text-gray-900">
-                    {item.text}
-                  </span>
-                </div>
-              ))}
-            </div>
+            </motion.div>
           </div>
 
-          <div className="lg:pl-8">{/* Canvas is now in background */}</div>
+          {/* Visual Workflow Preview */}
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+            className="mt-24 max-w-6xl mx-auto relative"
+          >
+            <WorkflowCanvas />
+          </motion.div>
         </div>
       </div>
     </section>

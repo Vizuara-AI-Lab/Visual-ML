@@ -3,23 +3,16 @@ import Navbar from "./Navbar";
 import Hero from "./Hero";
 import GenAISection from "./GenAISection";
 import Features from "./Features";
-import HowItWorks from "./HowItWorks";
-import Templates from "./Templates";
-import Testimonials from "./Testimonials";
-import FAQ from "./FAQ";
 import Footer from "./Footer";
 
 const LandingPage: React.FC = () => {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-linear-to-b from-white to-slate-50">
       <Navbar />
       <Hero />
       <GenAISection />
       <Features />
-      <HowItWorks />
-      <Templates />
-      <Testimonials />
-      <FAQ />
+
       <Footer />
     </div>
   );

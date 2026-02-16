@@ -1,0 +1,289 @@
+"""
+Text-to-Speech Service (Inworld Integration)
+
+Converts mentor text messages to natural voice audio using Inworld TTS API.
+Supports personality-based voice configuration and audio caching.
+"""
+
+from typing import Optional
+import httpx
+import base64
+import hashlib
+from pathlib import Path
+from app.mentor.schemas import PersonalityStyle, TTSResponse
+from app.core.config import settings
+from app.core.logging import logger
+
+
+class TTSService:
+    """Inworld Text-to-Speech integration for mentor voice."""
+
+    def __init__(self):
+        self.api_key = getattr(settings, "INWORLD_API_KEY", None)
+        self.workspace_id = getattr(settings, "INWORLD_WORKSPACE_ID", None)
+        self.character_id = getattr(settings, "INWORLD_CHARACTER_ID", None)
+        self.cache_dir = Path(settings.UPLOAD_DIR) / "tts_cache"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Voice configurations per personality
+        self.voice_configs = {
+            PersonalityStyle.ENCOURAGING: {
+                "voice": "friendly",
+                "pitch": 1.1,
+                "speed": 1.0,
+                "energy": "high",
+            },
+            PersonalityStyle.PROFESSIONAL: {
+                "voice": "professional",
+                "pitch": 1.0,
+                "speed": 0.95,
+                "energy": "medium",
+            },
+            PersonalityStyle.CONCISE: {
+                "voice": "neutral",
+                "pitch": 1.0,
+                "speed": 1.1,
+                "energy": "medium",
+            },
+            PersonalityStyle.EDUCATIONAL: {
+                "voice": "teacher",
+                "pitch": 1.0,
+                "speed": 0.9,
+                "energy": "medium",
+            },
+        }
+
+    async def generate_speech(
+        self,
+        text: str,
+        personality: PersonalityStyle = PersonalityStyle.ENCOURAGING,
+        cache_key: Optional[str] = None,
+        return_base64: bool = True,
+    ) -> TTSResponse:
+        """
+        Generate speech audio from text using Inworld TTS.
+
+        Args:
+            text: Text to convert to speech
+            personality: Voice personality style
+            cache_key: Optional key for caching
+            return_base64: Return audio as base64 (True) or save file (False)
+
+        Returns:
+            TTSResponse with audio data or URL
+        """
+        try:
+            # Check if API credentials are configured
+            if not self.api_key:
+                logger.warning("Inworld API key not configured - TTS disabled")
+                return TTSResponse(
+                    success=False,
+                    audio_url=None,
+                    audio_base64=None,
+                    duration_seconds=None,
+                    cached=False,
+                    error="TTS service not configured. Please add INWORLD_API_KEY to environment.",
+                )
+
+            # Generate cache key from text + personality
+            if not cache_key:
+                cache_key = self._generate_cache_key(text, personality)
+
+            # Check cache first
+            cached_audio = self._get_cached_audio(cache_key)
+            if cached_audio:
+                logger.info(f"Serving TTS from cache: {cache_key}")
+                return TTSResponse(
+                    success=True,
+                    audio_url=None,
+                    audio_base64=cached_audio if return_base64 else None,
+                    duration_seconds=None,
+                    cached=True,
+                    error=None,
+                )
+
+            # Call Inworld API
+            logger.info(f"Generating TTS with Inworld for text: {text[:50]}...")
+            voice_config = self.voice_configs.get(
+                personality, self.voice_configs[PersonalityStyle.ENCOURAGING]
+            )
+
+            audio_data = await self._call_inworld_api(text, voice_config)
+
+            if not audio_data:
+                raise Exception("Failed to generate audio from Inworld")
+
+            # Cache the audio
+            self._cache_audio(cache_key, audio_data)
+
+            # Return response
+            if return_base64:
+                audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+                return TTSResponse(
+                    success=True,
+                    audio_url=None,
+                    audio_base64=audio_base64,
+                    duration_seconds=None,  # Could calculate from audio
+                    cached=False,
+                    error=None,
+                )
+            else:
+                # Save to file and return URL (using .ogg for OGG_OPUS format)
+                audio_path = self.cache_dir / f"{cache_key}.ogg"
+                audio_path.write_bytes(audio_data)
+
+                return TTSResponse(
+                    success=True,
+                    audio_url=f"/api/v1/mentor/audio/{cache_key}.ogg",
+                    audio_base64=None,
+                    duration_seconds=None,
+                    cached=False,
+                    error=None,
+                )
+
+        except Exception as e:
+            logger.error(f"TTS generation failed: {str(e)}", exc_info=True)
+            return TTSResponse(
+                success=False,
+                audio_url=None,
+                audio_base64=None,
+                duration_seconds=None,
+                cached=False,
+                error=str(e),
+            )
+
+    async def _call_inworld_api(self, text: str, voice_config: dict) -> Optional[bytes]:
+        """
+        Call Inworld TTS API to generate audio using streaming endpoint.
+        Simplified based on official example.
+        """
+        try:
+            # Map personality to Inworld voice ID
+            voice_id = "Dennis"  # Simple default
+            model_id = "inworld-tts-1.5-mini"
+
+            url = "https://api.inworld.ai/tts/v1/voice:stream"
+
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Basic {self.api_key}",
+            }
+
+            payload = {
+                "text": text,
+                "voice_id": voice_id,
+                "model_id": model_id,
+                "audio_config": {
+                    "audio_encoding": "OGG_OPUS",
+                    "sample_rate_hertz": 24000,
+                    "bit_rate": 32000,
+                },
+            }
+
+            logger.info(f"🎤 TTS Request: voice={voice_id}, text_len={len(text)}")
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # Make streaming request
+                response = await client.post(url, headers=headers, json=payload)
+
+                if response.status_code != 200:
+                    error_text = response.text
+                    logger.error(f"❌ Inworld API error {response.status_code}: {error_text}")
+                    return None
+
+                # Collect audio chunks
+                audio_chunks = []
+                chunk_count = 0
+
+                for line in response.text.split("\n"):
+                    if line.strip():
+                        try:
+                            import json
+
+                            chunk_data = json.loads(line)
+                            result = chunk_data.get("result", {})
+
+                            if "audioContent" in result:
+                                audio_chunk = base64.b64decode(result["audioContent"])
+                                audio_chunks.append(audio_chunk)
+                                chunk_count += 1
+
+                        except Exception as e:
+                            logger.debug(f"Skipping chunk: {e}")
+                            continue
+
+                if chunk_count > 0:
+                    audio_data = b"".join(audio_chunks)
+                    logger.info(f"✅ TTS Success: {chunk_count} chunks, {len(audio_data)} bytes")
+                    return audio_data
+                else:
+                    logger.error("❌ No audio chunks received")
+                    return None
+
+        except Exception as e:
+            logger.error(f"❌ TTS API error: {str(e)}", exc_info=True)
+            return None
+
+    def _generate_cache_key(self, text: str, personality: PersonalityStyle) -> str:
+        """Generate cache key from text and personality."""
+        combined = f"{text}_{personality.value}"
+        return hashlib.md5(combined.encode()).hexdigest()
+
+    def _get_cached_audio(self, cache_key: str) -> Optional[str]:
+        """Retrieve cached audio as base64."""
+        # Try OGG format first (current), then fallback to MP3 (legacy)
+        cache_file = self.cache_dir / f"{cache_key}.ogg"
+        if not cache_file.exists():
+            cache_file = self.cache_dir / f"{cache_key}.mp3"
+
+        if cache_file.exists():
+            try:
+                audio_bytes = cache_file.read_bytes()
+                return base64.b64encode(audio_bytes).decode("utf-8")
+            except Exception as e:
+                logger.error(f"Error reading cached audio: {str(e)}")
+                return None
+        return None
+
+    def _cache_audio(self, cache_key: str, audio_data: bytes) -> None:
+        """Cache audio data to file (OGG format)."""
+        try:
+            cache_file = self.cache_dir / f"{cache_key}.ogg"
+            cache_file.write_bytes(audio_data)
+            logger.info(f"Cached TTS audio: {cache_key}")
+        except Exception as e:
+            logger.error(f"Error caching audio: {str(e)}")
+
+    def clear_cache(self, max_age_days: int = 7) -> int:
+        """Clear old cached audio files."""
+        import time
+
+        cleared = 0
+
+        try:
+            current_time = time.time()
+            max_age_seconds = max_age_days * 24 * 60 * 60
+
+            # Clear both OGG and MP3 files
+            for cache_file in self.cache_dir.glob("*.ogg"):
+                file_age = current_time - cache_file.stat().st_mtime
+                if file_age > max_age_seconds:
+                    cache_file.unlink()
+                    cleared += 1
+
+            for cache_file in self.cache_dir.glob("*.mp3"):
+                file_age = current_time - cache_file.stat().st_mtime
+                if file_age > max_age_seconds:
+                    cache_file.unlink()
+                    cleared += 1
+
+            logger.info(f"Cleared {cleared} old TTS cache files")
+            return cleared
+
+        except Exception as e:
+            logger.error(f"Error clearing TTS cache: {str(e)}")
+            return 0
+
+
+# Singleton instance
+tts_service = TTSService()

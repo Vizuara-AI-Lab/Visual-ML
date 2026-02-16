@@ -3,7 +3,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   type OnConnect,
   type OnNodesChange,
   type OnEdgesChange,
@@ -11,6 +10,10 @@ import {
   applyEdgeChanges,
   type Node,
   useReactFlow,
+  type EdgeProps,
+  BaseEdge,
+  getSmoothStepPath,
+  type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { usePlaygroundStore } from "../../store/playgroundStore";
@@ -63,6 +66,58 @@ const nodeTypes: Record<string, React.ComponentType<any>> = {
   api_endpoint: MLNode,
 };
 
+// Custom styled edge
+const PipelineEdge = ({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style = {},
+  markerEnd,
+}: EdgeProps) => {
+  const [edgePath] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    borderRadius: 12,
+  });
+
+  return (
+    <BaseEdge
+      id={id}
+      path={edgePath}
+      markerEnd={markerEnd}
+      style={{
+        stroke: "#94a3b8",
+        strokeWidth: 2,
+        ...style,
+      }}
+    />
+  );
+};
+
+const edgeTypes = {
+  pipeline: PipelineEdge,
+};
+
+const defaultEdgeOptions = {
+  type: "pipeline" as const,
+  animated: true,
+  style: { stroke: "#94a3b8", strokeWidth: 2 },
+  markerEnd: {
+    type: "arrowclosed" as const,
+    color: "#94a3b8",
+    width: 16,
+    height: 16,
+  },
+};
+
 interface CanvasProps {
   onNodeClick: (nodeId: string) => void;
 }
@@ -97,7 +152,7 @@ export const Canvas = ({ onNodeClick }: CanvasProps) => {
           id: `${connection.source}-${connection.target}`,
           source: connection.source,
           target: connection.target,
-          type: "smoothstep",
+          type: "pipeline",
           animated: true,
         });
       }
@@ -155,7 +210,7 @@ export const Canvas = ({ onNodeClick }: CanvasProps) => {
   );
 
   return (
-    <div ref={reactFlowWrapper} className="flex-1 bg-gray-950">
+    <div ref={reactFlowWrapper} className="flex-1 bg-slate-50">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -166,18 +221,15 @@ export const Canvas = ({ onNodeClick }: CanvasProps) => {
         onDragOver={onDragOver}
         onNodeClick={(_, node) => onNodeClick(node.id)}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        defaultEdgeOptions={defaultEdgeOptions}
         fitView
         snapToGrid
         snapGrid={[15, 15]}
       >
-        <Background color="#374151" gap={16} />
-        <Controls />
-        <MiniMap
-          className="!bg-gray-900 !border-gray-700"
-          nodeColor={(node) => {
-            const nodeDef = getNodeByType(node.type as NodeType);
-            return nodeDef?.color || "#6B7280";
-          }}
+        <Background color="#cbd5e1" gap={20} size={1.5} />
+        <Controls
+          className="rounded-xl! border-slate-200! shadow-md! [&>button]:rounded-lg! [&>button]:border-slate-200!"
         />
       </ReactFlow>
     </div>

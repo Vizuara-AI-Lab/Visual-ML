@@ -4,7 +4,7 @@ MSE Score Node - Calculate Mean Squared Error for regression models.
 
 from typing import Type, Dict, Any, List, Optional
 from pydantic import Field
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.core.exceptions import NodeExecutionError
 from app.core.logging import logger
 
@@ -46,6 +46,25 @@ class MSEScoreNode(BaseNode):
     """
 
     node_type = "mse_score"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.METRIC,
+            primary_output_field="mse_score",
+            output_fields={
+                "mse_score": "Mean Squared Error",
+                "display_value": "Formatted display value",
+                "interpretation": "Interpretation of the score",
+                "model_info": "Model information",
+            },
+            requires_input=True,
+            can_branch=True,
+            produces_dataset=False,
+            max_inputs=1,
+            allowed_source_categories=[NodeCategory.ML_ALGORITHM],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         """Return input schema."""

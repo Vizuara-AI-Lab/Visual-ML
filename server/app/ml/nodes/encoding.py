@@ -1,6 +1,6 @@
 """
 Encoding Node - Encode categorical variables using various methods.
-Supports One-Hot, Label, Ordinal, and Target encoding with per-column configuration.
+Supports One-Hot and Label encoding with per-column configuration.
 """
 
 from typing import Type, Optional, Dict, Any, List
@@ -9,12 +9,12 @@ import pandas as pd
 import numpy as np
 from pydantic import Field
 from pathlib import Path
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder, OrdinalEncoder
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 import joblib
 import io
 import json
 
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
 from app.core.config import settings
 from app.core.logging import logger
@@ -28,9 +28,7 @@ class ColumnEncodingConfig(BaseModel):
     """Configuration for encoding a single column."""
 
     column_name: str = Field(..., description="Name of the column to encode")
-    encoding_method: str = Field(
-        ..., description="Encoding method: onehot, label, ordinal, target, none"
-    )
+    encoding_method: str = Field(..., description="Encoding method: onehot, label, none")
     handle_unknown: str = Field(
         "error", description="How to handle unknown categories: error, ignore, use_encoded_value"
     )
@@ -38,9 +36,6 @@ class ColumnEncodingConfig(BaseModel):
         "error", description="How to handle missing values: error, most_frequent, create_category"
     )
     drop_first: bool = Field(False, description="Drop first category in one-hot encoding")
-    ordinal_categories: Optional[List[str]] = Field(
-        None, description="Ordered categories for ordinal encoding"
-    )
 
 
 class EncodingInput(NodeInput):
@@ -50,7 +45,9 @@ class EncodingInput(NodeInput):
     column_configs: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict, description="Per-column encoding configuration"
     )
-    target_column: Optional[str] = Field(None, description="Target column for target encoding")
+    columns: Optional[List[str]] = Field(
+        None, description="Available columns from upstream node (auto-filled by DAG)"
+    )
 
 
 class EncodingOutput(NodeOutput):
@@ -71,6 +68,20 @@ class EncodingOutput(NodeOutput):
         default_factory=dict, description="Detected column types"
     )
 
+    # Learning activity data (all Optional for backward compatibility)
+    encoding_before_after: Optional[Dict[str, Any]] = Field(
+        None, description="Before/after sample rows for encoding visualization"
+    )
+    encoding_map: Optional[Dict[str, Any]] = Field(
+        None, description="Complete category-to-number mapping for each encoded column"
+    )
+    encoding_method_comparison: Optional[Dict[str, Any]] = Field(
+        None, description="Comparison of one-hot vs label encoding for each column"
+    )
+    quiz_questions: Optional[List[Dict[str, Any]]] = Field(
+        None, description="Auto-generated quiz questions about encoding"
+    )
+
 
 class EncodingNode(BaseNode):
     """
@@ -79,11 +90,31 @@ class EncodingNode(BaseNode):
     Supports:
     - One-Hot Encoding: Create binary columns for each category
     - Label Encoding: Convert categories to integers
-    - Ordinal Encoding: Convert categories to ordered integers
-    - Target Encoding: Encode based on target variable mean
     """
 
     node_type = "encoding"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.PREPROCESSING,
+            primary_output_field="encoded_dataset_id",
+            output_fields={
+                "encoded_dataset_id": "ID of the encoded dataset",
+                "encoded_path": "Path to encoded dataset file",
+                "artifacts_path": "Path to encoding artifacts (encoders)",
+                "columns": "All columns in the encoded dataset (for downstream nodes)",
+            },
+            requires_input=True,
+            can_branch=True,
+            produces_dataset=True,
+            allowed_source_categories=[
+                NodeCategory.DATA_SOURCE,
+                NodeCategory.PREPROCESSING,
+                NodeCategory.DATA_TRANSFORM,
+            ],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         return EncodingInput
@@ -94,6 +125,12 @@ class EncodingNode(BaseNode):
     async def _execute(self, input_data: EncodingInput) -> EncodingOutput:
         """Execute encoding with per-column configuration."""
         try:
+            # DEBUG: Log all input fields
+            logger.info(
+                f"[ENCODING DEBUG] Input data: dataset_id={input_data.dataset_id}, "
+                f"columns={getattr(input_data, 'columns', 'NOT FOUND')}"
+            )
+
             logger.info(f"Starting encoding for dataset: {input_data.dataset_id}")
 
             # Load dataset
@@ -117,7 +154,9 @@ class EncodingNode(BaseNode):
             # Process each column configuration
             for column_name, config_dict in input_data.column_configs.items():
                 if column_name not in df.columns:
-                    logger.warning(f"Column {column_name} not found in dataset")
+                    warning_msg = f"Column '{column_name}' not found in dataset - skipping encoding"
+                    logger.warning(warning_msg)
+                    warnings.append(warning_msg)
                     continue
 
                 # Parse configuration
@@ -167,34 +206,6 @@ class EncodingNode(BaseNode):
                         "handle_missing": config.handle_missing,
                     }
 
-                elif config.encoding_method == "ordinal":
-                    df_encoded, encoder = self._ordinal_encode(
-                        df_encoded, column_name, config.ordinal_categories, config.handle_unknown
-                    )
-                    encoders[column_name] = {
-                        "type": "ordinal",
-                        "categories": config.ordinal_categories,
-                    }
-                    encoding_summary[column_name] = {
-                        "method": "ordinal",
-                        "categories": config.ordinal_categories,
-                        "handle_unknown": config.handle_unknown,
-                        "handle_missing": config.handle_missing,
-                    }
-
-                elif config.encoding_method == "target":
-                    if not input_data.target_column:
-                        raise ValueError("Target column required for target encoding")
-                    df_encoded, mapping = self._target_encode(
-                        df_encoded, column_name, input_data.target_column
-                    )
-                    encoders[column_name] = {"type": "target", "mapping": mapping}
-                    encoding_summary[column_name] = {
-                        "method": "target",
-                        "target_column": input_data.target_column,
-                        "handle_missing": config.handle_missing,
-                    }
-
             final_columns = len(df_encoded.columns)
 
             # Save encoded dataset
@@ -213,6 +224,37 @@ class EncodingNode(BaseNode):
                 f"Warnings: {len(warnings)}, Saved to: {encoded_path}"
             )
 
+            # Generate learning activity data (non-blocking)
+            encoding_before_after = None
+            try:
+                encoding_before_after = self._generate_encoding_before_after(
+                    df, df_encoded, encoding_summary
+                )
+            except Exception as e:
+                logger.warning(f"Encoding before/after generation failed: {e}")
+
+            encoding_map = None
+            try:
+                encoding_map = self._generate_encoding_map(df, encoding_summary)
+            except Exception as e:
+                logger.warning(f"Encoding map generation failed: {e}")
+
+            encoding_method_comparison = None
+            try:
+                encoding_method_comparison = self._generate_encoding_method_comparison(
+                    df, encoding_summary
+                )
+            except Exception as e:
+                logger.warning(f"Encoding method comparison generation failed: {e}")
+
+            quiz_questions = None
+            try:
+                quiz_questions = self._generate_encoding_quiz(
+                    df, encoding_summary, column_types
+                )
+            except Exception as e:
+                logger.warning(f"Encoding quiz generation failed: {e}")
+
             return EncodingOutput(
                 node_type=self.node_type,
                 execution_time_ms=0,
@@ -227,6 +269,10 @@ class EncodingNode(BaseNode):
                 encoding_summary=encoding_summary,
                 warnings=warnings,
                 column_type_info=column_types,
+                encoding_before_after=encoding_before_after,
+                encoding_map=encoding_map,
+                encoding_method_comparison=encoding_method_comparison,
+                quiz_questions=quiz_questions,
             )
 
         except Exception as e:
@@ -238,7 +284,7 @@ class EncodingNode(BaseNode):
     def _detect_column_types(self, df: pd.DataFrame) -> Dict[str, str]:
         """
         Detect column types for validation.
-        Returns: dict mapping column names to types (categorical_nominal, categorical_ordinal, numeric, high_cardinality)
+        Returns: dict mapping column names to types (categorical_nominal, numeric, high_cardinality)
         """
         column_types = {}
 
@@ -273,12 +319,7 @@ class EncodingNode(BaseNode):
         if encoding_method == "onehot" and unique_count > 50:
             warnings.append(
                 f"⚠️ Column '{column}': One-Hot encoding with {unique_count} categories will create many columns. "
-                "Consider using Target or Label encoding for high-cardinality features."
-            )
-
-        if encoding_method == "ordinal" and column_type != "categorical_ordinal":
-            warnings.append(
-                f"⚠️ Column '{column}': Ordinal encoding should only be used when categories have a natural order."
+                "Consider using Label encoding for high-cardinality features."
             )
 
         return warnings
@@ -392,34 +433,244 @@ class EncodingNode(BaseNode):
         df[column] = le.fit_transform(df[column].astype(str))
         return df, le
 
-    def _ordinal_encode(
-        self,
-        df: pd.DataFrame,
-        column: str,
-        categories: Optional[List[str]] = None,
-        handle_unknown: str = "error",
-    ) -> tuple[pd.DataFrame, Dict[str, int]]:
-        """Apply ordinal encoding."""
-        if categories:
-            # Use provided category order
-            mapping = {cat: idx for idx, cat in enumerate(categories)}
-        else:
-            # Sort categories alphabetically
-            sorted_categories = sorted(df[column].unique())
-            mapping = {cat: idx for idx, cat in enumerate(sorted_categories)}
+    # --- Learning Activity Helpers ---
 
-        df[column] = df[column].map(mapping)
-        return df, mapping
+    def _generate_encoding_before_after(
+        self, df_original: pd.DataFrame, df_encoded: pd.DataFrame, encoding_summary: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Generate before/after sample rows for each encoded column."""
+        columns_data = {}
 
-    def _target_encode(
-        self, df: pd.DataFrame, column: str, target_column: str
-    ) -> tuple[pd.DataFrame, Dict[str, float]]:
-        """Apply target encoding."""
-        # Calculate mean target value for each category
-        target_means = df.groupby(column)[target_column].mean()
-        mapping = target_means.to_dict()
+        for col_name, summary in encoding_summary.items():
+            if col_name not in df_original.columns:
+                continue
 
-        df[f"{column}_encoded"] = df[column].map(target_means)
-        df = df.drop(columns=[column])
+            method = summary.get("method", "unknown")
+            unique_vals = df_original[col_name].dropna().unique()
+            sample_categories = unique_vals[:5].tolist()
 
-        return df, mapping
+            samples = []
+            for cat in sample_categories:
+                row_idx = df_original[df_original[col_name] == cat].index
+                if len(row_idx) == 0:
+                    continue
+                idx = row_idx[0]
+
+                if method == "onehot":
+                    new_cols = summary.get("new_columns", [])
+                    encoded_vals = {}
+                    for nc in new_cols:
+                        if nc in df_encoded.columns and idx in df_encoded.index:
+                            encoded_vals[nc] = int(df_encoded.at[idx, nc])
+                    samples.append({"original": str(cat), "encoded": encoded_vals})
+                elif method == "label":
+                    if col_name in df_encoded.columns and idx in df_encoded.index:
+                        val = df_encoded.at[idx, col_name]
+                        samples.append({"original": str(cat), "encoded": int(val)})
+
+            columns_data[col_name] = {
+                "method": method,
+                "samples": samples,
+            }
+
+        return {
+            "columns": columns_data,
+            "total_rows": len(df_original),
+            "rows_sampled": 5,
+        }
+
+    def _generate_encoding_map(
+        self, df: pd.DataFrame, encoding_summary: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Generate complete category-to-number mapping for each encoded column."""
+        result = {}
+
+        for col_name, summary in encoding_summary.items():
+            if col_name not in df.columns:
+                continue
+
+            method = summary.get("method", "unknown")
+            value_counts = df[col_name].value_counts()
+
+            if method == "onehot":
+                new_cols = summary.get("new_columns", [])
+                mapping = []
+                for cat in value_counts.index:
+                    cat_str = str(cat)
+                    matched_col = None
+                    for nc in new_cols:
+                        if nc == f"{col_name}_{cat_str}" or nc.endswith(f"_{cat_str}"):
+                            matched_col = nc
+                            break
+                    mapping.append({
+                        "category": cat_str,
+                        "encoded_column": matched_col or f"{col_name}_{cat_str}",
+                        "count": int(value_counts[cat]),
+                    })
+                result[col_name] = {"method": "onehot", "mapping": mapping}
+
+            elif method == "label":
+                le = LabelEncoder()
+                le.fit(df[col_name].dropna().astype(str))
+                mapping = []
+                for i, cls in enumerate(le.classes_):
+                    count = int(value_counts.get(cls, 0))
+                    mapping.append({
+                        "category": str(cls),
+                        "value": i,
+                        "count": count,
+                    })
+                result[col_name] = {"method": "label", "mapping": mapping}
+
+        return result
+
+    def _generate_encoding_method_comparison(
+        self, df: pd.DataFrame, encoding_summary: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Compare one-hot vs label encoding for each encoded column."""
+        result = {}
+
+        for col_name, summary in encoding_summary.items():
+            if col_name not in df.columns:
+                continue
+
+            unique_vals = df[col_name].dropna().unique()
+            unique_count = len(unique_vals)
+            applied = summary.get("method", "unknown")
+            sample_cats = [str(v) for v in unique_vals[:5]]
+
+            # One-hot result
+            onehot_cols = [f"{col_name}_{c}" for c in sample_cats]
+            sample_row = {c: (1 if c == onehot_cols[0] else 0) for c in onehot_cols}
+
+            # Label result
+            le = LabelEncoder()
+            le.fit(df[col_name].dropna().astype(str))
+            label_mapping = {str(cls): int(i) for i, cls in enumerate(le.classes_)}
+            sample_label = {k: v for k, v in list(label_mapping.items())[:5]}
+
+            recommendation = (
+                "One-hot is better for nominal categories (no natural order) with few unique values"
+                if unique_count <= 10
+                else "Label encoding is more practical for high-cardinality columns"
+            )
+
+            result[col_name] = {
+                "unique_count": unique_count,
+                "applied_method": applied,
+                "onehot_result": {
+                    "new_columns_count": unique_count,
+                    "sample_row": sample_row,
+                    "pros": "No false ordering between categories",
+                    "cons": f"Creates {unique_count} new columns (increases dimensionality)",
+                },
+                "label_result": {
+                    "new_columns_count": 0,
+                    "sample_mapping": sample_label,
+                    "pros": "Compact — only 1 column",
+                    "cons": "Implies ordering (0 < 1 < 2) which may mislead the model",
+                },
+                "recommendation": recommendation,
+            }
+
+        return result
+
+    def _generate_encoding_quiz(
+        self, df: pd.DataFrame, encoding_summary: Dict[str, Any], column_types: Dict[str, str]
+    ) -> List[Dict[str, Any]]:
+        """Auto-generate quiz questions about encoding from actual data."""
+        import random as _random
+        questions = []
+        q_id = 0
+
+        encoded_cols = list(encoding_summary.keys())
+
+        # Q1: Column count question (one-hot)
+        for col in encoded_cols:
+            summary = encoding_summary[col]
+            if summary.get("method") == "onehot":
+                n_cats = summary.get("unique_values", 0)
+                if n_cats >= 2:
+                    q_id += 1
+                    wrong1 = max(1, n_cats - 1)
+                    wrong2 = n_cats + 1
+                    wrong3 = n_cats * 2
+                    options = [str(n_cats), str(wrong1), str(wrong2), str(wrong3)]
+                    _random.shuffle(options)
+                    correct_idx = options.index(str(n_cats))
+                    questions.append({
+                        "id": f"q{q_id}",
+                        "question": f"Column '{col}' had {n_cats} unique categories and was one-hot encoded. How many new columns were created?",
+                        "options": options,
+                        "correct_answer": correct_idx,
+                        "explanation": f"One-hot encoding creates one binary column for each category. With {n_cats} categories, {n_cats} new columns are created.",
+                        "difficulty": "easy",
+                    })
+                    break
+
+        # Q2: Method choice question
+        for col in encoded_cols:
+            if col in df.columns and column_types.get(col) == "categorical_nominal":
+                q_id += 1
+                questions.append({
+                    "id": f"q{q_id}",
+                    "question": f"Column '{col}' contains categories with no natural ordering (like colors or cities). Which encoding preserves this correctly?",
+                    "options": ["One-Hot Encoding", "Label Encoding", "Both work equally well", "Neither works"],
+                    "correct_answer": 0,
+                    "explanation": "One-hot encoding creates separate binary columns, so no ordering is implied. Label encoding assigns numbers (0, 1, 2...) which implies an order that doesn't exist.",
+                    "difficulty": "medium",
+                })
+                break
+
+        # Q3: Label ordering trap
+        for col in encoded_cols:
+            summary = encoding_summary[col]
+            if summary.get("method") == "label" and col in df.columns:
+                unique_vals = df[col].dropna().unique()[:3]
+                if len(unique_vals) >= 3:
+                    vals_str = ", ".join([f"{v}={i}" for i, v in enumerate(unique_vals)])
+                    q_id += 1
+                    questions.append({
+                        "id": f"q{q_id}",
+                        "question": f"Column '{col}' is label-encoded as {vals_str}. What potential problem does this create?",
+                        "options": [
+                            "The model may assume a meaningful order between categories",
+                            "The model will ignore this column",
+                            "It creates too many columns",
+                            "It removes missing values",
+                        ],
+                        "correct_answer": 0,
+                        "explanation": f"Label encoding assigns numbers that imply an order. The model might think {unique_vals[2]}({2}) > {unique_vals[1]}({1}) > {unique_vals[0]}({0}), even if no such order exists.",
+                        "difficulty": "medium",
+                    })
+                    break
+
+        # Q4: One-hot interpretation
+        q_id += 1
+        questions.append({
+            "id": f"q{q_id}",
+            "question": "In one-hot encoding, if a row has Color_Blue=1, what values do Color_Red and Color_Green have?",
+            "options": ["Both are 0", "Both are 1", "They can be any number", "They are removed"],
+            "correct_answer": 0,
+            "explanation": "In one-hot encoding, exactly one column is 1 and all others are 0 for each row. This is called 'mutually exclusive' — a row belongs to exactly one category.",
+            "difficulty": "easy",
+        })
+
+        # Q5: Why encode
+        q_id += 1
+        questions.append({
+            "id": f"q{q_id}",
+            "question": "Why do we need to encode categorical columns before training an ML model?",
+            "options": [
+                "ML algorithms can only work with numbers",
+                "It makes the dataset smaller",
+                "It removes duplicate rows",
+                "It fixes missing values",
+            ],
+            "correct_answer": 0,
+            "explanation": "Most ML algorithms perform mathematical operations (addition, multiplication) and can only work with numerical inputs. Encoding converts text categories into numbers the model can process.",
+            "difficulty": "easy",
+        })
+
+        _random.shuffle(questions)
+        return questions[:5]

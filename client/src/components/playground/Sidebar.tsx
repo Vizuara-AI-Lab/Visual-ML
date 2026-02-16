@@ -1,24 +1,35 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  PanelLeftClose,
+  PanelLeft,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   nodeCategories,
   type NodeDefinition,
 } from "../../config/nodeDefinitions";
+import { templates } from "../../config/templateConfig";
 
 interface SidebarProps {
   onNodeDragStart: (event: React.DragEvent, nodeType: string) => void;
+  onTemplateClick: (templateId: string) => void;
 }
 
-export const Sidebar = ({ onNodeDragStart }: SidebarProps) => {
+export const Sidebar = ({ onNodeDragStart, onTemplateClick }: SidebarProps) => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(["data-sources", "ml-algorithms"]),
+    new Set(["templates", "data-sources", "ml-algorithms"]),
   );
 
   const toggleCategory = (categoryId: string) => {
     setExpandedCategories((prev) => {
       const next = new Set(prev);
       if (next.has(categoryId)) {
-        next.delete(categoryId);
+        next.delete(categoryId); 
       } else {
         next.add(categoryId);
       }
@@ -27,53 +38,141 @@ export const Sidebar = ({ onNodeDragStart }: SidebarProps) => {
   };
 
   return (
-    <div className="w-72 bg-gray-900 border-r border-gray-700 overflow-y-auto">
-      <div className="p-4 border-b border-gray-700">
-        <h2 className="text-lg font-semibold text-white">Node Palette</h2>
-        <p className="text-sm text-gray-400 mt-1">Drag nodes to canvas</p>
-      </div>
+    <motion.div
+      initial={{ width: 288 }}
+      animate={{ width: isCollapsed ? 48 : 288 }}
+      transition={{ duration: 0.3, ease: "easeInOut" }}
+      className="bg-white/90 backdrop-blur-xl border-r border-slate-200/60 overflow-y-auto shrink-0 shadow-lg shadow-slate-900/5"
+    >
+      {/* Collapsed State - Just Toggle Button */}
+      {isCollapsed ? (
+        <div className="h-full flex flex-col items-center py-4">
+          <button
+            onClick={() => setIsCollapsed(false)}
+            className="p-2 rounded-lg hover:bg-slate-100/50 transition-colors group"
+            title="Expand Sidebar"
+          >
+            <PanelLeft className="w-5 h-5 text-slate-500 group-hover:text-slate-800 transition-colors" />
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Expanded State - Full Content */}
+          <div className="p-4 border-b border-slate-200/60 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">
+                Node Palette
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">
+                Drag nodes to canvas
+              </p>
+            </div>
+            <button
+              onClick={() => setIsCollapsed(true)}
+              className="p-2 rounded-lg hover:bg-slate-100/50 transition-colors group"
+              title="Collapse Sidebar"
+            >
+              <PanelLeftClose className="w-5 h-5 text-slate-500 group-hover:text-slate-800 transition-colors" />
+            </button>
+          </div>
 
-      <div className="p-2">
-        {nodeCategories.map((category) => {
-          const Icon = category.icon;
-          const isExpanded = expandedCategories.has(category.id);
-
-          return (
-            <div key={category.id} className="mb-2">
+          <div className="p-3">
+            {/* Templates Section */}
+            <div className="mb-2">
               <button
-                onClick={() => toggleCategory(category.id)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors text-left"
+                onClick={() => toggleCategory("templates")}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100/50 transition-colors text-left"
               >
-                {isExpanded ? (
-                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                {expandedCategories.has("templates") ? (
+                  <ChevronDown className="w-4 h-4 text-slate-500" />
                 ) : (
-                  <ChevronRight className="w-4 h-4 text-gray-400" />
+                  <ChevronRight className="w-4 h-4 text-slate-500" />
                 )}
-                <Icon className="w-5 h-5 text-blue-400" />
-                <span className="text-sm font-medium text-gray-200 flex-1">
-                  {category.label}
+                <Zap className="w-5 h-5 text-slate-700" />
+                <span className="text-sm font-medium text-slate-800 flex-1">
+                  Templates
                 </span>
-                <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">
-                  {category.nodes.length}
+                <span className="text-xs text-slate-500 bg-slate-50 px-2 py-0.5 rounded">
+                  {templates.length}
                 </span>
               </button>
 
-              {isExpanded && (
-                <div className="mt-1 ml-2 space-y-1">
-                  {category.nodes.map((node) => (
-                    <NodeCard
-                      key={node.type}
-                      node={node}
-                      onDragStart={onNodeDragStart}
-                    />
-                  ))}
-                </div>
-              )}
+              <AnimatePresence>
+                {expandedCategories.has("templates") && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-1 ml-2 space-y-1">
+                      {templates.map((template) => (
+                        <TemplateCard
+                          key={template.id}
+                          template={template}
+                          onClick={() => onTemplateClick(template.id)}
+                        />
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          );
-        })}
-      </div>
-    </div>
+
+            {/* Node Categories */}
+            {nodeCategories.map((category) => {
+              const Icon = category.icon;
+              const isExpanded = expandedCategories.has(category.id);
+
+              return (
+                <div key={category.id} className="mb-2">
+                  <button
+                    onClick={() => toggleCategory(category.id)}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100/50 transition-colors text-left"
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="w-4 h-4 text-slate-500" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-slate-500" />
+                    )}
+                    <Icon className="w-5 h-5 text-slate-700" />
+                    <span className="text-sm font-medium text-slate-800 flex-1">
+                      {category.label}
+                    </span>
+                    <span className="text-xs text-slate-500 bg-slate-50 px-2 py-0.5 rounded">
+                      {category.nodes.length}
+                    </span>
+                  </button>
+
+                  <AnimatePresence>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="mt-1 ml-2 space-y-1">
+                          {category.nodes.map((node) => (
+                            <NodeCard
+                              key={node.type}
+                              node={node}
+                              onDragStart={onNodeDragStart}
+                            />
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </motion.div>
   );
 };
 
@@ -89,7 +188,7 @@ const NodeCard = ({ node, onDragStart }: NodeCardProps) => {
     <div
       draggable
       onDragStart={(e) => onDragStart(e, node.type)}
-      className="group relative px-3 py-2.5 rounded-lg border border-gray-700 bg-gray-800/50 hover:bg-gray-800 hover:border-gray-600 transition-all cursor-grab active:cursor-grabbing"
+      className="group relative px-3 py-2.5 rounded-lg border border-slate-200/60 bg-white/80 hover:bg-white hover:border-slate-300 transition-all cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md"
       style={{
         borderLeftWidth: "3px",
         borderLeftColor: node.color,
@@ -97,20 +196,63 @@ const NodeCard = ({ node, onDragStart }: NodeCardProps) => {
     >
       <div className="flex items-start gap-2">
         <div
-          className="p-1.5 rounded-md flex-shrink-0"
+          className="p-1.5 rounded-md shrink-0"
           style={{ backgroundColor: `${node.color}20` }}
         >
           <Icon className="w-4 h-4" style={{ color: node.color }} />
         </div>
         <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-medium text-gray-200 truncate">
+          <h4 className="text-sm font-medium text-slate-800 truncate">
             {node.label}
           </h4>
-          <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+          <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
             {node.description}
           </p>
         </div>
       </div>
     </div>
+  );
+};
+
+interface TemplateCardProps {
+  template: {
+    id: string;
+    label: string;
+    description: string;
+    icon: LucideIcon;
+    color: string;
+  };
+  onClick: () => void;
+}
+
+const TemplateCard = ({ template, onClick }: TemplateCardProps) => {
+  const Icon = template.icon;
+
+  return (
+    <button
+      onClick={onClick}
+      className="group relative w-full px-3 py-3 rounded-lg border border-slate-200/60 bg-gradient-to-br from-white/90 to-white/60 hover:from-white hover:to-white/80 hover:border-slate-300 transition-all cursor-pointer shadow-sm hover:shadow-md text-left"
+      style={{
+        borderLeftWidth: "3px",
+        borderLeftColor: template.color,
+      }}
+    >
+      <div className="flex items-start gap-2">
+        <div
+          className="p-2 rounded-md shrink-0"
+          style={{ backgroundColor: `${template.color}20` }}
+        >
+          <Icon className="w-5 h-5" style={{ color: template.color }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h4 className="text-sm font-semibold text-slate-800">
+            {template.label}
+          </h4>
+          <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
+            {template.description}
+          </p>
+        </div>
+      </div>
+    </button>
   );
 };

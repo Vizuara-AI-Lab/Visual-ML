@@ -21,7 +21,9 @@ from app.api.v1 import (
     auth_student,
     genai,
     tasks,
+    sharing,
 )
+from app.mentor import router as mentor_router
 from pathlib import Path
 
 
@@ -143,6 +145,9 @@ app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
 app.include_router(datasets.router, prefix=settings.API_V1_PREFIX)
 app.include_router(tasks.router, prefix=settings.API_V1_PREFIX)  # Task status/management
 
+# AI Mentor routes
+app.include_router(mentor_router.router, prefix=settings.API_V1_PREFIX)
+
 # GenAI routes
 app.include_router(
     genai_pipelines.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["GenAI Pipelines"]
@@ -153,6 +158,9 @@ app.include_router(
 app.include_router(secrets.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["API Secrets"])
 app.include_router(genai.router, prefix=settings.API_V1_PREFIX)
 app.include_router(projects.router, prefix=settings.API_V1_PREFIX)
+app.include_router(
+    sharing.router, prefix=settings.API_V1_PREFIX + "/projects", tags=["Project Sharing"]
+)
 
 
 if __name__ == "__main__":

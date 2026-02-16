@@ -47,7 +47,42 @@ export const FeatureEngineeringConfigPanel = ({
   });
 
   switch (nodeData.type) {
-    case "missing_value_handler":
+    case "missing_value_handler": {
+      // Get column configs or initialize
+      const columnConfigs =
+        (config.column_configs as Record<string, Record<string, unknown>>) ||
+        {};
+
+      const handleStrategyChange = (column: string, strategy: string) => {
+        const updatedConfigs = { ...columnConfigs };
+        if (!updatedConfigs[column]) {
+          updatedConfigs[column] = {};
+        }
+        updatedConfigs[column] = {
+          ...updatedConfigs[column],
+          strategy: strategy,
+          enabled: true,
+          fill_value: updatedConfigs[column]?.fill_value || null,
+        };
+        setConfig((prev) => ({ ...prev, column_configs: updatedConfigs }));
+      };
+
+      const handleFillValueChange = (column: string, value: string) => {
+        const updatedConfigs = { ...columnConfigs };
+        if (updatedConfigs[column]) {
+          updatedConfigs[column].fill_value = value;
+          setConfig((prev) => ({ ...prev, column_configs: updatedConfigs }));
+        }
+      };
+
+      const handleEnabledChange = (column: string, enabled: boolean) => {
+        const updatedConfigs = { ...columnConfigs };
+        if (updatedConfigs[column]) {
+          updatedConfigs[column].enabled = enabled;
+          setConfig((prev) => ({ ...prev, column_configs: updatedConfigs }));
+        }
+      };
+
       return (
         <div className="space-y-4">
           <div className="p-4 bg-pink-50 border border-pink-200 rounded-lg">
@@ -58,10 +93,12 @@ export const FeatureEngineeringConfigPanel = ({
               Configure different strategies for each column
             </p>
           </div>
+
           {renderField("dataset_id", "Dataset Source", "text")}
           {renderField("default_strategy", "Default Strategy", "select", [
             { value: "none", label: "No Action" },
             { value: "drop", label: "Drop Rows" },
+            { value: "drop_column", label: "Drop Column" },
             { value: "mean", label: "Fill with Mean" },
             { value: "median", label: "Fill with Median" },
             { value: "mode", label: "Fill with Mode" },
@@ -70,12 +107,126 @@ export const FeatureEngineeringConfigPanel = ({
             { value: "backward_fill", label: "Backward Fill" },
           ])}
           {renderField("preview_mode", "Preview Mode", "checkbox")}
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-xs text-blue-800">
-              💡 <strong>Tip:</strong> Column-wise configuration will be
-              available after connecting to a dataset
-            </p>
-          </div>
+
+          {/* Column-wise configuration */}
+          {availableColumns.length > 0 ? (
+            <>
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-xs text-green-800">
+                  ✓ Found {availableColumns.length} columns:{" "}
+                  {availableColumns.join(", ")}
+                </p>
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gray-800 mb-3">
+                  Column-wise Missing Value Configuration
+                </h4>
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {availableColumns.map((column) => (
+                    <div
+                      key={column}
+                      className="border border-gray-200 rounded-lg p-3 bg-gray-50"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-sm text-gray-700">
+                          {column}
+                        </span>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={columnConfigs[column]?.enabled !== false}
+                            onChange={(e) =>
+                              handleEnabledChange(column, e.target.checked)
+                            }
+                            className="rounded"
+                          />
+                          <span className="text-xs text-gray-600">Enabled</span>
+                        </label>
+                      </div>
+
+                      {columnConfigs[column]?.enabled !== false && (
+                        <div className="space-y-2">
+                          {/* Strategy */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                              Strategy
+                            </label>
+                            <select
+                              value={String(
+                                columnConfigs[column]?.strategy || "none",
+                              )}
+                              onChange={(e) =>
+                                handleStrategyChange(column, e.target.value)
+                              }
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-pink-500"
+                            >
+                              <option value="none">No Action</option>
+                              <option value="drop">
+                                Drop Rows with Missing
+                              </option>
+                              <option value="drop_column">
+                                Drop Entire Column
+                              </option>
+                              <option value="mean">Fill with Mean</option>
+                              <option value="median">Fill with Median</option>
+                              <option value="mode">Fill with Mode</option>
+                              <option value="fill">
+                                Fill with Custom Value
+                              </option>
+                              <option value="forward_fill">Forward Fill</option>
+                              <option value="backward_fill">
+                                Backward Fill
+                              </option>
+                            </select>
+                          </div>
+
+                          {/* Warning for drop_column strategy */}
+                          {columnConfigs[column]?.strategy ===
+                            "drop_column" && (
+                            <div className="p-2 bg-red-50 border border-red-200 rounded">
+                              <p className="text-xs text-red-700">
+                                ⚠️ This column will be completely removed from
+                                the dataset
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Fill Value - only shown when strategy is 'fill' */}
+                          {columnConfigs[column]?.strategy === "fill" && (
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                Fill Value
+                              </label>
+                              <input
+                                type="text"
+                                value={String(
+                                  columnConfigs[column]?.fill_value || "",
+                                )}
+                                onChange={(e) =>
+                                  handleFillValueChange(column, e.target.value)
+                                }
+                                placeholder="Enter value to fill"
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-pink-500"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-xs text-yellow-800">
+                💡 <strong>Tip:</strong> Column-wise configuration will be
+                available after connecting to a dataset
+              </p>
+            </div>
+          )}
+
           {(config.dataset_id as string) && (
             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
               <p className="text-sm text-green-800">
@@ -85,6 +236,7 @@ export const FeatureEngineeringConfigPanel = ({
           )}
         </div>
       );
+    }
 
     case "encoding": {
       // Get column configs or initialize
@@ -192,8 +344,6 @@ export const FeatureEngineeringConfigPanel = ({
                             <option value="none">None (Skip)</option>
                             <option value="onehot">One-Hot Encoding</option>
                             <option value="label">Label Encoding</option>
-                            <option value="ordinal">Ordinal Encoding</option>
-                            <option value="target">Target Encoding</option>
                           </select>
                         </div>
 
@@ -292,32 +442,6 @@ export const FeatureEngineeringConfigPanel = ({
                   ))}
                 </div>
               </div>
-
-              {/* Target Column (for target encoding) */}
-              {Object.values(columnConfigs).some(
-                (cfg: Record<string, unknown>) =>
-                  cfg?.encoding_method === "target",
-              ) && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Target Column (for Target Encoding)
-                  </label>
-                  <select
-                    value={(config.target_column as string) || ""}
-                    onChange={(e) =>
-                      updateField("target_column", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="">-- Select target column --</option>
-                    {availableColumns.map((col) => (
-                      <option key={col} value={col}>
-                        {col}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
             </>
           ) : (
             <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">

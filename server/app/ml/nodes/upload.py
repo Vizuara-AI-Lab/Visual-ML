@@ -9,7 +9,7 @@ import io
 from pathlib import Path
 from pydantic import Field, field_validator
 from datetime import datetime
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.core.exceptions import FileUploadError, InvalidDatasetError
 from app.core.config import settings
 from app.core.logging import logger
@@ -115,6 +115,26 @@ class UploadFileNode(BaseNode):
     """
 
     node_type = "upload_file"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Define node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.DATA_SOURCE,
+            primary_output_field="dataset_id",
+            output_fields={
+                "dataset_id": "Unique identifier for the uploaded dataset",
+                "n_rows": "Number of rows in the dataset",
+                "n_columns": "Number of columns in the dataset",
+                "columns": "List of column names",
+                "dtypes": "Data types of each column",
+            },
+            requires_input=False,
+            can_branch=True,
+            produces_dataset=True,
+            max_inputs=0,
+            allowed_source_categories=[],
+        )
 
     def __init__(self, node_id: Optional[str] = None, storage_backend: str = None):
         """

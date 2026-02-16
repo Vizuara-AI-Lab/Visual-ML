@@ -171,7 +171,8 @@ class LogisticRegression:
             return self.training_metadata
 
         except Exception as e:
-            logger.error(f"Logistic Regression training failed: {str(e)}", exc_info=True)
+            error_msg = str(e).replace("{", "{{").replace("}", "}}")
+            logger.error(f"Logistic Regression training failed: {error_msg}", exc_info=True)
             raise ModelTrainingError(
                 algorithm="logistic_regression", reason=str(e), traceback=str(e.__traceback__)
             )

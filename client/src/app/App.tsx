@@ -17,6 +17,7 @@ const StudentDetail = lazy(() => import("../pages/dashboard/StudentDetail"));
 const PlaygroundPage = lazy(() => import("../pages/playground/PlayGround"));
 const Profile = lazy(() => import("../pages/auth/Profile"));
 const ForgotPassword = lazy(() => import("../pages/auth/ForgotPassword"));
+const SharedProject = lazy(() => import("../pages/SharedProject"));
 const ProtectedRoute = lazy(
   () => import("../components/common/ProtectedRoute"),
 );
@@ -34,6 +35,10 @@ const App = () => {
           {/* Lazy loaded routes */}
           <Route path="/verify-email" element={<OTPVerification />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+
+          {/* Public shared project view */}
+          <Route path="/shared/:shareToken" element={<SharedProject />} />
+
           <Route
             path="/dashboard"
             element={

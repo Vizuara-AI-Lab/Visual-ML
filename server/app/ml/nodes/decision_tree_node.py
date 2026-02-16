@@ -9,7 +9,7 @@ import io
 from pydantic import Field
 from pathlib import Path
 from datetime import datetime
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.ml.algorithms.classification.decision_tree import DecisionTreeClassifier
 from app.ml.algorithms.regression.decision_tree_regressor import DecisionTreeRegressor
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
@@ -25,6 +25,9 @@ class DecisionTreeInput(NodeInput):
     """Input schema for Decision Tree node."""
 
     train_dataset_id: str = Field(..., description="Training dataset ID")
+    test_dataset_id: Optional[str] = Field(
+        None, description="Test dataset ID (auto-filled from split node)"
+    )
     target_column: str = Field(..., description="Name of target column")
     task_type: str = Field(..., description="Task type: 'classification' or 'regression'")
 
@@ -53,6 +56,12 @@ class DecisionTreeOutput(NodeOutput):
 
     metadata: Dict[str, Any] = Field(..., description="Training metadata")
 
+    # Pass-through fields for downstream nodes (e.g., confusion_matrix)
+    test_dataset_id: Optional[str] = Field(
+        None, description="Test dataset ID (passed from split node)"
+    )
+    target_column: Optional[str] = Field(None, description="Target column (passed from split node)")
+
 
 class DecisionTreeNode(BaseNode):
     """
@@ -74,6 +83,30 @@ class DecisionTreeNode(BaseNode):
 
     node_type = "decision_tree"
 
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.ML_ALGORITHM,
+            primary_output_field="model_id",
+            output_fields={
+                "model_id": "Unique model identifier",
+                "model_path": "Path to saved model file",
+                "training_metrics": "Training performance metrics",
+                "tree_depth": "Actual tree depth",
+                "n_leaves": "Number of leaf nodes",
+            },
+            requires_input=True,
+            can_branch=True,
+            produces_dataset=False,
+            max_inputs=1,
+            allowed_source_categories=[
+                NodeCategory.DATA_TRANSFORM,
+                NodeCategory.PREPROCESSING,
+                NodeCategory.FEATURE_ENGINEERING,
+            ],
+        )
+
     def get_input_schema(self) -> Type[NodeInput]:
         """Return input schema."""
         return DecisionTreeInput
@@ -83,11 +116,19 @@ class DecisionTreeNode(BaseNode):
         return DecisionTreeOutput
 
     async def _load_dataset(self, dataset_id: str) -> Optional[pd.DataFrame]:
-        """Load dataset from storage."""
+        """Load dataset from storage (uploads folder first, then database)."""
         try:
             # Recognize common missing value indicators: ?, NA, N/A, null, empty strings
             missing_values = ["?", "NA", "N/A", "null", "NULL", "", " ", "NaN", "nan"]
 
+            # FIRST: Try to load from uploads folder (for train/test datasets from split node)
+            upload_path = Path(settings.UPLOAD_DIR) / f"{dataset_id}.csv"
+            if upload_path.exists():
+                logger.info(f"Loading dataset from uploads folder: {upload_path}")
+                df = pd.read_csv(upload_path, na_values=missing_values, keep_default_na=True)
+                return df
+
+            # SECOND: Try to load from database (for original datasets)
             db = SessionLocal()
             dataset = (
                 db.query(Dataset)
@@ -96,7 +137,7 @@ class DecisionTreeNode(BaseNode):
             )
 
             if not dataset:
-                logger.error(f"Dataset not found: {dataset_id}")
+                logger.error(f"Dataset not found in uploads or database: {dataset_id}")
                 db.close()
                 return None
 
@@ -200,6 +241,9 @@ class DecisionTreeNode(BaseNode):
                     },
                     "full_training_metadata": training_metadata,
                 },
+                # Pass through split node fields for downstream nodes
+                test_dataset_id=input_data.test_dataset_id,
+                target_column=input_data.target_column,
             )
 
         except Exception as e:

@@ -1,19 +1,10 @@
-import {
-  Play,
-  Trash2,
-  Save,
-  FolderOpen,
-  Download,
-  Settings,
-  ArrowLeft,
-} from "lucide-react";
+import { Play, Trash2, Save, Settings, ArrowLeft, Share2 } from "lucide-react";
 
 interface ToolbarProps {
   onExecute: () => void;
   onClear: () => void;
   onSave: () => void;
-  onLoad: () => void;
-  onExport: () => void;
+  onShare?: () => void;
   isExecuting: boolean;
   executionProgress?: {
     status: string;
@@ -29,110 +20,102 @@ export const Toolbar = ({
   onExecute,
   onClear,
   onSave,
-  onLoad,
-  onExport,
+  onShare,
   isExecuting,
   executionProgress,
   projectName,
   onBack,
 }: ToolbarProps) => {
   return (
-    <div className="h-14 bg-gray-900 border-b border-gray-700 flex items-center justify-between px-4">
-      <div className="flex items-center gap-2">
+    <div className="h-16 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 flex items-center justify-between px-6 shadow-lg shadow-slate-900/5">
+      <div className="flex items-center gap-3">
         {onBack && (
           <button
             onClick={onBack}
-            className="px-3 py-2 hover:bg-gray-800 text-gray-300 hover:text-white rounded-lg flex items-center gap-2 transition-colors"
+            className="p-2 hover:bg-slate-100/50 text-slate-500 hover:text-slate-800 rounded-lg transition-all"
             title="Back to Projects"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-5 h-5" />
           </button>
         )}
-        <h1 className="text-xl font-bold text-white mr-4">
-          {projectName || "ML Pipeline Playground"}
-        </h1>
 
+        <div className="flex items-center gap-3 mr-6">
+          <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg shadow-slate-900/25">
+            <Settings className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-slate-800">
+              {projectName || "ML Pipeline Playground"}
+            </h1>
+            <p className="text-xs text-slate-500">Visual Pipeline Builder</p>
+          </div>
+        </div>
+        <div className="h-10 w-px bg-slate-200/60" />
         <button
           onClick={onExecute}
           disabled={isExecuting}
-          className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors"
+          className="ml-3 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-slate-900/25 hover:shadow-xl hover:shadow-slate-900/30 disabled:shadow-none font-semibold"
         >
           <Play className="w-4 h-4" />
-          {isExecuting ? "Executing..." : "Execute Pipeline"}
+          {isExecuting ? "Executing..." : "Run Pipeline"}
         </button>
 
         {/* Progress Indicator */}
         {executionProgress && (
-          <div className="flex items-center gap-3 px-4 py-2 bg-blue-900/30 border border-blue-700/50 rounded-lg">
-            <div className="flex-1 min-w-[200px]">
-              <div className="text-xs text-blue-300 mb-1">
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg shadow-md">
+            <div className="flex-1 min-w-55">
+              <div className="text-xs font-medium text-slate-600 mb-1.5">
                 {executionProgress.status}
                 {executionProgress.current_node &&
                   executionProgress.total_nodes && (
-                    <span className="ml-2">
+                    <span className="ml-2 text-slate-500">
                       ({executionProgress.current_node}/
                       {executionProgress.total_nodes} nodes)
                     </span>
                   )}
               </div>
-              <div className="w-full bg-gray-700 rounded-full h-2">
+              <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                 <div
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                  className="bg-slate-900 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${executionProgress.percent}%` }}
                 />
               </div>
             </div>
-            <div className="text-sm font-semibold text-blue-400">
+            <div className="text-sm font-bold text-slate-800">
               {executionProgress.percent}%
             </div>
           </div>
         )}
-
-        <div className="h-8 w-px bg-gray-700 mx-2" />
-
-        <button
-          onClick={onSave}
-          className="px-3 py-2 hover:bg-gray-800 text-gray-300 hover:text-white rounded-lg flex items-center gap-2 transition-colors"
-          title="Save Pipeline"
-        >
-          <Save className="w-4 h-4" />
-          Save
-        </button>
-
-        <button
-          onClick={onLoad}
-          className="px-3 py-2 hover:bg-gray-800 text-gray-300 hover:text-white rounded-lg flex items-center gap-2 transition-colors"
-          title="Load Pipeline"
-        >
-          <FolderOpen className="w-4 h-4" />
-          Load
-        </button>
-
-        <button
-          onClick={onExport}
-          className="px-3 py-2 hover:bg-gray-800 text-gray-300 hover:text-white rounded-lg flex items-center gap-2 transition-colors"
-          title="Export Pipeline"
-        >
-          <Download className="w-4 h-4" />
-          Export
-        </button>
       </div>
 
       <div className="flex items-center gap-2">
         <button
-          className="px-3 py-2 hover:bg-gray-800 text-gray-300 hover:text-white rounded-lg flex items-center gap-2 transition-colors"
-          title="Settings"
+          onClick={onSave}
+          className="px-4 py-2 hover:bg-slate-100/50 text-slate-500 hover:text-slate-800 rounded-lg flex items-center gap-2 transition-all"
+          title="Save Pipeline"
         >
-          <Settings className="w-4 h-4" />
+          <Save className="w-4 h-4" />
+          <span className="font-medium">Save</span>
         </button>
+
+        {onShare && (
+          <button
+            onClick={onShare}
+            className="px-4 py-2 hover:bg-blue-50 text-blue-600 hover:text-blue-700 rounded-lg flex items-center gap-2 transition-all border border-transparent hover:border-blue-200"
+            title="Share Project"
+          >
+            <Share2 className="w-4 h-4" />
+            <span className="font-medium">Share</span>
+          </button>
+        )}
 
         <button
           onClick={onClear}
-          className="px-3 py-2 hover:bg-red-900/20 text-red-400 hover:text-red-300 rounded-lg flex items-center gap-2 transition-colors"
+          className="px-4 py-2 hover:bg-red-50 text-red-600 hover:text-red-700 rounded-lg flex items-center gap-2 transition-all border border-transparent hover:border-red-200"
           title="Clear Canvas"
         >
           <Trash2 className="w-4 h-4" />
-          Clear
+          <span className="font-medium">Clear</span>
         </button>
       </div>
     </div>

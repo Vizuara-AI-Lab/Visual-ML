@@ -117,13 +117,14 @@ class MLPipelineService:
             current_user: Current user context for authentication
 
         Returns:
-            List of node results
+            Dict with success status and results list
         """
         try:
-            results = await pipeline_engine.execute_pipeline(
-                pipeline=pipeline, edges=edges, dry_run=dry_run, current_user=current_user
+            result = await pipeline_engine.execute_pipeline(
+                nodes=pipeline, edges=edges, dry_run=dry_run, current_user=current_user
             )
-            return results
+            # Return the full DAG execution result (includes success, error, results, etc.)
+            return result
         except Exception as e:
             logger.error(f"Pipeline execution failed: {str(e)}", exc_info=True)
             raise

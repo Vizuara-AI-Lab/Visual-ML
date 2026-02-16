@@ -1,8 +1,7 @@
 /**
  * Validation rules for Result & Metric nodes
  * - r2_score, mse_score, rmse_score, mae_score (regression)
- * - confusion_matrix, classification_report, accuracy_score, roc_curve (classification)
- * - feature_importance, residual_plot, prediction_table (both)
+ * - confusion_matrix (classification)
  */
 
 import type { ValidationRegistry } from "./types";
@@ -18,14 +17,6 @@ const classificationModelSources = [
   "logistic_regression",
   "decision_tree", // when task_type = classification
   "random_forest", // when task_type = classification
-  "evaluate",
-];
-
-const allModelSources = [
-  "linear_regression",
-  "logistic_regression",
-  "decision_tree",
-  "random_forest",
   "evaluate",
 ];
 
@@ -59,56 +50,9 @@ export const resultValidationRules: ValidationRegistry = {
     allowedTargets: [],
   },
 
-  residual_plot: {
-    allowedSources: regressionModelSources,
-    requiresInput: true,
-    maxInputConnections: 1,
-    allowedTargets: [],
-  },
-
   // Classification metrics
   confusion_matrix: {
     allowedSources: classificationModelSources,
-    requiresInput: true,
-    maxInputConnections: 1,
-    allowedTargets: [],
-  },
-
-  classification_report: {
-    allowedSources: classificationModelSources,
-    requiresInput: true,
-    maxInputConnections: 1,
-    allowedTargets: [],
-  },
-
-  accuracy_score: {
-    allowedSources: classificationModelSources,
-    requiresInput: true,
-    maxInputConnections: 1,
-    allowedTargets: [],
-  },
-
-  roc_curve: {
-    allowedSources: classificationModelSources,
-    requiresInput: true,
-    maxInputConnections: 1,
-    allowedTargets: [],
-  },
-
-  // Universal metrics
-  feature_importance: {
-    allowedSources: [
-      "decision_tree",
-      "random_forest",
-      "evaluate",
-    ],
-    requiresInput: true,
-    maxInputConnections: 1,
-    allowedTargets: [],
-  },
-
-  prediction_table: {
-    allowedSources: allModelSources,
     requiresInput: true,
     maxInputConnections: 1,
     allowedTargets: [],

@@ -3,8 +3,9 @@
 export interface Student {
   id: number;
   emailId: string;
+  fullName: string;
   role: string;
-  authProvider: 'LOCAL' | 'GOOGLE';
+  authProvider: "LOCAL" | "GOOGLE";
   collegeOrSchool?: string;
   contactNo?: string;
   recentProject?: string;
@@ -18,7 +19,8 @@ export interface Student {
 export interface StudentListItem {
   id: number;
   emailId: string;
-  authProvider: 'LOCAL' | 'GOOGLE';
+  fullName: string;
+  authProvider: "LOCAL" | "GOOGLE";
   collegeOrSchool?: string;
   isPremium: boolean;
   isActive: boolean;
@@ -30,7 +32,7 @@ export interface AdminProfile {
   id: number;
   email: string;
   name?: string;
-  role: 'ADMIN';
+  role: "ADMIN";
   isActive: boolean;
   createdAt: string;
   lastLogin?: string;

@@ -95,7 +95,7 @@ async def chat_stream(request: ChatRequest):
                     partial(
                         client.models.generate_content_stream,
                         # Hay ai don't change the change the model here
-                        model="gemini-2.0-flash-exp",
+                        model="gemma-3-27b-it",
                         contents=content,
                     ),
                 )

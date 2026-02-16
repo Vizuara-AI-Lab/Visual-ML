@@ -10,6 +10,7 @@ import { Canvas } from "../../components/playground/Canvas";
 import { ConfigModal } from "../../components/playground/ConfigModal";
 import { ChatbotModal } from "../../components/playground/ChatbotModal";
 import { ViewNodeModal } from "../../components/playground/ViewNodeModal";
+import { ShareModal } from "../../components/playground/ShareModal";
 import { Toolbar } from "../../components/playground/Toolbar";
 import { ResultsPanel } from "../../components/playground/ResultsPanel";
 import { usePlaygroundStore } from "../../store/playgroundStore";
@@ -18,6 +19,13 @@ import type { NodeType, BaseNodeData } from "../../types/pipeline";
 import { useProjectState } from "../../hooks/queries/useProjectState";
 import { useSaveProject } from "../../hooks/mutations/useSaveProject";
 import { validatePipeline } from "../../utils/validation";
+import { MentorAssistant, mentorApi } from "../../features/mentor";
+import { useAuthStore } from "../../store/authStore";
+import { useMentorContext } from "../../features/mentor";
+import {
+  useMentorStore,
+  type MentorAction,
+} from "../../features/mentor/store/mentorStore";
 
 export default function PlayGround() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -26,6 +34,7 @@ export default function PlayGround() {
   const [viewNodeId, setViewNodeId] = useState<string | null>(null);
   const [chatbotNodeId, setChatbotNodeId] = useState<string | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
 
   const [executionProgress, setExecutionProgress] = useState<{
     status: string;
@@ -46,7 +55,17 @@ export default function PlayGround() {
     executionResult,
     currentProjectId,
     updateNode,
+    addNode,
   } = usePlaygroundStore();
+
+  const { user } = useAuthStore();
+  const { preferences } = useMentorStore();
+
+  // Enable AI mentor context awareness
+  useMentorContext({
+    enabled: preferences.enabled,
+    debounceMs: 1000,
+  });
 
   // Handle node click - show view data modal for view nodes, config for others
   const handleNodeClick = (nodeId: string) => {
@@ -69,8 +88,9 @@ export default function PlayGround() {
 
     // If it's a view node
     if (viewNodeTypes.includes(node.data.type)) {
-      // If configured and has execution results, show view modal
-      if (node.data.isConfigured && executionResult?.nodeResults?.[nodeId]) {
+      // If configured/executed and has execution results, show view modal
+      const nodeResult = executionResult?.nodeResults?.[nodeId];
+      if (nodeResult && (node.data.isConfigured || nodeResult.success)) {
         setViewNodeId(nodeId);
       } else {
         // Otherwise show config modal
@@ -148,6 +168,73 @@ export default function PlayGround() {
   const onNodeDragStart = (event: React.DragEvent, nodeType: string) => {
     event.dataTransfer.setData("application/reactflow", nodeType);
     event.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleTemplateClick = async (templateId: string) => {
+    const { getTemplateById } = await import("../../config/templateConfig");
+    const { getNodeByType } = await import("../../config/nodeDefinitions");
+    const template = getTemplateById(templateId);
+
+    if (!template) {
+      console.error("Template not found:", templateId);
+      return;
+    }
+
+    // Generate unique IDs for nodes
+    const nodeIdMap = new Map<number, string>();
+    const newNodes = template.nodes
+      .map((templateNode, index: number) => {
+        const nodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        nodeIdMap.set(index, nodeId);
+
+        const nodeDef = getNodeByType(templateNode.type);
+        if (!nodeDef) {
+          console.error(
+            `Node definition not found for type: ${templateNode.type}`,
+          );
+          return null;
+        }
+
+        return {
+          id: nodeId,
+          type: templateNode.type, // Use the actual node type (e.g., 'upload_file')
+          position: templateNode.position,
+          data: {
+            label: nodeDef.label,
+            type: nodeDef.type,
+            config: JSON.parse(JSON.stringify(nodeDef.defaultConfig)),
+            isConfigured: false,
+            color: nodeDef.color,
+            icon: nodeDef.icon,
+          },
+        };
+      })
+      .filter(Boolean) as any[]; // Filter out nulls
+
+    // Generate edges based on template connections
+    const newEdges = template.edges.map((edge) => {
+      const sourceId = nodeIdMap.get(edge.sourceIndex);
+      const targetId = nodeIdMap.get(edge.targetIndex);
+
+      return {
+        id: `edge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        source: sourceId!,
+        target: targetId!,
+        type: "smoothstep",
+        animated: true,
+      };
+    });
+
+    // Add nodes and edges to the canvas using the store
+    const { setNodes, setEdges } = usePlaygroundStore.getState();
+    setNodes((prevNodes) => [...prevNodes, ...newNodes]);
+    setEdges((prevEdges) => [...prevEdges, ...newEdges]);
+
+    toast.success(`${template.label} template loaded!`, {
+      duration: 2000,
+      position: "top-right",
+      icon: "✅",
+    });
   };
 
   const handleExecute = async () => {
@@ -306,40 +393,51 @@ export default function PlayGround() {
 
       setExecutionProgress(null);
 
-      // Format user-friendly error message
+      // Format user-friendly error message with details and suggestion
       let userFriendlyError = "Pipeline execution failed";
+      let errorDetails: Record<string, unknown> | undefined = undefined;
+      let errorSuggestion: string | undefined = undefined;
 
       if (error && typeof error === "object" && "response" in error) {
         const responseError = (error as any).response?.data;
 
-        if (responseError?.message) {
-          // Extract the actual error message
-          const errorMsg = responseError.message;
+        // FastAPI returns errors in "detail" field by default
+        const errorMsg =
+          responseError?.detail ||
+          responseError?.message ||
+          responseError?.error;
 
+        if (errorMsg) {
           // Handle specific error types with user-friendly messages
           if (errorMsg.includes("Missing values found")) {
             const columnMatch = errorMsg.match(/column '([^']+)'/);
             const column = columnMatch ? columnMatch[1] : "a column";
-            userFriendlyError = `⚠️ Missing values detected in "${column}". Please handle missing values before encoding.`;
+            userFriendlyError = `Missing values detected in "${column}"`;
+            errorSuggestion = "Please handle missing values before encoding.";
           } else if (errorMsg.includes("column_configs")) {
-            userFriendlyError =
-              "⚠️ Please configure encoding settings for at least one column.";
-          } else if (errorMsg.includes("Target column required")) {
-            userFriendlyError =
-              "⚠️ Target column is required when using target encoding.";
+            userFriendlyError = "No columns configured for encoding";
+            errorSuggestion =
+              "Please configure encoding settings for at least one column.";
           } else if (
             errorMsg.includes("Dataset") &&
             errorMsg.includes("not found")
           ) {
-            userFriendlyError =
-              "⚠️ Dataset not found. Please ensure the data source is properly connected.";
+            userFriendlyError = "Dataset not found or empty";
+            errorSuggestion =
+              "Please ensure the data source is properly connected.";
           } else {
             // Extract just the reason part if it exists
             const reasonMatch = errorMsg.match(/\[.*?\]: (.+)/);
             userFriendlyError = reasonMatch ? reasonMatch[1] : errorMsg;
           }
-        } else if (responseError?.error) {
-          userFriendlyError = responseError.error;
+
+          // Extract details and suggestion from response if available
+          if (responseError.details) {
+            errorDetails = responseError.details;
+          }
+          if (responseError.suggestion && !errorSuggestion) {
+            errorSuggestion = responseError.suggestion;
+          }
         }
       } else if (error instanceof Error) {
         userFriendlyError = error.message;
@@ -348,6 +446,8 @@ export default function PlayGround() {
       setExecutionResult({
         success: false,
         error: userFriendlyError,
+        errorDetails: errorDetails,
+        errorSuggestion: errorSuggestion,
         timestamp: new Date().toISOString(),
       });
     } finally {
@@ -380,32 +480,85 @@ export default function PlayGround() {
     );
   };
 
-  const handleLoad = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
+  const handleShare = () => {
+    if (!projectId) {
+      toast.error("No project selected. Please create a project first.");
+      return;
+    }
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        try {
-          const data = JSON.parse(event.target?.result as string);
-          // TODO: Load nodes and edges into store
-          console.log("Loaded pipeline:", data);
-        } catch (error) {
-          console.error("Failed to load pipeline:", error);
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
+    // Auto-save before sharing
+    const state = getProjectState();
+    saveProject.mutate(
+      { id: projectId, state },
+      {
+        onSuccess: () => {
+          setShareModalOpen(true);
+        },
+        onError: () => {
+          toast.error("Please save the project before sharing");
+        },
+      },
+    );
   };
 
-  const handleExport = () => {
-    // Export as Python code or other format
-    console.log("Export functionality coming soon");
+  // Handle adding a node from mentor suggestions
+  const handleAddNodeFromMentor = async (nodeType: string) => {
+    console.log("[handleAddNodeFromMentor] Adding node type:", nodeType);
+    try {
+      const { getNodeByType } = await import("../../config/nodeDefinitions");
+      const nodeDef = getNodeByType(nodeType as NodeType);
+
+      if (!nodeDef) {
+        console.error(
+          "[handleAddNodeFromMentor] Node definition not found for:",
+          nodeType,
+        );
+        toast.error(`Node type "${nodeType}" not found`);
+        return;
+      }
+
+      console.log(
+        "[handleAddNodeFromMentor] Node definition found:",
+        nodeDef.label,
+      );
+
+      // Create a new node with a unique ID
+      const nodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Calculate position - center of viewport with slight offset for each new node
+      const position = {
+        x: 300 + nodes.length * 20, // Offset to avoid overlap
+        y: 200 + nodes.length * 20,
+      };
+
+      const newNode = {
+        id: nodeId,
+        type: nodeDef.type,
+        position,
+        data: {
+          label: nodeDef.label,
+          type: nodeDef.type,
+          config: JSON.parse(JSON.stringify(nodeDef.defaultConfig)),
+          isConfigured: false,
+          color: nodeDef.color,
+          icon: nodeDef.icon,
+        },
+      };
+
+      addNode(newNode);
+      toast.success(`Added ${nodeDef.label} to canvas`, {
+        icon: "✨",
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error("Error adding node from mentor:", error);
+      toast.error("Failed to add node");
+    }
+  };
+
+  // Handle execute pipeline action from mentor
+  const handleExecutePipeline = () => {
+    handleExecute();
   };
 
   return (
@@ -415,8 +568,7 @@ export default function PlayGround() {
         onExecute={handleExecute}
         onClear={handleClear}
         onSave={handleSave}
-        onLoad={handleLoad}
-        onExport={handleExport}
+        onShare={projectId ? handleShare : undefined}
         isExecuting={usePlaygroundStore.getState().isExecuting}
         executionProgress={executionProgress}
         projectName={projectData?.name}
@@ -425,7 +577,10 @@ export default function PlayGround() {
 
       <div className="flex-1 flex overflow-hidden">
         <ReactFlowProvider>
-          <Sidebar onNodeDragStart={onNodeDragStart} />
+          <Sidebar
+            onNodeDragStart={onNodeDragStart}
+            onTemplateClick={handleTemplateClick}
+          />
           <Canvas onNodeClick={handleNodeClick} />
         </ReactFlowProvider>
 
@@ -445,6 +600,158 @@ export default function PlayGround() {
       <ChatbotModal
         nodeId={chatbotNodeId}
         onClose={() => setChatbotNodeId(null)}
+      />
+
+      <ShareModal
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        projectId={projectId ? parseInt(projectId) : 0}
+        projectName={projectData?.name || "Untitled Project"}
+      />
+
+      <MentorAssistant
+        userName={user?.fullName || user?.emailId || "there"}
+        onAction={async (action: MentorAction) => {
+          console.log("[Mentor] Action clicked:", action);
+
+          // Handle mentor suggestion actions
+          if (action.type === "show_guide") {
+            const modelType = action.payload?.model_type as string;
+
+            // Check if this is the initial guide request or dataset guidance
+            if (action.payload?.action) {
+              // This is a dataset guidance action
+              try {
+                const guidanceResponse = await mentorApi.getDatasetGuidance(
+                  action.payload.action as string,
+                  modelType,
+                  action.payload.next_message as string,
+                );
+
+                if (
+                  guidanceResponse.success &&
+                  guidanceResponse.suggestions.length > 0
+                ) {
+                  useMentorStore
+                    .getState()
+                    .showSuggestion(guidanceResponse.suggestions[0]);
+                }
+              } catch (error) {
+                console.error(
+                  "[Mentor] Error fetching dataset guidance:",
+                  error,
+                );
+                toast.error("Failed to load guidance");
+              }
+            } else {
+              // Initial guide request - show model introduction
+              if (modelType) {
+                try {
+                  const introResponse =
+                    await mentorApi.getModelIntroduction(modelType);
+
+                  if (
+                    introResponse.success &&
+                    introResponse.suggestions.length > 0
+                  ) {
+                    useMentorStore
+                      .getState()
+                      .showSuggestion(introResponse.suggestions[0]);
+                    toast.success(
+                      `Learning about ${modelType.replace(/_/g, " ")}`,
+                    );
+                  }
+                } catch (error) {
+                  console.error("[Mentor] Error fetching introduction:", error);
+                  toast.error("Failed to load introduction");
+                }
+              }
+            }
+          } else if (action.type === "learn_more") {
+            // Handle learn_more actions (dataset options that show more info)
+            if (action.payload?.action && action.payload?.model_type) {
+              try {
+                const guidanceResponse = await mentorApi.getDatasetGuidance(
+                  action.payload.action as string,
+                  action.payload.model_type as string,
+                  (action.payload.next_message as string) || "",
+                );
+
+                if (
+                  guidanceResponse.success &&
+                  guidanceResponse.suggestions.length > 0
+                ) {
+                  useMentorStore
+                    .getState()
+                    .showSuggestion(guidanceResponse.suggestions[0]);
+                }
+              } catch (error) {
+                console.error("[Mentor] Error fetching guidance:", error);
+                toast.error("Failed to load guidance");
+              }
+            } else if (action.payload?.url) {
+              console.log("[Mentor] Opening learn more:", action.payload.url);
+              window.open(action.payload.url as string, "_blank");
+            } else {
+              // "Get Suggestions" button — trigger pipeline analysis
+              try {
+                const pipelineData = {
+                  nodes: nodes.map((n) => ({
+                    id: n.id,
+                    type: n.data.type,
+                    config: n.data,
+                    position: n.position,
+                  })),
+                  edges: edges.map((e) => ({
+                    id: e.id,
+                    source: e.source,
+                    target: e.target,
+                  })),
+                };
+
+                const analysis =
+                  await mentorApi.analyzePipeline(pipelineData);
+
+                if (analysis.suggestions.length > 0) {
+                  analysis.suggestions.slice(0, 2).forEach((suggestion) => {
+                    useMentorStore
+                      .getState()
+                      .showSuggestion(suggestion);
+                  });
+                } else {
+                  toast("No suggestions right now — keep building!", {
+                    icon: "💡",
+                    duration: 2000,
+                  });
+                }
+              } catch (error) {
+                console.error(
+                  "[Mentor] Error fetching suggestions:",
+                  error,
+                );
+                toast.error("Failed to get suggestions");
+              }
+            }
+          } else if (action.type === "add_node") {
+            // Check for both node_type and model_type in payload
+            const nodeType = (action.payload?.node_type ||
+              action.payload?.model_type) as string;
+            if (nodeType) {
+              console.log("[Mentor] Adding node:", nodeType);
+              handleAddNodeFromMentor(nodeType);
+            } else {
+              console.warn(
+                "[Mentor] No node_type or model_type in payload:",
+                action.payload,
+              );
+            }
+          } else if (action.type === "execute") {
+            console.log("[Mentor] Executing pipeline");
+            handleExecutePipeline();
+          } else {
+            console.log("[Mentor] Unknown action type:", action.type);
+          }
+        }}
       />
     </div>
   );

@@ -11,7 +11,7 @@ from pathlib import Path
 from sklearn.feature_selection import VarianceThreshold
 import io
 
-from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput
+from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.core.exceptions import NodeExecutionError, InvalidDatasetError
 from app.core.config import settings
 from app.core.logging import logger
@@ -65,6 +65,20 @@ class FeatureSelectionOutput(NodeOutput):
     )
     selection_summary: Dict[str, Any] = Field(..., description="Summary of selection")
 
+    # Learning activity data (all Optional for backward compatibility)
+    feature_score_details: Optional[Dict[str, Any]] = Field(
+        None, description="Enriched feature list for score visualization"
+    )
+    feature_correlation_matrix: Optional[Dict[str, Any]] = Field(
+        None, description="Correlation matrix data for heatmap"
+    )
+    threshold_simulation_data: Optional[Dict[str, Any]] = Field(
+        None, description="Pre-sorted features for client-side threshold slider"
+    )
+    quiz_questions: Optional[List[Dict[str, Any]]] = Field(
+        None, description="Auto-generated quiz questions about feature selection"
+    )
+
 
 class FeatureSelectionNode(BaseNode):
     """
@@ -76,6 +90,28 @@ class FeatureSelectionNode(BaseNode):
     """
 
     node_type = "feature_selection"
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """Return node metadata for DAG execution."""
+        return NodeMetadata(
+            category=NodeCategory.FEATURE_ENGINEERING,
+            primary_output_field="selected_dataset_id",
+            output_fields={
+                "selected_dataset_id": "ID of dataset with selected features",
+                "selected_path": "Path to selected dataset file",
+                "selected_feature_names": "Names of selected features",
+                "removed_feature_names": "Names of removed features",
+            },
+            requires_input=True,
+            can_branch=True,
+            produces_dataset=True,
+            allowed_source_categories=[
+                NodeCategory.DATA_SOURCE,
+                NodeCategory.PREPROCESSING,
+                NodeCategory.FEATURE_ENGINEERING,
+            ],
+        )
 
     def get_input_schema(self) -> Type[NodeInput]:
         return FeatureSelectionInput
@@ -155,6 +191,39 @@ class FeatureSelectionNode(BaseNode):
                 f"Saved to: {selected_path}"
             )
 
+            # Generate learning activity data (non-blocking)
+            feature_score_details = None
+            try:
+                feature_score_details = self._generate_feature_score_details(
+                    df, feature_scores, selected_features, removed_features, input_data.method
+                )
+            except Exception as e:
+                logger.warning(f"Feature score details generation failed: {e}")
+
+            feature_correlation_matrix = None
+            try:
+                feature_correlation_matrix = self._generate_feature_correlation_matrix(
+                    df, selected_features, removed_features
+                )
+            except Exception as e:
+                logger.warning(f"Feature correlation matrix generation failed: {e}")
+
+            threshold_simulation_data = None
+            try:
+                threshold_simulation_data = self._generate_threshold_simulation_data(
+                    feature_scores, input_data
+                )
+            except Exception as e:
+                logger.warning(f"Threshold simulation data generation failed: {e}")
+
+            quiz_questions = None
+            try:
+                quiz_questions = self._generate_feature_selection_quiz(
+                    df, feature_scores, selected_features, removed_features, selection_summary
+                )
+            except Exception as e:
+                logger.warning(f"Feature selection quiz generation failed: {e}")
+
             return FeatureSelectionOutput(
                 node_type=self.node_type,
                 execution_time_ms=0,
@@ -166,6 +235,10 @@ class FeatureSelectionNode(BaseNode):
                 removed_feature_names=removed_features,
                 feature_scores=feature_scores,
                 selection_summary=selection_summary,
+                feature_score_details=feature_score_details,
+                feature_correlation_matrix=feature_correlation_matrix,
+                threshold_simulation_data=threshold_simulation_data,
+                quiz_questions=quiz_questions,
             )
 
         except Exception as e:
@@ -327,3 +400,247 @@ class FeatureSelectionNode(BaseNode):
         all_selected = non_numeric_cols + selected_features
 
         return df[all_selected], selected_features, removed_features, correlation_scores
+
+    # --- Learning Activity Helpers ---
+
+    def _generate_feature_score_details(
+        self, df: pd.DataFrame, feature_scores: Dict[str, float],
+        selected: List[str], removed: List[str], method: str
+    ) -> Dict[str, Any]:
+        """Enriched feature list for score visualization."""
+        if not feature_scores:
+            return {"features": [], "method": method}
+
+        max_score = max(feature_scores.values()) if feature_scores else 1
+        min_score = min(feature_scores.values()) if feature_scores else 0
+        score_range = max_score - min_score if max_score != min_score else 1
+
+        features_list = []
+        sorted_features = sorted(
+            feature_scores.items(),
+            key=lambda x: x[1],
+            reverse=(method == "variance"),
+        )
+
+        for rank, (name, score) in enumerate(sorted_features, 1):
+            bar_width = ((score - min_score) / score_range * 100) if score_range > 0 else 50
+
+            feat_data: Dict[str, Any] = {
+                "name": name,
+                "score": round(score, 6),
+                "rank": rank,
+                "selected": name in selected,
+                "bar_width_pct": round(bar_width, 1),
+            }
+
+            if name in df.columns and pd.api.types.is_numeric_dtype(df[name]):
+                col_vals = df[name].dropna()
+                if len(col_vals) > 0:
+                    feat_data["stats"] = {
+                        "mean": round(float(col_vals.mean()), 4),
+                        "std": round(float(col_vals.std()), 4),
+                        "min": round(float(col_vals.min()), 4),
+                        "max": round(float(col_vals.max()), 4),
+                    }
+
+            features_list.append(feat_data)
+
+        return {
+            "features": features_list,
+            "max_score": round(max_score, 6),
+            "min_score": round(min_score, 6),
+            "method": method,
+            "total_features": len(feature_scores),
+            "selected_count": len(selected),
+            "removed_count": len(removed),
+        }
+
+    def _generate_feature_correlation_matrix(
+        self, df: pd.DataFrame, selected: List[str], removed: List[str]
+    ) -> Dict[str, Any]:
+        """Generate correlation matrix data for heatmap."""
+        numeric_df = df.select_dtypes(include=[np.number])
+        cols = numeric_df.columns.tolist()[:20]  # Cap at 20
+
+        if len(cols) < 2:
+            return {"columns": cols, "matrix": [], "highly_correlated_pairs": []}
+
+        corr_matrix = numeric_df[cols].corr()
+        matrix = [[round(float(corr_matrix.iloc[i, j]), 4) for j in range(len(cols))] for i in range(len(cols))]
+
+        # Find highly correlated pairs
+        highly_correlated = []
+        for i in range(len(cols)):
+            for j in range(i + 1, len(cols)):
+                corr_val = abs(corr_matrix.iloc[i, j])
+                if corr_val > 0.7:
+                    which_removed = None
+                    if cols[i] in removed:
+                        which_removed = cols[i]
+                    elif cols[j] in removed:
+                        which_removed = cols[j]
+                    highly_correlated.append({
+                        "feature_a": cols[i],
+                        "feature_b": cols[j],
+                        "correlation": round(float(corr_val), 4),
+                        "which_removed": which_removed,
+                    })
+
+        highly_correlated.sort(key=lambda x: x["correlation"], reverse=True)
+
+        feature_status = {}
+        for col in cols:
+            if col in selected:
+                feature_status[col] = "selected"
+            elif col in removed:
+                feature_status[col] = "removed"
+            else:
+                feature_status[col] = "other"
+
+        return {
+            "columns": cols,
+            "matrix": matrix,
+            "highly_correlated_pairs": highly_correlated[:10],
+            "feature_status": feature_status,
+        }
+
+    def _generate_threshold_simulation_data(
+        self, feature_scores: Dict[str, float], input_data: FeatureSelectionInput
+    ) -> Dict[str, Any]:
+        """Pre-sorted features for client-side threshold slider."""
+        if not feature_scores:
+            return {"features_sorted": [], "applied_threshold": 0, "total_features": 0}
+
+        sorted_features = sorted(feature_scores.items(), key=lambda x: x[1])
+        score_range = {
+            "min": round(min(feature_scores.values()), 6),
+            "max": round(max(feature_scores.values()), 6),
+        }
+
+        applied_threshold = 0
+        if input_data.method == "variance":
+            applied_threshold = input_data.variance_threshold
+        elif input_data.method == "correlation":
+            applied_threshold = input_data.correlation_threshold
+
+        return {
+            "features_sorted": [{"name": n, "score": round(s, 6)} for n, s in sorted_features],
+            "applied_threshold": applied_threshold,
+            "method": input_data.method,
+            "score_range": score_range,
+            "total_features": len(feature_scores),
+        }
+
+    def _generate_feature_selection_quiz(
+        self, df: pd.DataFrame, feature_scores: Dict[str, float],
+        selected: List[str], removed: List[str], summary: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Auto-generate quiz questions about feature selection from actual data."""
+        import random as _random
+        questions = []
+        q_id = 0
+
+        sorted_by_score = sorted(feature_scores.items(), key=lambda x: x[1], reverse=True)
+
+        # Q1: Score interpretation
+        if len(sorted_by_score) >= 2:
+            high_feat, high_score = sorted_by_score[0]
+            low_feat, low_score = sorted_by_score[-1]
+            q_id += 1
+            questions.append({
+                "id": f"q{q_id}",
+                "question": f"Feature '{high_feat}' has a score of {round(high_score, 4)} and '{low_feat}' has {round(low_score, 4)}. Which has more information?",
+                "options": [
+                    f"{high_feat} (higher score)",
+                    f"{low_feat} (lower score)",
+                    "They have equal information",
+                    "Cannot determine from scores alone",
+                ],
+                "correct_answer": 0,
+                "explanation": f"In variance-based selection, higher variance means more spread in values, indicating more information. {high_feat} ({round(high_score, 4)}) has more variance than {low_feat} ({round(low_score, 4)}).",
+                "difficulty": "easy",
+            })
+
+        # Q2: Threshold question
+        if removed and feature_scores:
+            removed_feat = removed[0]
+            removed_score = feature_scores.get(removed_feat, 0)
+            threshold = summary.get("variance_threshold", summary.get("correlation_threshold", 0))
+            q_id += 1
+            questions.append({
+                "id": f"q{q_id}",
+                "question": f"The threshold is {threshold}. Feature '{removed_feat}' has a score of {round(removed_score, 4)}. Was it selected or removed?",
+                "options": ["Removed", "Selected", "It depends on other features", "Score is not used"],
+                "correct_answer": 0,
+                "explanation": f"Feature '{removed_feat}' was removed because its score ({round(removed_score, 4)}) {'is below' if summary.get('method') == 'variance' else 'exceeds'} the threshold ({threshold}).",
+                "difficulty": "easy",
+            })
+
+        # Q3: Correlation question
+        numeric_df = df.select_dtypes(include=[np.number])
+        if len(numeric_df.columns) >= 2:
+            corr_matrix = numeric_df.corr().abs()
+            # Find highest correlation pair
+            max_corr = 0
+            pair = ("", "")
+            for i, c1 in enumerate(numeric_df.columns):
+                for j, c2 in enumerate(numeric_df.columns):
+                    if i < j and corr_matrix.loc[c1, c2] > max_corr:
+                        max_corr = corr_matrix.loc[c1, c2]
+                        pair = (c1, c2)
+
+            if max_corr > 0.5:
+                q_id += 1
+                questions.append({
+                    "id": f"q{q_id}",
+                    "question": f"Features '{pair[0]}' and '{pair[1]}' have a correlation of {round(max_corr, 2)}. Why might we remove one of them?",
+                    "options": [
+                        "They carry similar information, so one is redundant",
+                        "High correlation means they are both important",
+                        "Correlation doesn't affect feature selection",
+                        "Both should always be removed",
+                    ],
+                    "correct_answer": 0,
+                    "explanation": f"When two features are highly correlated ({round(max_corr, 2)}), they provide nearly the same information. Keeping both adds redundancy without improving the model, and can slow training.",
+                    "difficulty": "medium",
+                })
+
+        # Q4: Reduction math
+        orig = summary.get("original_features", 0)
+        sel = summary.get("selected_features", 0)
+        if orig > 0 and sel > 0:
+            reduction = round((1 - sel / orig) * 100, 1)
+            wrong1 = round(reduction + 15, 1)
+            wrong2 = round(reduction - 10, 1) if reduction > 10 else round(reduction + 25, 1)
+            wrong3 = round(sel / orig * 100, 1)
+            q_id += 1
+            options4 = [f"{reduction}%", f"{wrong1}%", f"{wrong2}%", f"{wrong3}%"]
+            _random.shuffle(options4)
+            correct_idx4 = options4.index(f"{reduction}%")
+            questions.append({
+                "id": f"q{q_id}",
+                "question": f"We started with {orig} features and kept {sel}. What percentage of features were removed?",
+                "options": options4,
+                "correct_answer": correct_idx4,
+                "explanation": f"Removed {orig - sel} out of {orig} features = ({orig - sel}/{orig}) × 100 = {reduction}% reduction.",
+                "difficulty": "easy",
+            })
+
+        # Q5: Why select features
+        q_id += 1
+        questions.append({
+            "id": f"q{q_id}",
+            "question": "What is the main benefit of removing low-variance features?",
+            "options": [
+                "They contain very little useful information for predictions",
+                "They make the dataset larger",
+                "They are always categorical columns",
+                "They cause errors in ML models",
+            ],
+            "correct_answer": 0,
+            "explanation": "Features with very low variance have nearly the same value for all samples. Since they barely change, they can't help the model distinguish between different outcomes. Removing them simplifies the model without losing predictive power.",
+            "difficulty": "easy",
+        })
+
+        _random.shuffle(questions)
+        return questions[:5]

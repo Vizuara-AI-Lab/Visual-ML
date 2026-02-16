@@ -152,7 +152,7 @@ def execute_node_task(
     Supports all node types:
     - upload_file: Dataset upload and validation
     - missing_value_handler: Handle missing data
-    - encoding: Categorical encoding (one-hot, label, ordinal, target)
+    - encoding: Categorical encoding (one-hot, label)
     - transformation: Feature transformations (log, sqrt, polynomial - removed)
     - scaling: Feature scaling (standard, minmax, robust)
     - feature_selection: Feature selection (Chi-Square, F-Score, RFE)
