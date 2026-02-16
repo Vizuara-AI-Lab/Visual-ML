@@ -211,6 +211,46 @@ async def explain_error(
         )
 
 
+@router.post("/explain-node", response_model=MentorResponse)
+async def explain_node(
+    node_type: str,
+    student: Student = Depends(get_current_student),
+    db: Session = Depends(get_db),
+):
+    """
+    Explain a specific node type with simple, everyday examples.
+
+    Args:
+        node_type: Type of node to explain (e.g., 'missing_value_handler', 'encoding', 'split')
+
+    Returns:
+        MentorResponse with detailed explanation including real-life examples
+    """
+    try:
+        # Get user preferences
+        preferences = _get_user_preferences(student, db)
+
+        # Generate node explanation
+        explanation_suggestion = recommendation_engine.explain_node(
+            node_type=node_type,
+            personality=preferences.personality,
+            expertise_level=preferences.expertise_level,
+        )
+
+        return MentorResponse(
+            success=True,
+            suggestions=[explanation_suggestion],
+            context_summary=f"Explanation for {node_type.replace('_', ' ').title()} node",
+        )
+
+    except Exception as e:
+        logger.error(f"Error explaining node '{node_type}': {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to explain node: {str(e)}",
+        )
+
+
 @router.post("/generate-speech", response_model=TTSResponse)
 async def generate_speech(request: TTSRequest, student: Student = Depends(get_current_student)):
     """

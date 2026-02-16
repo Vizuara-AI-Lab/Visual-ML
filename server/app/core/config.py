@@ -93,10 +93,6 @@ class Settings(BaseSettings):
     LAZY_LOAD_MODELS: bool = True
     ENABLE_MODEL_WARMUP: bool = False
 
-    # Admin
-    ADMIN_EMAIL: str = "admin@visualml.com"
-    ADMIN_PASSWORD: str = "change-this-password"
-
     # Inworld TTS (AI Mentor)
     INWORLD_API_KEY: Optional[str] = None
     INWORLD_WORKSPACE_ID: Optional[str] = None
@@ -109,9 +105,13 @@ class Settings(BaseSettings):
     # Frontend URL (for OAuth redirects)
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # Admin Credentials
+    ADMIN_EMAIL: str = "admin@visualml.com"
+    ADMIN_PASSWORD: str = "change-this-password"
+
     # Brevo Email Service
     BREVO_API_KEY: Optional[str] = ""
-    BREVO_SENDER_EMAIL: str = "mrsachinchaurasiya@gmail.com"
+    BREVO_SENDER_EMAIL: str = ""
     BREVO_SENDER_NAME: str = "Visual ML"
 
     # Redis URL for Celery

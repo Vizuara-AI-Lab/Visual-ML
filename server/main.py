@@ -31,10 +31,9 @@ from pathlib import Path
 async def lifespan(app: FastAPI):
     """
     Application lifespan manager.
-    Handles startup and shutdown logic.
+    Handles startup and shutdown logic. 
     """
     # Startup
-    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
 
     # Create necessary directories
@@ -57,18 +56,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-origins = ["http://localhost:5173", "http://127.0.0.1:5173", "https://visual-ml-fdxt.vercel.app/"]
+origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "https://visual-ml-fdxt.vercel.app/",
     ],
-    allow_credentials=True,  # REQUIRED for cookies
+    allow_credentials=True,  
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Request-ID"],  # For request tracing
+    expose_headers=["X-Request-ID"],  
 )
 
 # GZIP compression middleware - compress responses > 1KB
@@ -125,8 +123,6 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 # Routes
-
-
 @app.get("/")
 async def root():
     """Root endpoint with API information."""
@@ -143,7 +139,7 @@ async def root():
 app.include_router(auth_student.router, prefix=settings.API_V1_PREFIX)
 app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
 app.include_router(datasets.router, prefix=settings.API_V1_PREFIX)
-app.include_router(tasks.router, prefix=settings.API_V1_PREFIX)  # Task status/management
+app.include_router(tasks.router, prefix=settings.API_V1_PREFIX)  
 
 # AI Mentor routes
 app.include_router(mentor_router.router, prefix=settings.API_V1_PREFIX)

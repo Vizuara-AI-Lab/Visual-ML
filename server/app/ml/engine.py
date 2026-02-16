@@ -6,7 +6,6 @@ DAG-based execution with dynamic node registration.
 from typing import Dict, Any, List, Optional, Set, Tuple, Type
 from datetime import datetime
 from collections import defaultdict, deque
-import asyncio
 
 from app.core.logging import logger, log_ml_operation
 from app.core.exceptions import NodeExecutionError
@@ -20,18 +19,8 @@ class DAGValidationError(Exception):
 
 
 class MLPipelineEngine:
-    """
-    ML Pipeline orchestration engine with DAG-based execution.
+    
 
-    Features:
-    - Dynamic node registration (no hardcoded imports)
-    - DAG validation (cycle detection, topological sort)
-    - Automatic parallel execution
-    - Generic input preparation (no node-specific logic)
-    - Metadata-driven execution (nodes declare their behavior)
-    """
-
-    # Class-level node registry - nodes can self-register
     NODE_REGISTRY: Dict[str, Type[BaseNode]] = {}
 
     def __init__(self):
@@ -64,7 +53,6 @@ class MLPipelineEngine:
 
         This eliminates the need for manual imports and registration.
         """
-        # Import all node modules to trigger registration
         from app.ml.nodes.upload import UploadFileNode
         from app.ml.nodes.select import SelectDatasetNode
         from app.ml.nodes.clean import PreprocessNode

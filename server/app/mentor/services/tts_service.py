@@ -2,7 +2,7 @@
 Text-to-Speech Service (Inworld Integration)
 
 Converts mentor text messages to natural voice audio using Inworld TTS API.
-Supports personality-based voice configuration and audio caching.
+Uses cloned Rajat Sir voice for all mentor interactions with audio caching.
 """
 
 from typing import Optional
@@ -25,33 +25,8 @@ class TTSService:
         self.cache_dir = Path(settings.UPLOAD_DIR) / "tts_cache"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # Voice configurations per personality
-        self.voice_configs = {
-            PersonalityStyle.ENCOURAGING: {
-                "voice": "friendly",
-                "pitch": 1.1,
-                "speed": 1.0,
-                "energy": "high",
-            },
-            PersonalityStyle.PROFESSIONAL: {
-                "voice": "professional",
-                "pitch": 1.0,
-                "speed": 0.95,
-                "energy": "medium",
-            },
-            PersonalityStyle.CONCISE: {
-                "voice": "neutral",
-                "pitch": 1.0,
-                "speed": 1.1,
-                "energy": "medium",
-            },
-            PersonalityStyle.EDUCATIONAL: {
-                "voice": "teacher",
-                "pitch": 1.0,
-                "speed": 0.9,
-                "energy": "medium",
-            },
-        }
+        # Cloned voice ID for all mentor interactions
+        self.voice_id = "default-tdxiowf-g_jzcmgci-i_iw__rajat_sir_voice_clone"
 
     async def generate_speech(
         self,
@@ -65,7 +40,7 @@ class TTSService:
 
         Args:
             text: Text to convert to speech
-            personality: Voice personality style
+            personality: Used for cache key differentiation (voice is always Rajat Sir clone)
             cache_key: Optional key for caching
             return_base64: Return audio as base64 (True) or save file (False)
 
@@ -104,11 +79,8 @@ class TTSService:
 
             # Call Inworld API
             logger.info(f"Generating TTS with Inworld for text: {text[:50]}...")
-            voice_config = self.voice_configs.get(
-                personality, self.voice_configs[PersonalityStyle.ENCOURAGING]
-            )
 
-            audio_data = await self._call_inworld_api(text, voice_config)
+            audio_data = await self._call_inworld_api(text)
 
             if not audio_data:
                 raise Exception("Failed to generate audio from Inworld")
@@ -152,14 +124,14 @@ class TTSService:
                 error=str(e),
             )
 
-    async def _call_inworld_api(self, text: str, voice_config: dict) -> Optional[bytes]:
+    async def _call_inworld_api(self, text: str) -> Optional[bytes]:
         """
         Call Inworld TTS API to generate audio using streaming endpoint.
-        Simplified based on official example.
+        Uses cloned Rajat Sir voice for all interactions.
         """
         try:
-            # Map personality to Inworld voice ID
-            voice_id = "Dennis"  # Simple default
+            # Use cloned voice ID
+            voice_id = self.voice_id
             model_id = "inworld-tts-1.5-mini"
 
             url = "https://api.inworld.ai/tts/v1/voice:stream"
