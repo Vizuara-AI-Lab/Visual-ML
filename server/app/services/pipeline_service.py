@@ -3,7 +3,7 @@ ML Pipeline Service - Business logic for ML operations.
 Handles caching, async operations, and background tasks.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 from pathlib import Path
 from datetime import datetime
 import pandas as pd
@@ -103,10 +103,11 @@ class MLPipelineService:
     async def execute_pipeline(
         self,
         pipeline: List[Dict[str, Any]],
-        edges: List[Dict[str, Any]] = None,
+        edges: Optional[List[Dict[str, Any]]] = None,
         dry_run: bool = False,
         current_user: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+        progress_callback: Optional[Callable] = None,
+    ) -> Dict[str, Any]:
         """
         Execute a complete pipeline.
 
@@ -115,13 +116,18 @@ class MLPipelineService:
             edges: List of edge connections (source -> target)
             dry_run: Validate without executing
             current_user: Current user context for authentication
+            progress_callback: Optional async callback for progress updates
 
         Returns:
             Dict with success status and results list
         """
         try:
             result = await pipeline_engine.execute_pipeline(
-                nodes=pipeline, edges=edges, dry_run=dry_run, current_user=current_user
+                nodes=pipeline,
+                edges=edges or [],
+                dry_run=dry_run,
+                current_user=current_user,
+                progress_callback=progress_callback,
             )
             # Return the full DAG execution result (includes success, error, results, etc.)
             return result

@@ -4,7 +4,7 @@
 
 import { create } from "zustand";
 import { type Node, type Edge } from "@xyflow/react";
-import type { BaseNodeData } from "../types/pipeline";
+import type { BaseNodeData, NodeExecutionStatus } from "../types/pipeline";
 
 export interface DatasetMetadata {
   dataset_id: string;
@@ -68,6 +68,13 @@ interface PlaygroundStore {
   executionResults: PipelineExecutionResult | null;
   setExecutionResults: (results: PipelineExecutionResult | null) => void;
 
+  // Real-time execution status tracking
+  nodeExecutionStatus: Record<string, NodeExecutionStatus>;
+  setNodeExecutionStatus: (nodeId: string, status: NodeExecutionStatus) => void;
+  setAllNodesPending: (nodeIds: string[]) => void;
+  clearExecutionStatus: () => void;
+  animateEdgesForNode: (nodeId: string) => void;
+
   // Project state
   currentProjectId: string | null;
   setCurrentProjectId: (id: string | null) => void;
@@ -100,6 +107,7 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
   isExecuting: false,
   executionResult: null,
   executionResults: null,
+  nodeExecutionStatus: {},
   currentProjectId: null,
 
   // Node actions
@@ -169,6 +177,75 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
   setExecutionResult: (result) => set({ executionResult: result }),
   setExecutionResults: (results) => set({ executionResults: results }),
 
+  // Real-time execution status
+  setNodeExecutionStatus: (nodeId, status) =>
+    set((state) => ({
+      nodeExecutionStatus: {
+        ...state.nodeExecutionStatus,
+        [nodeId]: status,
+      },
+    })),
+
+  setAllNodesPending: (nodeIds) =>
+    set({
+      nodeExecutionStatus: Object.fromEntries(
+        nodeIds.map((id) => [id, "pending" as NodeExecutionStatus]),
+      ),
+    }),
+
+  clearExecutionStatus: () =>
+    set({
+      nodeExecutionStatus: {},
+    }),
+
+  animateEdgesForNode: (nodeId) =>
+    set((state) => {
+      // Find outgoing edges from this node
+      const outgoingEdges = state.edges.filter(
+        (edge) => edge.source === nodeId,
+      );
+
+      if (outgoingEdges.length === 0) return {};
+
+      // Temporarily animate outgoing edges
+      const updatedEdges = state.edges.map((edge) => {
+        if (edge.source === nodeId) {
+          return {
+            ...edge,
+            animated: true,
+            style: {
+              ...edge.style,
+              stroke: "#10B981", // Green color for data flow
+              strokeWidth: 2,
+            },
+          };
+        }
+        return edge;
+      });
+
+      // Reset animation after 2 seconds
+      setTimeout(() => {
+        const currentState = usePlaygroundStore.getState();
+        const resetEdges = currentState.edges.map((edge) => {
+          if (edge.source === nodeId) {
+            return {
+              ...edge,
+              animated: false,
+              style: {
+                ...edge.style,
+                stroke: undefined,
+                strokeWidth: undefined,
+              },
+            };
+          }
+          return edge;
+        });
+        usePlaygroundStore.setState({ edges: resetEdges });
+      }, 2000);
+
+      return { edges: updatedEdges };
+    }),
+
   // Project state
   setCurrentProjectId: (id) => set({ currentProjectId: id }),
 
@@ -232,6 +309,7 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
       datasetMetadata: null,
       executionResult: null,
       executionResults: null,
+      nodeExecutionStatus: {},
     }),
 
   // Clear
@@ -241,5 +319,6 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
       edges: [],
       selectedNodeId: null,
       executionResults: null,
+      nodeExecutionStatus: {},
     }),
 }));

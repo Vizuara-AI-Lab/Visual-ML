@@ -3,7 +3,7 @@ ML Pipeline Engine - Orchestrates node execution and manages pipelines.
 DAG-based execution with dynamic node registration.
 """
 
-from typing import Dict, Any, List, Optional, Set, Tuple, Type
+from typing import Dict, Any, List, Optional, Set, Tuple, Type, Callable
 from datetime import datetime
 from collections import defaultdict, deque
 
@@ -19,7 +19,6 @@ class DAGValidationError(Exception):
 
 
 class MLPipelineEngine:
-    
 
     NODE_REGISTRY: Dict[str, Type[BaseNode]] = {}
 
@@ -425,7 +424,11 @@ class MLPipelineEngine:
         return merged_data
 
     async def _execute_dag(
-        self, execution_order: List[str], nodes: List[Dict[str, Any]], dag: Dict[str, List[str]]
+        self,
+        execution_order: List[str],
+        nodes: List[Dict[str, Any]],
+        dag: Dict[str, List[str]],
+        progress_callback: Optional[Callable] = None,
     ) -> None:
         """
         Execute nodes in DAG order.
@@ -437,6 +440,7 @@ class MLPipelineEngine:
             execution_order: Topologically sorted node IDs
             nodes: List of node configs
             dag: DAG adjacency list
+            progress_callback: Optional async callback for progress updates
         """
         # Create node lookup by ID
         node_lookup = {}
@@ -448,9 +452,21 @@ class MLPipelineEngine:
         for node_id in execution_order:
             node_config = node_lookup[node_id]
             node_type = node_config.get("node_type")
+            node_label = node_config.get("label", node_type)
 
             # Prepare input from predecessors
             input_data = self._prepare_node_input(node_id, node_config, dag)
+
+            # Notify node started
+            if progress_callback:
+                await progress_callback(
+                    {
+                        "event": "node_started",
+                        "node_id": node_id,
+                        "node_type": node_type,
+                        "label": node_label,
+                    }
+                )
 
             # Execute node
             try:
@@ -470,6 +486,18 @@ class MLPipelineEngine:
 
                 logger.info(f"Node {node_id} ({node_type}) executed successfully")
 
+                # Notify node completed
+                if progress_callback:
+                    await progress_callback(
+                        {
+                            "event": "node_completed",
+                            "node_id": node_id,
+                            "node_type": node_type,
+                            "label": node_label,
+                            "success": True,
+                        }
+                    )
+
             except Exception as e:
                 logger.error(f"Node {node_id} ({node_type}) execution failed: {str(e)}")
 
@@ -481,6 +509,18 @@ class MLPipelineEngine:
                     "node_id": node_id,
                 }
 
+                # Notify node failed
+                if progress_callback:
+                    await progress_callback(
+                        {
+                            "event": "node_failed",
+                            "node_id": node_id,
+                            "node_type": node_type,
+                            "label": node_label,
+                            "error": str(e),
+                        }
+                    )
+
                 # Stop execution on error
                 raise
 
@@ -490,6 +530,7 @@ class MLPipelineEngine:
         edges: List[Dict[str, Any]],
         dry_run: bool = False,
         current_user: Optional[Dict[str, Any]] = None,
+        progress_callback: Optional[Callable] = None,
     ) -> Dict[str, Any]:
         """
         Execute a complete pipeline using DAG-based execution.
@@ -505,6 +546,7 @@ class MLPipelineEngine:
             edges: List of edges [{"source": "1", "target": "2"}, ...]
             dry_run: If True, validate but don't execute
             current_user: Current user context
+            progress_callback: Optional async callback for progress updates
 
         Returns:
             {
@@ -547,8 +589,8 @@ class MLPipelineEngine:
 
             logger.info(f"Execution order: {execution_order}")
 
-            # Execute DAG
-            await self._execute_dag(execution_order, nodes, dag)
+            # Execute DAG with progress callback
+            await self._execute_dag(execution_order, nodes, dag, progress_callback)
 
             # Collect results
             results = [self.execution_context.get(node_id, {}) for node_id in execution_order]

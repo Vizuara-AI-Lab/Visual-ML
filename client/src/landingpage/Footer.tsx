@@ -1,19 +1,17 @@
 import React from "react";
-import { Twitter, Linkedin, Mail, ArrowRight } from "lucide-react";
+import { Twitter, Linkedin, Mail } from "lucide-react";
 
 const Footer: React.FC = () => {
   const footerLinks = {
     Product: [
       { name: "Features", href: "#features" },
       { name: "Automation", href: "#automation" },
-      { name: "Pricing", href: "#pricing" },
       { name: "Templates", href: "#templates" },
     ],
     Company: [
-      { name: "About", href: "#about" },
-      { name: "Blog", href: "#blog" },
-      { name: "Careers", href: "#careers" },
-      { name: "Contact", href: "#contact" },
+      { name: "About", href: "https://vizuara.ai/about-us/" },
+      { name: "Careers", href: "https://hiring.vizuara.ai/" },
+      { name: "Contact", href: "https://vizuara.ai/contact-us" },
     ],
     Resources: [
       { name: "Documentation", href: "#docs" },
@@ -58,21 +56,7 @@ const Footer: React.FC = () => {
                 </div>
 
                 {/* Newsletter */}
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-slate-900">
-                    Stay updated
-                  </p>
-                  <div className="flex gap-2">
-                    <input
-                      type="email"
-                      placeholder="Enter your email"
-                      className="flex-1 px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
-                    />
-                    <button className="px-4 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/25 hover:shadow-xl hover:shadow-slate-900/30 flex items-center justify-center">
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+                
               </div>
             </div>
 

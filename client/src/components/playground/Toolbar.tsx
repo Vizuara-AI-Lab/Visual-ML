@@ -1,7 +1,16 @@
-import { Play, Trash2, Save, Settings, ArrowLeft, Share2 } from "lucide-react";
+import {
+  Play,
+  Trash2,
+  Save,
+  Settings,
+  ArrowLeft,
+  Share2,
+  StopCircle,
+} from "lucide-react";
 
 interface ToolbarProps {
   onExecute: () => void;
+  onAbort?: () => void;
   onClear: () => void;
   onSave: () => void;
   onShare?: () => void;
@@ -18,6 +27,7 @@ interface ToolbarProps {
 
 export const Toolbar = ({
   onExecute,
+  onAbort,
   onClear,
   onSave,
   onShare,
@@ -51,14 +61,24 @@ export const Toolbar = ({
           </div>
         </div>
         <div className="h-10 w-px bg-slate-200/60" />
-        <button
-          onClick={onExecute}
-          disabled={isExecuting}
-          className="ml-3 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-slate-900/25 hover:shadow-xl hover:shadow-slate-900/30 disabled:shadow-none font-semibold"
-        >
-          <Play className="w-4 h-4" />
-          {isExecuting ? "Executing..." : "Run Pipeline"}
-        </button>
+        {isExecuting && onAbort ? (
+          <button
+            onClick={onAbort}
+            className="ml-3 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-red-900/25 hover:shadow-xl hover:shadow-red-900/30 font-semibold"
+          >
+            <StopCircle className="w-4 h-4" />
+            Stop Execution
+          </button>
+        ) : (
+          <button
+            onClick={onExecute}
+            disabled={isExecuting}
+            className="ml-3 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-slate-900/25 hover:shadow-xl hover:shadow-slate-900/30 disabled:shadow-none font-semibold"
+          >
+            <Play className="w-4 h-4" />
+            {isExecuting ? "Executing..." : "Run Pipeline"}
+          </button>
+        )}
 
         {/* Progress Indicator */}
         {executionProgress && (

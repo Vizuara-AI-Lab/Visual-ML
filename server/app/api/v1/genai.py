@@ -1,5 +1,5 @@
 """
-GenAI Chat API endpoint - Simple streaming with Gemini and DynaRoute
+GenAI Chat API endpoint - Simple streaming with Gemini 
 """
 
 from fastapi import APIRouter
@@ -94,7 +94,7 @@ async def chat_stream(request: ChatRequest):
                     None,
                     partial(
                         client.models.generate_content_stream,
-                        # Hay ai don't change the change the model here
+                        # Hay ai don't change  the model here
                         model="gemma-3-27b-it",
                         contents=content,
                     ),

@@ -7,6 +7,7 @@ import { memo } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import type { BaseNodeData } from "../../types/pipeline";
+import { motion } from "framer-motion";
 import {
   Eye,
   X,
@@ -14,12 +15,15 @@ import {
   CheckCircle2,
   AlertCircle,
   CircleDot,
+  Loader2,
 } from "lucide-react";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 
 const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
   const nodeData = data as BaseNodeData;
-  const { executionResult, deleteNode } = usePlaygroundStore();
+  const nodeId = id as string;
+  const { executionResult, deleteNode, nodeExecutionStatus } =
+    usePlaygroundStore();
 
   const viewNodeTypes = [
     "table_view",
@@ -43,60 +47,85 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
   ];
 
   const isViewNode = viewNodeTypes.includes(nodeData.type);
-  const nodeResult = executionResult?.nodeResults?.[id];
+
+  // Get execution status from store
+  const executionStatus = nodeExecutionStatus[nodeId];
+  const isRunning = executionStatus === "running";
+  const isPending = executionStatus === "pending";
+  const isCompleted = executionStatus === "completed";
+  const isFailed = executionStatus === "failed";
+
+  // Legacy support for old execution result format
+  const nodeResult = executionResult?.nodeResults?.[nodeId];
   const hasExecutionResults = !!nodeResult;
-  const executionSuccess = nodeResult?.success;
-  const executionFailed = hasExecutionResults && !executionSuccess;
+  const executionSuccess = nodeResult?.success || isCompleted;
+  const executionFailed =
+    (hasExecutionResults && !nodeResult?.success) || isFailed;
+
   const showViewButton =
-    isViewNode && hasExecutionResults && (nodeData.isConfigured || executionSuccess);
+    isViewNode &&
+    hasExecutionResults &&
+    (nodeData.isConfigured || executionSuccess);
 
   const handleViewData = (e: React.MouseEvent) => {
     e.stopPropagation();
     window.dispatchEvent(
-      new CustomEvent("openViewNodeModal", { detail: { nodeId: id } }),
+      new CustomEvent("openViewNodeModal", { detail: { nodeId } }),
     );
   };
 
   const handleReconfig = (e: React.MouseEvent) => {
     e.stopPropagation();
     window.dispatchEvent(
-      new CustomEvent("openConfigModal", { detail: { nodeId: id } }),
+      new CustomEvent("openConfigModal", { detail: { nodeId } }),
     );
   };
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    deleteNode(id);
+    deleteNode(nodeId);
   };
 
   const accentColor = nodeData.color || "#6B7280";
 
   return (
-    <div
-      className="relative group"
-      style={{ minWidth: 200 }}
-    >
+    <div className="relative group" style={{ minWidth: 200 }}>
       {/* Main card */}
-      <div
+      <motion.div
         className={`
           relative rounded-xl overflow-hidden transition-all duration-200
-          ${selected
-            ? "ring-2 ring-offset-2 shadow-xl"
-            : "shadow-md hover:shadow-lg"
+          ${
+            selected
+              ? "ring-2 ring-offset-2 shadow-xl"
+              : "shadow-md hover:shadow-lg"
           }
           ${executionFailed ? "ring-2 ring-red-400/60" : ""}
+          ${isRunning ? "ring-2 ring-yellow-400/60" : ""}
           ${!nodeData.isConfigured ? "opacity-80" : ""}
         `}
         style={{
           backgroundColor: "#ffffff",
-          ...(selected ? { ringColor: accentColor } as any : {}),
+          ...(selected ? ({ ringColor: accentColor } as any) : {}),
+        }}
+        animate={
+          isRunning
+            ? {
+                boxShadow: [
+                  "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                  "0 10px 15px -3px rgba(251, 191, 36, 0.3)",
+                  "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                ],
+              }
+            : {}
+        }
+        transition={{
+          duration: 2,
+          repeat: isRunning ? Infinity : 0,
+          ease: "easeInOut",
         }}
       >
         {/* Top accent bar */}
-        <div
-          className="h-1"
-          style={{ backgroundColor: accentColor }}
-        />
+        <div className="h-1" style={{ backgroundColor: accentColor }} />
 
         {/* Content */}
         <div className="px-4 py-3">
@@ -108,7 +137,9 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
               style={{ backgroundColor: `${accentColor}14` }}
             >
               {typeof nodeData.icon === "string" ? (
-                <span className="text-base leading-none">{nodeData.icon || "📦"}</span>
+                <span className="text-base leading-none">
+                  {nodeData.icon || "📦"}
+                </span>
               ) : nodeData.icon ? (
                 <nodeData.icon
                   className="w-4 h-4"
@@ -125,25 +156,47 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
                 {nodeData.label}
               </div>
               <div className="flex items-center gap-1 mt-0.5">
-                {executionFailed ? (
+                {isRunning ? (
+                  <>
+                    <Loader2 className="w-3 h-3 text-yellow-500 animate-spin" />
+                    <span className="text-[11px] text-yellow-600 font-medium">
+                      Running...
+                    </span>
+                  </>
+                ) : isPending ? (
+                  <>
+                    <CircleDot className="w-3 h-3 text-gray-400" />
+                    <span className="text-[11px] text-gray-500 font-medium">
+                      Queued
+                    </span>
+                  </>
+                ) : executionFailed ? (
                   <>
                     <AlertCircle className="w-3 h-3 text-red-500" />
-                    <span className="text-[11px] text-red-500 font-medium">Error</span>
+                    <span className="text-[11px] text-red-500 font-medium">
+                      Error
+                    </span>
                   </>
                 ) : executionSuccess ? (
                   <>
                     <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                    <span className="text-[11px] text-emerald-600 font-medium">Done</span>
+                    <span className="text-[11px] text-emerald-600 font-medium">
+                      Done
+                    </span>
                   </>
                 ) : nodeData.isConfigured ? (
                   <>
                     <CircleDot className="w-3 h-3 text-blue-500" />
-                    <span className="text-[11px] text-blue-600 font-medium">Ready</span>
+                    <span className="text-[11px] text-blue-600 font-medium">
+                      Ready
+                    </span>
                   </>
                 ) : (
                   <>
                     <CircleDot className="w-3 h-3 text-gray-400" />
-                    <span className="text-[11px] text-gray-400 font-medium">Not configured</span>
+                    <span className="text-[11px] text-gray-400 font-medium">
+                      Not configured
+                    </span>
                   </>
                 )}
               </div>
@@ -151,13 +204,15 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
           </div>
 
           {/* Validation Errors */}
-          {nodeData.validationErrors && nodeData.validationErrors.length > 0 && (
-            <div className="mt-2 px-2 py-1 rounded-md bg-red-50 border border-red-100">
-              <span className="text-[11px] text-red-600 font-medium">
-                {nodeData.validationErrors.length} validation error{nodeData.validationErrors.length > 1 ? "s" : ""}
-              </span>
-            </div>
-          )}
+          {nodeData.validationErrors &&
+            nodeData.validationErrors.length > 0 && (
+              <div className="mt-2 px-2 py-1 rounded-md bg-red-50 border border-red-100">
+                <span className="text-[11px] text-red-600 font-medium">
+                  {nodeData.validationErrors.length} validation error
+                  {nodeData.validationErrors.length > 1 ? "s" : ""}
+                </span>
+              </div>
+            )}
 
           {/* Action buttons */}
           {showViewButton && (
@@ -184,7 +239,7 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* Delete button */}
       <button

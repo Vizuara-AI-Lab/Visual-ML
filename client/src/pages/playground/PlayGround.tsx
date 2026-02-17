@@ -14,7 +14,7 @@ import { ShareModal } from "../../components/playground/ShareModal";
 import { Toolbar } from "../../components/playground/Toolbar";
 import { ResultsPanel } from "../../components/playground/ResultsPanel";
 import { usePlaygroundStore } from "../../store/playgroundStore";
-import { executePipeline } from "../../features/playground/api";
+import { executePipelineStream } from "../../features/playground/api";
 import type { NodeType, BaseNodeData } from "../../types/pipeline";
 import { useProjectState } from "../../hooks/queries/useProjectState";
 import { useSaveProject } from "../../hooks/mutations/useSaveProject";
@@ -35,6 +35,7 @@ export default function PlayGround() {
   const [chatbotNodeId, setChatbotNodeId] = useState<string | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [streamCleanup, setStreamCleanup] = useState<(() => void) | null>(null);
 
   const [executionProgress, setExecutionProgress] = useState<{
     status: string;
@@ -56,6 +57,10 @@ export default function PlayGround() {
     currentProjectId,
     updateNode,
     addNode,
+    setNodeExecutionStatus,
+    setAllNodesPending,
+    clearExecutionStatus,
+    animateEdgesForNode,
   } = usePlaygroundStore();
 
   const { user } = useAuthStore();
@@ -165,6 +170,20 @@ export default function PlayGround() {
     };
   }, []);
 
+  // Cleanup SSE stream on unmount
+  useEffect(() => {
+    return () => {
+      if (streamCleanup) {
+        streamCleanup();
+      }
+    };
+  }, [streamCleanup]);
+
+  // Clear execution status when nodes or edges change (pipeline modified)
+  useEffect(() => {
+    clearExecutionStatus();
+  }, [nodes.length, edges.length, clearExecutionStatus]);
+
   const onNodeDragStart = (event: React.DragEvent, nodeType: string) => {
     event.dataTransfer.setData("application/reactflow", nodeType);
     event.dataTransfer.effectAllowed = "move";
@@ -241,6 +260,7 @@ export default function PlayGround() {
     try {
       setIsExecuting(true);
       setResultsOpen(true);
+      clearExecutionStatus();
 
       // 🛡️ VALIDATION: Check pipeline before execution
       const validationResult = validatePipeline(nodes, edges);
@@ -301,6 +321,9 @@ export default function PlayGround() {
       // Topological sort to determine execution order
       const sortedNodes = topologicalSort(nodes, edges);
 
+      // Initialize all nodes as pending
+      setAllNodesPending(sortedNodes.map((n) => n.id));
+
       // Inject project_id into each node's input for nodes that need it (upload_file)
       const pipelineConfig = sortedNodes.map((node) => ({
         node_id: node.id,
@@ -312,130 +335,147 @@ export default function PlayGround() {
             ? { project_id: parseInt(currentProjectId) }
             : {}),
         },
+        label: node.data.label,
       }));
 
-      console.log("🚀 Executing pipeline with config:", pipelineConfig);
+      console.log("🚀 Executing pipeline with streaming...", pipelineConfig);
 
-      // Debug: Log each node's config
-      pipelineConfig.forEach((nodeConfig, index) => {
-        console.log(`📋 Node ${index + 1} (${nodeConfig.node_type}):`, {
-          node_id: nodeConfig.node_id,
-          input: nodeConfig.input,
-        });
-        if (nodeConfig.node_type === "transformation") {
-          console.log("  ⚠️ Transformation columns:", nodeConfig.input.columns);
-        }
-        if (nodeConfig.node_type === "feature_selection") {
-          console.log(
-            "  🎯 Feature Selection - target_column:",
-            nodeConfig.input.target_column,
-          );
-          console.log(
-            "  🎯 Feature Selection - scoring_function:",
-            nodeConfig.input.scoring_function,
-          );
-          console.log(
-            "  🎯 Feature Selection - method:",
-            nodeConfig.input.method,
-          );
-        }
-      });
-
-      const result = await executePipeline({
-        pipeline: pipelineConfig,
-        edges: edges.map((edge) => ({
-          source: edge.source,
-          target: edge.target,
-          sourceHandle: edge.sourceHandle || undefined,
-          targetHandle: edge.targetHandle || undefined,
-        })),
-        pipeline_name: "Playground Pipeline",
-      });
-
-      console.log("✅ Pipeline execution result:", result);
-
-      // Store results by node ID
+      // Store results by node ID as they come in
       const nodeResults: Record<string, any> = {};
-      if (result.results) {
-        result.results.forEach((nodeResult: any, index: number) => {
-          const nodeId = sortedNodes[index]?.id;
-          if (nodeId) {
-            console.log(
-              `📦 Node ${nodeId} (${sortedNodes[index]?.type}) result:`,
-              nodeResult,
-            );
-            nodeResults[nodeId] = nodeResult;
-          }
-        });
-      }
 
-      console.log("📊 All node results:", nodeResults);
+      // Execute pipeline with streaming
+      const cleanup = await executePipelineStream(
+        {
+          pipeline: pipelineConfig,
+          edges: edges.map((edge) => ({
+            source: edge.source,
+            target: edge.target,
+            sourceHandle: edge.sourceHandle || undefined,
+            targetHandle: edge.targetHandle || undefined,
+          })),
+          pipeline_name: "Playground Pipeline",
+        },
+        {
+          onNodeStarted: (event) => {
+            console.log("🟡 Node started:", event);
+            setNodeExecutionStatus(event.node_id, "running");
+            toast.loading(`Running: ${event.label}`, {
+              id: event.node_id,
+              duration: Infinity,
+            });
+          },
+          onNodeCompleted: (event) => {
+            console.log("🟢 Node completed:", event);
+            setNodeExecutionStatus(event.node_id, "completed");
+            animateEdgesForNode(event.node_id);
+            toast.success(`Completed: ${event.label}`, {
+              id: event.node_id,
+              duration: 2000,
+            });
+          },
+          onNodeFailed: (event) => {
+            console.log("🔴 Node failed:", event);
+            setNodeExecutionStatus(event.node_id, "failed");
+            toast.error(`Failed: ${event.label}\n${event.error}`, {
+              id: event.node_id,
+              duration: 5000,
+            });
+          },
+          onPipelineCompleted: (event) => {
+            console.log("✅ Pipeline completed:", event);
 
-      // Update each node with its execution result
-      sortedNodes.forEach((node, index) => {
-        const nodeResult = result.results?.[index];
-        if (nodeResult && node.id) {
-          updateNode(node.id, {
-            result: nodeResult,
-          });
-        }
-      });
+            // Store results by node ID
+            if (event.results) {
+              event.results.forEach((nodeResult: any, index: number) => {
+                const nodeId = sortedNodes[index]?.id;
+                if (nodeId) {
+                  nodeResults[nodeId] = nodeResult;
+                  updateNode(nodeId, { result: nodeResult });
+                }
+              });
+            }
 
-      setExecutionResult({
-        success: result.success,
-        nodeResults,
-        timestamp: new Date().toISOString(),
-      });
+            setExecutionResult({
+              success: true,
+              nodeResults,
+              timestamp: new Date().toISOString(),
+            });
 
-      setExecutionProgress(null);
+            toast.success("Pipeline execution completed!", {
+              duration: 3000,
+            });
+
+            setIsExecuting(false);
+            setStreamCleanup(null);
+          },
+          onPipelineFailed: (event) => {
+            console.log("❌ Pipeline failed:", event);
+
+            // Format user-friendly error message
+            let userFriendlyError = event.error || "Pipeline execution failed";
+            let errorSuggestion: string | undefined = undefined;
+
+            // Handle specific error types
+            if (userFriendlyError.includes("Missing values found")) {
+              const columnMatch = userFriendlyError.match(/column '([^']+)'/);
+              const column = columnMatch ? columnMatch[1] : "a column";
+              userFriendlyError = `Missing values detected in "${column}"`;
+              errorSuggestion = "Please handle missing values before encoding.";
+            } else if (userFriendlyError.includes("column_configs")) {
+              userFriendlyError = "No columns configured for encoding";
+              errorSuggestion =
+                "Please configure encoding settings for at least one column.";
+            }
+
+            setExecutionResult({
+              success: false,
+              error: userFriendlyError,
+              errorSuggestion: errorSuggestion,
+              timestamp: new Date().toISOString(),
+            });
+
+            toast.error(userFriendlyError, {
+              duration: 5000,
+            });
+
+            setIsExecuting(false);
+            setStreamCleanup(null);
+          },
+          onError: (error) => {
+            console.error("SSE Error:", error);
+            toast.error("Connection error: " + error.message, {
+              duration: 5000,
+            });
+            setIsExecuting(false);
+            setStreamCleanup(null);
+          },
+        },
+      );
+
+      // Store cleanup function for abort functionality
+      setStreamCleanup(() => cleanup);
     } catch (error) {
       console.error("Pipeline execution failed:", error);
-
       setExecutionProgress(null);
 
-      // Format user-friendly error message with details and suggestion
+      // Format user-friendly error message
       let userFriendlyError = "Pipeline execution failed";
       let errorDetails: Record<string, unknown> | undefined = undefined;
       let errorSuggestion: string | undefined = undefined;
 
       if (error && typeof error === "object" && "response" in error) {
         const responseError = (error as any).response?.data;
-
-        // FastAPI returns errors in "detail" field by default
         const errorMsg =
           responseError?.detail ||
           responseError?.message ||
           responseError?.error;
 
         if (errorMsg) {
-          // Handle specific error types with user-friendly messages
-          if (errorMsg.includes("Missing values found")) {
-            const columnMatch = errorMsg.match(/column '([^']+)'/);
-            const column = columnMatch ? columnMatch[1] : "a column";
-            userFriendlyError = `Missing values detected in "${column}"`;
-            errorSuggestion = "Please handle missing values before encoding.";
-          } else if (errorMsg.includes("column_configs")) {
-            userFriendlyError = "No columns configured for encoding";
-            errorSuggestion =
-              "Please configure encoding settings for at least one column.";
-          } else if (
-            errorMsg.includes("Dataset") &&
-            errorMsg.includes("not found")
-          ) {
-            userFriendlyError = "Dataset not found or empty";
-            errorSuggestion =
-              "Please ensure the data source is properly connected.";
-          } else {
-            // Extract just the reason part if it exists
-            const reasonMatch = errorMsg.match(/\[.*?\]: (.+)/);
-            userFriendlyError = reasonMatch ? reasonMatch[1] : errorMsg;
-          }
-
-          // Extract details and suggestion from response if available
+          userFriendlyError = errorMsg;
           if (responseError.details) {
             errorDetails = responseError.details;
           }
-          if (responseError.suggestion && !errorSuggestion) {
+          if (responseError.suggestion) {
             errorSuggestion = responseError.suggestion;
           }
         }
@@ -450,9 +490,22 @@ export default function PlayGround() {
         errorSuggestion: errorSuggestion,
         timestamp: new Date().toISOString(),
       });
-    } finally {
+
       setIsExecuting(false);
+      setStreamCleanup(null);
     }
+  };
+
+  const handleAbort = () => {
+    if (streamCleanup) {
+      streamCleanup();
+      setStreamCleanup(null);
+    }
+    setIsExecuting(false);
+    clearExecutionStatus();
+    toast.error("Pipeline execution aborted by user", {
+      duration: 3000,
+    });
   };
 
   const handleClear = () => {
@@ -566,6 +619,7 @@ export default function PlayGround() {
       <Toaster />
       <Toolbar
         onExecute={handleExecute}
+        onAbort={handleAbort}
         onClear={handleClear}
         onSave={handleSave}
         onShare={projectId ? handleShare : undefined}
@@ -709,14 +763,11 @@ export default function PlayGround() {
                   })),
                 };
 
-                const analysis =
-                  await mentorApi.analyzePipeline(pipelineData);
+                const analysis = await mentorApi.analyzePipeline(pipelineData);
 
                 if (analysis.suggestions.length > 0) {
                   analysis.suggestions.slice(0, 2).forEach((suggestion) => {
-                    useMentorStore
-                      .getState()
-                      .showSuggestion(suggestion);
+                    useMentorStore.getState().showSuggestion(suggestion);
                   });
                 } else {
                   toast("No suggestions right now — keep building!", {
@@ -725,10 +776,7 @@ export default function PlayGround() {
                   });
                 }
               } catch (error) {
-                console.error(
-                  "[Mentor] Error fetching suggestions:",
-                  error,
-                );
+                console.error("[Mentor] Error fetching suggestions:", error);
                 toast.error("Failed to get suggestions");
               }
             }

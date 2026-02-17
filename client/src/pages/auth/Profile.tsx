@@ -17,7 +17,6 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import axiosInstance from "../../lib/axios";
 import Navbar from "../../landingpage/Navbar";
-import { MentorSettings } from "../../components/MentorSettings";
 
 interface UserProfile {
   id: number;
@@ -492,9 +491,6 @@ const Profile: React.FC = () => {
                 </div>
               </form>
             </div>
-
-            {/* AI Mentor Settings Card */}
-            <MentorSettings />
           </div>
         </div>
       </div>
