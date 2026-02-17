@@ -11,6 +11,7 @@ import { ConfigModal } from "../../components/playground/ConfigModal";
 import { ChatbotModal } from "../../components/playground/ChatbotModal";
 import { ViewNodeModal } from "../../components/playground/ViewNodeModal";
 import { ShareModal } from "../../components/playground/ShareModal";
+import { ExportModal } from "../../components/playground/ExportModal";
 import { Toolbar } from "../../components/playground/Toolbar";
 import { ResultsPanel } from "../../components/playground/ResultsPanel";
 import { usePlaygroundStore } from "../../store/playgroundStore";
@@ -35,6 +36,7 @@ export default function PlayGround() {
   const [chatbotNodeId, setChatbotNodeId] = useState<string | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
 
   const [executionProgress, setExecutionProgress] = useState<{
     status: string;
@@ -568,6 +570,7 @@ export default function PlayGround() {
         onExecute={handleExecute}
         onClear={handleClear}
         onSave={handleSave}
+        onExport={() => setExportModalOpen(true)}
         onShare={projectId ? handleShare : undefined}
         isExecuting={usePlaygroundStore.getState().isExecuting}
         executionProgress={executionProgress}
@@ -607,6 +610,11 @@ export default function PlayGround() {
         onClose={() => setShareModalOpen(false)}
         projectId={projectId ? parseInt(projectId) : 0}
         projectName={projectData?.name || "Untitled Project"}
+      />
+
+      <ExportModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
       />
 
       <MentorAssistant
