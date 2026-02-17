@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Share2,
   StopCircle,
+  Code,
 } from "lucide-react";
 
 interface ToolbarProps {
@@ -14,6 +15,7 @@ interface ToolbarProps {
   onClear: () => void;
   onSave: () => void;
   onShare?: () => void;
+  onExport?: () => void;
   isExecuting: boolean;
   executionProgress?: {
     status: string;
@@ -31,6 +33,7 @@ export const Toolbar = ({
   onClear,
   onSave,
   onShare,
+  onExport,
   isExecuting,
   executionProgress,
   projectName,
@@ -117,6 +120,17 @@ export const Toolbar = ({
           <Save className="w-4 h-4" />
           <span className="font-medium">Save</span>
         </button>
+
+        {onExport && (
+          <button
+            onClick={onExport}
+            className="px-4 py-2 hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700 rounded-lg flex items-center gap-2 transition-all border border-transparent hover:border-emerald-200"
+            title="Export Pipeline to Code"
+          >
+            <Code className="w-4 h-4" />
+            <span className="font-medium">Export Code</span>
+          </button>
+        )}
 
         {onShare && (
           <button
