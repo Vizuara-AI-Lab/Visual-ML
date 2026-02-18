@@ -1,19 +1,20 @@
-import React from "react";
-import { Twitter, Linkedin, Mail, ArrowRight } from "lucide-react";
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import { Twitter, Linkedin, Mail, ArrowRight, Sparkles } from "lucide-react";
 
 const Footer: React.FC = () => {
+  const [email, setEmail] = useState("");
+
   const footerLinks = {
     Product: [
       { name: "Features", href: "#features" },
-      { name: "Automation", href: "#automation" },
-      { name: "Pricing", href: "#pricing" },
+      { name: "Automation", href: "#genai" },
       { name: "Templates", href: "#templates" },
     ],
     Company: [
-      { name: "About", href: "#about" },
-      { name: "Blog", href: "#blog" },
-      { name: "Careers", href: "#careers" },
-      { name: "Contact", href: "#contact" },
+      { name: "About", href: "https://vizuara.ai/about-us/" },
+      { name: "Careers", href: "https://hiring.vizuara.ai/" },
+      { name: "Contact", href: "https://vizuara.ai/contact-us" },
     ],
     Resources: [
       { name: "Documentation", href: "#docs" },
@@ -45,40 +46,69 @@ const Footer: React.FC = () => {
         <div className="py-16 lg:py-20">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 lg:gap-12">
             {/* Brand Section */}
-            <div className="col-span-2 lg:col-span-2">
+            <motion.div
+              className="col-span-2 lg:col-span-2"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+            >
               <div className="space-y-6">
                 <div className="space-y-3">
-                  <h3 className="text-2xl font-bold bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
-                    Visual ML
-                  </h3>
-                  <p className="text-slate-600 leading-relaxed max-w-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-8 h-8 rounded-lg bg-linear-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-md shadow-slate-900/25">
+                      <Sparkles className="w-4 h-4 text-white" />
+                    </div>
+                    <h3 className="text-2xl font-bold bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+                      Visual ML
+                    </h3>
+                  </div>
+                  <p className="text-slate-600 leading-relaxed max-w-xs text-sm">
                     Build production-ready machine learning pipelines with an
                     intuitive visual interface. No code required.
                   </p>
                 </div>
 
                 {/* Newsletter */}
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-slate-900">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 mb-3">
                     Stay updated
                   </p>
-                  <div className="flex gap-2">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setEmail("");
+                    }}
+                    className="flex gap-2"
+                  >
                     <input
                       type="email"
-                      placeholder="Enter your email"
-                      className="flex-1 px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="your@email.com"
+                      className="flex-1 px-4 py-2.5 bg-white border border-slate-200/60 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all shadow-sm"
                     />
-                    <button className="px-4 py-2.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/25 hover:shadow-xl hover:shadow-slate-900/30 flex items-center justify-center">
+                    <button
+                      type="submit"
+                      className="px-4 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-slate-900/25 hover:shadow-xl"
+                    >
                       <ArrowRight className="w-4 h-4" />
                     </button>
-                  </div>
+                  </form>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Links Sections */}
-            {Object.entries(footerLinks).map(([category, links]) => (
-              <div key={category} className="col-span-1">
+            {Object.entries(footerLinks).map(([category, links], catIndex) => (
+              <motion.div
+                key={category}
+                className="col-span-1"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: (catIndex + 1) * 0.1 }}
+              >
                 <h4 className="text-sm font-semibold text-slate-900 mb-4">
                   {category}
                 </h4>
@@ -94,7 +124,7 @@ const Footer: React.FC = () => {
                     </li>
                   ))}
                 </ul>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -104,7 +134,7 @@ const Footer: React.FC = () => {
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-6">
               <span className="text-sm text-slate-600">
-                © 2026 Visual ML. All rights reserved.
+                &copy; 2026 Visual ML. All rights reserved.
               </span>
             </div>
 
@@ -113,14 +143,16 @@ const Footer: React.FC = () => {
               {socials.map((social) => {
                 const Icon = social.icon;
                 return (
-                  <a
+                  <motion.a
                     key={social.label}
                     href={social.href}
                     aria-label={social.label}
                     className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 hover:bg-slate-100 transition-all hover:shadow-md border border-slate-200/60 hover:border-slate-300"
+                    whileHover={{ scale: 1.1, y: -2 }}
+                    whileTap={{ scale: 0.95 }}
                   >
                     <Icon className="w-4 h-4 text-slate-700" />
-                  </a>
+                  </motion.a>
                 );
               })}
             </div>

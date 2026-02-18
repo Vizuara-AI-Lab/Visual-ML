@@ -8,7 +8,7 @@ const GenAISection: React.FC = () => {
       icon: Clock,
       title: "Cron Scheduling",
       description:
-        "Automate web scraping with flexible cron-based scheduling. .",
+        "Automate web scraping with flexible cron-based scheduling.",
     },
     {
       icon: Bot,
@@ -44,7 +44,7 @@ const GenAISection: React.FC = () => {
 
   return (
     <section
-      id="automation"
+      id="genai"
       className="relative py-32 px-6 lg:px-8 bg-white overflow-hidden"
     >
       {/* Background Elements */}
@@ -60,7 +60,17 @@ const GenAISection: React.FC = () => {
           viewport={{ once: true, margin: "-100px" }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-4xl lg:text-5xl font-bold bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+          {/* Badge */}
+          <div className="flex justify-center mb-4">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-xl border border-slate-200/60 rounded-full">
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm font-medium text-slate-700">
+                Automation Suite
+              </span>
+            </div>
+          </div>
+
+          <h2 className="text-4xl lg:text-5xl font-bold bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
             Powerful Automation Built-In
           </h2>
           <p className="text-xl text-slate-600 max-w-3xl mx-auto font-light">
@@ -86,7 +96,12 @@ const GenAISection: React.FC = () => {
                   transition: { duration: 0.2 },
                 }}
               >
-                <div className="w-14 h-14 bg-gradient-to-br from-slate-900 to-slate-700 rounded-xl flex items-center justify-center mb-6 shadow-lg shadow-slate-900/25 group-hover:shadow-xl group-hover:shadow-slate-900/30 transition-all">
+                {/* Step number */}
+                <span className="absolute top-4 right-4 text-xs font-bold text-slate-200">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+
+                <div className="w-14 h-14 bg-linear-to-br from-slate-900 to-slate-700 rounded-xl flex items-center justify-center mb-6 shadow-lg shadow-slate-900/25 group-hover:shadow-xl group-hover:shadow-slate-900/30 transition-all">
                   <Icon className="w-7 h-7 text-white" />
                 </div>
                 <h3 className="text-lg font-semibold text-slate-900 mb-3">

@@ -354,14 +354,14 @@ const StudentDetail: React.FC = () => {
               {student.recentProject && (
                 <div className="mt-6 pt-6 border-t border-slate-200/60">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-md shadow-purple-500/25">
+                    <div className="w-10 h-10 rounded-lg bg-linear-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-md shadow-purple-500/25">
                       <FolderKanban className="w-5 h-5 text-white" />
                     </div>
-                    <label className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
-                      Recent Project
+                    <label className="text-sm font-semibold text-slate-700  tracking-wide">
+                      Bio
                     </label>
                   </div>
-                  <div className="bg-gradient-to-br from-slate-50 to-slate-100/50 rounded-xl p-5 border border-slate-200/60 ml-13">
+                  <div className="bg-linear-to-br from-slate-50 to-slate-100/50 rounded-xl p-5 border border-slate-200/60 ml-13">
                     <p className="text-slate-900 font-medium">
                       {student.recentProject}
                     </p>

@@ -1,14 +1,60 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Save } from "lucide-react";
+import {
+  X,
+  Save,
+  Upload,
+  Database,
+  FileSpreadsheet,
+  CheckCircle2,
+  FlaskConical,
+  Table,
+  Eye,
+  BarChart3,
+  Info,
+  LineChart,
+  Rows3,
+  Columns3,
+  BarChart,
+  ScatterChart,
+  PieChart,
+} from "lucide-react";
 import { useState, useEffect } from "react";
 import { getNodeByType } from "../../config/nodeDefinitions";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 import { UploadDatasetButton } from "./UploadDatasetButton";
 import { FeatureEngineeringConfigPanel } from "./FeatureEngineeringConfigPanel";
+import { SplitConfigPanel } from "./SplitConfigPanel";
+import { MLAlgorithmConfigPanel } from "./MLAlgorithmConfigPanel";
+import { ResultMetricsConfigPanel } from "./ResultMetricsConfigPanel";
 import {
   listProjectDatasets,
   type DatasetMetadata,
 } from "../../lib/api/datasetApi";
+
+const SAMPLE_DATASETS: Record<
+  string,
+  {
+    label: string;
+    description: string;
+    rows: string;
+    cols: string;
+    task: string;
+  }
+> = {
+  iris: { label: "Iris", description: "Classify iris flower species from petal & sepal measurements", rows: "150", cols: "5", task: "Classification" },
+  wine: { label: "Wine Quality", description: "Predict wine quality from physicochemical properties", rows: "178", cols: "13", task: "Classification" },
+  breast_cancer: { label: "Breast Cancer", description: "Classify tumors as malignant or benign using cell features", rows: "569", cols: "30", task: "Classification" },
+  digits: { label: "Digits", description: "Handwritten digit recognition (0-9) from 8x8 pixel images", rows: "1,797", cols: "64", task: "Classification" },
+  titanic: { label: "Titanic", description: "Predict passenger survival on the Titanic", rows: "891", cols: "12", task: "Classification" },
+  penguins: { label: "Palmer Penguins", description: "Classify penguin species from body measurements", rows: "344", cols: "7", task: "Classification" },
+  heart_disease: { label: "Heart Disease", description: "Predict the presence of heart disease from clinical features", rows: "303", cols: "14", task: "Classification" },
+  diabetes: { label: "Diabetes", description: "Predict diabetes progression one year after baseline", rows: "442", cols: "10", task: "Regression" },
+  boston: { label: "California Housing", description: "Predict median house values in California districts", rows: "20,640", cols: "8", task: "Regression" },
+  tips: { label: "Tips", description: "Predict tip amount from restaurant billing data", rows: "244", cols: "7", task: "Regression" },
+  auto_mpg: { label: "Auto MPG", description: "Predict fuel efficiency of automobiles", rows: "398", cols: "8", task: "Regression" },
+  student: { label: "Student Performance", description: "Predict student academic performance", rows: "395", cols: "33", task: "Regression" },
+  linnerud: { label: "Linnerud", description: "Relate exercise to physiological measurements", rows: "20", cols: "6", task: "Multivariate" },
+};
 
 interface ConfigModalProps {
   nodeId: string | null;
@@ -35,11 +81,6 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
   // ALWAYS load the latest config from the store (no caching)
   useEffect(() => {
     if (node) {
-      console.log(
-        "🔄 Loading LATEST config for node:",
-        node.id,
-        node.data.config,
-      );
       setConfig({ ...node.data.config } || {});
     } else {
       setConfig({});
@@ -130,10 +171,6 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
           // Result nodes get model_output_id from ML algorithm node
           const modelId = sourceResult?.model_id;
 
-          console.log("📊 Auto-filling result node from ML algorithm:");
-          console.log("  - Source node type:", sourceNode?.type);
-          console.log("  - Model ID:", modelId);
-
           if (modelId) {
             setConfig((prev) => ({
               ...prev,
@@ -154,14 +191,6 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
             const trainDatasetId = sourceResult?.train_dataset_id;
             const targetColumn = sourceResult?.target_column;
 
-            console.log("🎯 Auto-filling ML node from split:");
-            console.log("  - Source node type:", sourceNode?.type);
-            console.log("  - Source node data:", sourceNode?.data);
-            console.log("  - Source result:", sourceResult);
-            console.log("  - Train dataset ID:", trainDatasetId);
-            console.log("  - Target column:", targetColumn);
-            console.log("  - Columns in result:", sourceResult?.columns);
-
             setConfig((prev) => ({
               ...prev,
               train_dataset_id: trainDatasetId || prev.train_dataset_id,
@@ -181,17 +210,6 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
             if (!datasetId) {
               datasetId = sourceConfig?.dataset_id;
             }
-
-            console.log(
-              "🔗 Auto-fill dataset_id - Source node:",
-              sourceNode?.type,
-              "\n  - sourceResult:",
-              sourceResult,
-              "\n  - sourceConfig:",
-              sourceConfig,
-              "\n  - Resolved dataset_id:",
-              datasetId,
-            );
 
             if (datasetId) {
               console.log(
@@ -355,10 +373,6 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
         sourceResult?.columns &&
         Array.isArray(sourceResult.columns)
       ) {
-        console.log(
-          "  ✅ Found columns from split node:",
-          sourceResult.columns,
-        );
         return sourceResult.columns as string[];
       }
 
@@ -373,7 +387,6 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
         const allColumns = targetCol
           ? [...(sourceResult.feature_columns as string[]), targetCol as string]
           : (sourceResult.feature_columns as string[]);
-        console.log("  ✅ Found feature_columns from split node:", allColumns);
         return allColumns;
       }
 
@@ -410,16 +423,11 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
   const availableColumns = getAvailableColumns();
 
   const handleSave = () => {
-    console.log("💾 ConfigModal - Saving config for node:", node.id);
-    console.log("💾 ConfigModal - Config being saved:", config);
-    console.log("💾 ConfigModal - target_column value:", config.target_column);
     updateNodeConfig(node.id, config);
     onClose();
   };
 
   const handleFieldChange = (fieldName: string, value: unknown) => {
-    console.log(`📝 ConfigModal - Field "${fieldName}" changed to:`, value);
-
     // Special handling for split node train/test ratios
     if (node.type === "split" && fieldName === "train_ratio") {
       const trainRatio = Number(value);
@@ -496,7 +504,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
           onClick={onClose}
         />
 
@@ -505,11 +513,11 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 20 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden z-10"
+          className="relative bg-white border border-slate-200 rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden z-10"
         >
           {/* Header */}
           <div
-            className="px-6 py-4 border-b border-gray-700 flex items-center justify-between"
+            className="px-6 py-4 border-b border-slate-200 flex items-center justify-between"
             style={{ borderTopColor: nodeDef.color, borderTopWidth: "3px" }}
           >
             <div className="flex items-center gap-3">
@@ -523,17 +531,17 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                 />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-white">
+                <h3 className="text-lg font-semibold text-slate-900">
                   {nodeDef.label}
                 </h3>
-                <p className="text-sm text-gray-400">{nodeDef.description}</p>
+                <p className="text-sm text-slate-500">{nodeDef.description}</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
             >
-              <X className="w-5 h-5 text-gray-400" />
+              <X className="w-5 h-5 text-slate-500" />
             </button>
           </div>
 
@@ -554,13 +562,14 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                 availableColumns={availableColumns}
                 updateField={handleFieldChange}
                 setConfig={setConfig}
+                connectedSourceNode={connectedSourceNode}
                 renderField={(field, label, type = "text", options) => {
                   const currentValue = config[field];
 
                   if (type === "select") {
                     return (
                       <div key={field} className="mb-4">
-                        <label className="block text-sm font-medium text-gray-200 mb-2">
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
                           {label}
                         </label>
                         <select
@@ -568,7 +577,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                           onChange={(e) =>
                             handleFieldChange(field, e.target.value)
                           }
-                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="">-- Select {label} --</option>
                           {Array.isArray(options) &&
@@ -592,9 +601,9 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                             onChange={(e) =>
                               handleFieldChange(field, e.target.checked)
                             }
-                            className="rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-gray-800"
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 bg-white"
                           />
-                          <span className="text-sm font-medium text-gray-200">
+                          <span className="text-sm font-medium text-slate-700">
                             {label}
                           </span>
                         </label>
@@ -607,7 +616,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                       options && !Array.isArray(options) ? options : {};
                     return (
                       <div key={field} className="mb-4">
-                        <label className="block text-sm font-medium text-gray-200 mb-2">
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
                           {label}
                         </label>
                         <input
@@ -622,7 +631,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                           step={numOptions.step || 0.01}
                           min={numOptions.min}
                           max={numOptions.max}
-                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
                     );
@@ -631,7 +640,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                   // Default text input
                   return (
                     <div key={field} className="mb-4">
-                      <label className="block text-sm font-medium text-gray-200 mb-2">
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
                         {label}
                       </label>
                       <input
@@ -641,10 +650,10 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                           handleFieldChange(field, e.target.value)
                         }
                         readOnly={field === "dataset_id"}
-                        className={`w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${field === "dataset_id" ? "cursor-not-allowed opacity-75" : ""}`}
+                        className={`w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 ${field === "dataset_id" ? "cursor-not-allowed opacity-75" : ""}`}
                       />
                       {field === "dataset_id" && connectedSourceNode && (
-                        <p className="text-xs text-green-400 mt-1">
+                        <p className="text-xs text-green-600 mt-1">
                           ✓ Connected to: {connectedSourceNode.data.label}
                         </p>
                       )}
@@ -654,63 +663,856 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
               />
             ) : node.type === "upload_file" ? (
               <div className="space-y-4">
-                <div className="p-4 bg-blue-900/20 border border-blue-700 rounded-lg">
-                  <p className="text-sm text-blue-200 mb-3">
-                    Upload a CSV file to use in your ML pipeline
-                  </p>
-                  {currentProjectId ? (
-                    <UploadDatasetButton
-                      nodeId={node.id}
-                      projectId={parseInt(currentProjectId)}
-                      onUploadComplete={(datasetData) => {
-                        console.log(
-                          "✅ Upload complete, updating config:",
-                          datasetData,
-                        );
-                        // Auto-fill dataset metadata
-                        const newConfig = {
-                          dataset_id: datasetData.dataset_id,
-                          filename: datasetData.filename,
-                          n_rows: datasetData.n_rows,
-                          n_columns: datasetData.n_columns,
-                          columns: datasetData.columns,
-                          dtypes: datasetData.dtypes,
-                        };
-                        setConfig(newConfig);
-                        // Auto-save after upload
-                        updateNodeConfig(node.id, newConfig);
-                      }}
-                    />
-                  ) : (
-                    <div className="text-red-400 text-sm p-3 bg-red-900/20 border border-red-700 rounded">
-                      ⚠️ No project selected. Please save your pipeline first.
+                {/* Upload Area */}
+                <div className="rounded-xl border-2 border-dashed border-blue-300 bg-linear-to-br from-blue-50/80 to-indigo-50/80 p-5">
+                  <div className="flex flex-col items-center gap-3 text-center">
+                    <div className="w-11 h-11 rounded-full bg-blue-100 flex items-center justify-center">
+                      <Upload className="w-5 h-5 text-blue-600" />
                     </div>
-                  )}
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">
+                        Upload CSV Dataset
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Select a CSV file from your computer
+                      </p>
+                    </div>
+                    {currentProjectId ? (
+                      <UploadDatasetButton
+                        nodeId={node.id}
+                        projectId={parseInt(currentProjectId)}
+                        onUploadComplete={(datasetData) => {
+                          const newConfig = {
+                            dataset_id: datasetData.dataset_id,
+                            filename: datasetData.filename,
+                            n_rows: datasetData.n_rows,
+                            n_columns: datasetData.n_columns,
+                            columns: datasetData.columns,
+                            dtypes: datasetData.dtypes,
+                          };
+                          setConfig(newConfig);
+                          updateNodeConfig(node.id, newConfig);
+                        }}
+                      />
+                    ) : (
+                      <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-medium">
+                        No project selected. Save your pipeline first.
+                      </div>
+                    )}
+                  </div>
                 </div>
 
+                {/* Dataset Info Card */}
                 {config.dataset_id && (
-                  <div className="p-4 bg-green-900/20 border border-green-700 rounded-lg space-y-2">
-                    <h4 className="font-semibold text-green-200 text-sm">
-                      ✅ Dataset Loaded
-                    </h4>
-                    <div className="text-xs text-green-300 space-y-1">
-                      <p>
-                        <strong>File:</strong> {config.filename as string}
-                      </p>
-                      <p>
-                        <strong>Rows:</strong> {config.n_rows as number}
-                      </p>
-                      <p>
-                        <strong>Columns:</strong> {config.n_columns as number}
-                      </p>
-                      <p>
-                        <strong>Dataset ID:</strong>{" "}
-                        {config.dataset_id as string}
-                      </p>
+                  <div className="rounded-xl border border-emerald-200 bg-linear-to-br from-emerald-50/80 to-green-50/80 overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-emerald-200/60 bg-emerald-100/40 flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                        Dataset Loaded
+                      </span>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="w-4 h-4 text-slate-400 shrink-0" />
+                        <span className="text-sm font-semibold text-slate-800 truncate">
+                          {config.filename as string}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-white/80 rounded-lg border border-slate-200/60 px-3 py-2">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Rows
+                          </div>
+                          <div className="text-lg font-bold text-slate-900">
+                            {Number(config.n_rows).toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="bg-white/80 rounded-lg border border-slate-200/60 px-3 py-2">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Columns
+                          </div>
+                          <div className="text-lg font-bold text-slate-900">
+                            {String(config.n_columns)}
+                          </div>
+                        </div>
+                      </div>
+                      {Array.isArray(config.columns) &&
+                        (config.columns as string[]).length > 0 && (
+                          <div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                              Column Preview
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {(config.columns as string[])
+                                .slice(0, 8)
+                                .map((col: string) => (
+                                  <span
+                                    key={col}
+                                    className="px-2 py-0.5 bg-white rounded-md text-[11px] text-slate-600 border border-slate-200/80 font-medium"
+                                  >
+                                    {col}
+                                  </span>
+                                ))}
+                              {(config.columns as string[]).length > 8 && (
+                                <span className="px-2 py-0.5 bg-slate-100 rounded-md text-[11px] text-slate-500 font-medium">
+                                  +{(config.columns as string[]).length - 8}{" "}
+                                  more
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      <div className="pt-2 border-t border-emerald-200/40">
+                        <div className="text-[10px] text-slate-400 font-mono truncate">
+                          ID: {config.dataset_id as string}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
+            ) : node.type === "select_dataset" ? (
+              <div className="space-y-4">
+                {/* Header + Selector */}
+                <div className="rounded-xl border border-emerald-200 bg-linear-to-br from-emerald-50/80 to-teal-50/80 p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center">
+                      <Database className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">
+                        Select Existing Dataset
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Choose from previously uploaded datasets
+                      </p>
+                    </div>
+                  </div>
+
+                  {loadingDatasets ? (
+                    <div className="flex items-center gap-2 py-3 justify-center">
+                      <div className="w-4 h-4 border-2 border-emerald-300 border-t-emerald-600 rounded-full animate-spin" />
+                      <span className="text-sm text-slate-600">
+                        Loading datasets...
+                      </span>
+                    </div>
+                  ) : userDatasets.length > 0 ? (
+                    <select
+                      value={(config.dataset_id as string) || ""}
+                      onChange={(e) => {
+                        const selectedDataset = userDatasets.find(
+                          (ds) => ds.dataset_id === e.target.value,
+                        );
+                        if (selectedDataset) {
+                          const newConfig = {
+                            dataset_id: selectedDataset.dataset_id,
+                            filename: selectedDataset.filename,
+                            n_rows: selectedDataset.n_rows,
+                            n_columns: selectedDataset.n_columns,
+                            columns: selectedDataset.columns,
+                            dtypes: selectedDataset.dtypes,
+                          };
+                          setConfig(newConfig);
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                    >
+                      <option value="">-- Select a dataset --</option>
+                      {userDatasets.map((dataset) => (
+                        <option
+                          key={dataset.dataset_id}
+                          value={dataset.dataset_id}
+                        >
+                          {dataset.filename} ({dataset.n_rows} rows,{" "}
+                          {dataset.n_columns} cols)
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="py-3 px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 text-center">
+                      No datasets available. Upload a dataset first.
+                    </div>
+                  )}
+                </div>
+
+                {/* Selected Dataset Info */}
+                {config.dataset_id && (
+                  <div className="rounded-xl border border-blue-200 bg-linear-to-br from-blue-50/80 to-sky-50/80 overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-blue-200/60 bg-blue-100/40 flex items-center gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                      <span className="text-xs font-bold text-blue-800 uppercase tracking-wider">
+                        Selected Dataset
+                      </span>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="w-4 h-4 text-slate-400 shrink-0" />
+                        <span className="text-sm font-semibold text-slate-800 truncate">
+                          {config.filename as string}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-white/80 rounded-lg border border-slate-200/60 px-3 py-2">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Rows
+                          </div>
+                          <div className="text-lg font-bold text-slate-900">
+                            {Number(config.n_rows).toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="bg-white/80 rounded-lg border border-slate-200/60 px-3 py-2">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Columns
+                          </div>
+                          <div className="text-lg font-bold text-slate-900">
+                            {String(config.n_columns)}
+                          </div>
+                        </div>
+                      </div>
+                      {Array.isArray(config.columns) &&
+                        (config.columns as string[]).length > 0 && (
+                          <div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                              Column Preview
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {(config.columns as string[])
+                                .slice(0, 8)
+                                .map((col: string) => (
+                                  <span
+                                    key={col}
+                                    className="px-2 py-0.5 bg-white rounded-md text-[11px] text-slate-600 border border-slate-200/80 font-medium"
+                                  >
+                                    {col}
+                                  </span>
+                                ))}
+                              {(config.columns as string[]).length > 8 && (
+                                <span className="px-2 py-0.5 bg-slate-100 rounded-md text-[11px] text-slate-500 font-medium">
+                                  +{(config.columns as string[]).length - 8}{" "}
+                                  more
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      <div className="pt-2 border-t border-blue-200/40">
+                        <div className="text-[10px] text-slate-400 font-mono truncate">
+                          ID: {config.dataset_id as string}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : node.type === "sample_dataset" ? (
+              (() => {
+                const selectedName =
+                  (config.dataset_name as string) || "iris";
+                const datasetInfo = SAMPLE_DATASETS[selectedName];
+                return (
+                  <div className="space-y-4">
+                    {/* Header + Selector */}
+                    <div className="rounded-xl border border-violet-200 bg-linear-to-br from-violet-50/80 to-purple-50/80 p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-9 h-9 rounded-lg bg-violet-100 flex items-center justify-center">
+                          <FlaskConical className="w-4 h-4 text-violet-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">
+                            Sample Dataset
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Choose a built-in dataset for learning
+                          </p>
+                        </div>
+                      </div>
+
+                      <select
+                        value={selectedName}
+                        onChange={(e) =>
+                          handleFieldChange("dataset_name", e.target.value)
+                        }
+                        className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors"
+                      >
+                        {Object.entries(SAMPLE_DATASETS).map(
+                          ([value, info]) => (
+                            <option key={value} value={value}>
+                              {info.label} ({info.task})
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </div>
+
+                    {/* Dataset Info Card */}
+                    {datasetInfo && (
+                      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                        <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
+                          <span className="text-sm font-semibold text-slate-800">
+                            {datasetInfo.label}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                              datasetInfo.task === "Classification"
+                                ? "bg-blue-100 text-blue-700"
+                                : datasetInfo.task === "Regression"
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-purple-100 text-purple-700"
+                            }`}
+                          >
+                            {datasetInfo.task}
+                          </span>
+                        </div>
+                        <div className="p-4 space-y-3">
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            {datasetInfo.description}
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-slate-50 rounded-lg border border-slate-200/60 px-3 py-2">
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                Rows
+                              </div>
+                              <div className="text-lg font-bold text-slate-900">
+                                {datasetInfo.rows}
+                              </div>
+                            </div>
+                            <div className="bg-slate-50 rounded-lg border border-slate-200/60 px-3 py-2">
+                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                Columns
+                              </div>
+                              <div className="text-lg font-bold text-slate-900">
+                                {datasetInfo.cols}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
+            ) : node.type === "table_view" ? (
+              <div className="space-y-4">
+                {/* Header */}
+                <div className="rounded-xl border border-cyan-200 bg-linear-to-br from-cyan-50/80 to-sky-50/80 p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-cyan-100 flex items-center justify-center">
+                      <Table className="w-4 h-4 text-cyan-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Table View</p>
+                      <p className="text-xs text-slate-500">Display your dataset as an interactive table</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Connection Status */}
+                <div className={`rounded-xl border p-3 ${connectedSourceNode ? "border-green-200 bg-green-50/60" : "border-amber-200 bg-amber-50/60"}`}>
+                  <div className="flex items-center gap-2">
+                    {connectedSourceNode ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                    ) : (
+                      <span className="text-amber-500 text-sm">⚠</span>
+                    )}
+                    <span className={`text-xs font-bold uppercase tracking-wider ${connectedSourceNode ? "text-green-800" : "text-amber-800"}`}>
+                      {connectedSourceNode ? "Data Source Connected" : "No Data Source"}
+                    </span>
+                  </div>
+                  <p className={`text-xs mt-1 ${connectedSourceNode ? "text-green-700" : "text-amber-700"}`}>
+                    {connectedSourceNode
+                      ? `Connected to: ${connectedSourceNode.data.label}`
+                      : "Connect a data source node to enable table view"}
+                  </p>
+                  {config.dataset_id && (
+                    <div className="mt-1.5 text-[10px] text-slate-400 font-mono truncate">
+                      Dataset ID: {config.dataset_id as string}
+                    </div>
+                  )}
+                </div>
+
+                {/* Max Rows Setting */}
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-3">
+                    Maximum Rows to Display
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="range"
+                      value={(config.max_rows as number) || 100}
+                      onChange={(e) => handleFieldChange("max_rows", parseInt(e.target.value))}
+                      min={10}
+                      max={1000}
+                      step={10}
+                      className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                      style={{
+                        background: `linear-gradient(to right, #06B6D4 0%, #06B6D4 ${(((config.max_rows as number) || 100) / 1000) * 100}%, #E2E8F0 ${(((config.max_rows as number) || 100) / 1000) * 100}%, #E2E8F0 100%)`,
+                      }}
+                    />
+                    <div className="w-16 px-2 py-1.5 bg-cyan-50 border border-cyan-200 rounded-lg text-center">
+                      <span className="text-sm font-bold text-cyan-800">{(config.max_rows as number) || 100}</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-2">Slide to adjust (10 - 1,000 rows)</p>
+                </div>
+
+                {/* Quick Info */}
+                <div className="flex items-start gap-2 px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                  <Rows3 className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    The table view displays your dataset with sortable columns. Connect a data source and run the pipeline to see your data.
+                  </p>
+                </div>
+              </div>
+            ) : node.type === "data_preview" ? (
+              <div className="space-y-4">
+                {/* Header */}
+                <div className="rounded-xl border border-violet-200 bg-linear-to-br from-violet-50/80 to-purple-50/80 p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-violet-100 flex items-center justify-center">
+                      <Eye className="w-4 h-4 text-violet-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Data Preview</p>
+                      <p className="text-xs text-slate-500">Quick look at the first and last rows of your data</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Connection Status */}
+                <div className={`rounded-xl border p-3 ${connectedSourceNode ? "border-green-200 bg-green-50/60" : "border-amber-200 bg-amber-50/60"}`}>
+                  <div className="flex items-center gap-2">
+                    {connectedSourceNode ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                    ) : (
+                      <span className="text-amber-500 text-sm">⚠</span>
+                    )}
+                    <span className={`text-xs font-bold uppercase tracking-wider ${connectedSourceNode ? "text-green-800" : "text-amber-800"}`}>
+                      {connectedSourceNode ? "Data Source Connected" : "No Data Source"}
+                    </span>
+                  </div>
+                  <p className={`text-xs mt-1 ${connectedSourceNode ? "text-green-700" : "text-amber-700"}`}>
+                    {connectedSourceNode
+                      ? `Connected to: ${connectedSourceNode.data.label}`
+                      : "Connect a data source node to enable preview"}
+                  </p>
+                  {config.dataset_id && (
+                    <div className="mt-1.5 text-[10px] text-slate-400 font-mono truncate">
+                      Dataset ID: {config.dataset_id as string}
+                    </div>
+                  )}
+                </div>
+
+                {/* Row Settings - Side by Side */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-6 h-6 rounded-md bg-violet-100 flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-violet-700">H</span>
+                      </div>
+                      <label className="text-sm font-medium text-slate-700">First N Rows</label>
+                    </div>
+                    <input
+                      type="number"
+                      value={(config.head_rows as number) || 5}
+                      onChange={(e) => handleFieldChange("head_rows", parseInt(e.target.value) || 5)}
+                      min={1}
+                      max={50}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-center text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1.5 text-center">Head rows (1-50)</p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-6 h-6 rounded-md bg-indigo-100 flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-indigo-700">T</span>
+                      </div>
+                      <label className="text-sm font-medium text-slate-700">Last N Rows</label>
+                    </div>
+                    <input
+                      type="number"
+                      value={(config.tail_rows as number) || 5}
+                      onChange={(e) => handleFieldChange("tail_rows", parseInt(e.target.value) || 5)}
+                      min={1}
+                      max={50}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-center text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1.5 text-center">Tail rows (1-50)</p>
+                  </div>
+                </div>
+
+                {/* Preview Summary */}
+                <div className="flex items-center justify-center gap-3 px-4 py-3 bg-violet-50/60 rounded-xl border border-violet-100">
+                  <span className="text-xs text-violet-700 font-medium">
+                    Showing first <span className="font-bold">{(config.head_rows as number) || 5}</span> and last <span className="font-bold">{(config.tail_rows as number) || 5}</span> rows = <span className="font-bold text-violet-900">{((config.head_rows as number) || 5) + ((config.tail_rows as number) || 5)}</span> total rows
+                  </span>
+                </div>
+              </div>
+            ) : node.type === "statistics_view" ? (
+              <div className="space-y-4">
+                {/* Header */}
+                <div className="rounded-xl border border-emerald-200 bg-linear-to-br from-emerald-50/80 to-green-50/80 p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center">
+                      <BarChart3 className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Statistics View</p>
+                      <p className="text-xs text-slate-500">Statistical summary of your dataset</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Connection Status */}
+                <div className={`rounded-xl border p-3 ${connectedSourceNode ? "border-green-200 bg-green-50/60" : "border-amber-200 bg-amber-50/60"}`}>
+                  <div className="flex items-center gap-2">
+                    {connectedSourceNode ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                    ) : (
+                      <span className="text-amber-500 text-sm">⚠</span>
+                    )}
+                    <span className={`text-xs font-bold uppercase tracking-wider ${connectedSourceNode ? "text-green-800" : "text-amber-800"}`}>
+                      {connectedSourceNode ? "Data Source Connected" : "No Data Source"}
+                    </span>
+                  </div>
+                  <p className={`text-xs mt-1 ${connectedSourceNode ? "text-green-700" : "text-amber-700"}`}>
+                    {connectedSourceNode
+                      ? `Connected to: ${connectedSourceNode.data.label}`
+                      : "Connect a data source node to compute statistics"}
+                  </p>
+                  {config.dataset_id && (
+                    <div className="mt-1.5 text-[10px] text-slate-400 font-mono truncate">
+                      Dataset ID: {config.dataset_id as string}
+                    </div>
+                  )}
+                </div>
+
+                {/* Include All Toggle */}
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">Include All Columns</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Show statistics for every column in the dataset</p>
+                    </div>
+                    <button
+                      onClick={() => handleFieldChange("include_all", !(config.include_all as boolean))}
+                      className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                        (config.include_all as boolean) !== false ? "bg-emerald-500" : "bg-slate-300"
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                          (config.include_all as boolean) !== false ? "translate-x-5.5" : "translate-x-0.5"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Stats Info */}
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
+                  <p className="text-xs font-semibold text-emerald-800 mb-2">Statistics Included:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {["Count", "Mean", "Std Dev", "Min", "25%", "50%", "75%", "Max"].map((stat) => (
+                      <span key={stat} className="px-2 py-0.5 bg-white rounded-md text-[11px] text-emerald-700 border border-emerald-200 font-medium">
+                        {stat}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : node.type === "column_info" ? (
+              <div className="space-y-4">
+                {/* Header */}
+                <div className="rounded-xl border border-amber-200 bg-linear-to-br from-amber-50/80 to-orange-50/80 p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center">
+                      <Info className="w-4 h-4 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Column Info</p>
+                      <p className="text-xs text-slate-500">Inspect column types, missing values & unique counts</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Connection Status */}
+                <div className={`rounded-xl border p-3 ${connectedSourceNode ? "border-green-200 bg-green-50/60" : "border-amber-200 bg-amber-50/60"}`}>
+                  <div className="flex items-center gap-2">
+                    {connectedSourceNode ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                    ) : (
+                      <span className="text-amber-500 text-sm">⚠</span>
+                    )}
+                    <span className={`text-xs font-bold uppercase tracking-wider ${connectedSourceNode ? "text-green-800" : "text-amber-800"}`}>
+                      {connectedSourceNode ? "Data Source Connected" : "No Data Source"}
+                    </span>
+                  </div>
+                  <p className={`text-xs mt-1 ${connectedSourceNode ? "text-green-700" : "text-amber-700"}`}>
+                    {connectedSourceNode
+                      ? `Connected to: ${connectedSourceNode.data.label}`
+                      : "Connect a data source node to inspect columns"}
+                  </p>
+                  {config.dataset_id && (
+                    <div className="mt-1.5 text-[10px] text-slate-400 font-mono truncate">
+                      Dataset ID: {config.dataset_id as string}
+                    </div>
+                  )}
+                </div>
+
+                {/* Display Options */}
+                <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                  <p className="text-sm font-medium text-slate-700 mb-1">Display Options</p>
+
+                  {[
+                    { field: "show_dtypes", label: "Data Types", desc: "Show column data types (int, float, object...)", color: "blue" },
+                    { field: "show_missing", label: "Missing Values", desc: "Show count & percentage of missing values", color: "red" },
+                    { field: "show_unique", label: "Unique Counts", desc: "Show number of unique values per column", color: "purple" },
+                  ].map((opt) => (
+                    <div key={opt.field} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full ${opt.color === "blue" ? "bg-blue-400" : opt.color === "red" ? "bg-red-400" : "bg-purple-400"}`} />
+                        <div>
+                          <p className="text-sm text-slate-700 font-medium">{opt.label}</p>
+                          <p className="text-[11px] text-slate-400">{opt.desc}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleFieldChange(opt.field, !(config[opt.field] as boolean))}
+                        className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                          (config[opt.field] as boolean) !== false ? "bg-amber-500" : "bg-slate-300"
+                        }`}
+                      >
+                        <div
+                          className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                            (config[opt.field] as boolean) !== false ? "translate-x-5.5" : "translate-x-0.5"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Available Columns Preview */}
+                {availableColumns.length > 0 && (
+                  <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Columns3 className="w-3.5 h-3.5 text-slate-400" />
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        {availableColumns.length} Columns Detected
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {availableColumns.slice(0, 10).map((col) => (
+                        <span key={col} className="px-2 py-0.5 bg-white rounded-md text-[11px] text-slate-600 border border-slate-200 font-medium">
+                          {col}
+                        </span>
+                      ))}
+                      {availableColumns.length > 10 && (
+                        <span className="px-2 py-0.5 bg-slate-100 rounded-md text-[11px] text-slate-500 font-medium">
+                          +{availableColumns.length - 10} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : node.type === "chart_view" ? (
+              (() => {
+                const chartType = (config.chart_type as string) || "bar";
+                const isPieChart = chartType === "pie";
+                const chartTypes = [
+                  { value: "bar", label: "Bar", Icon: BarChart },
+                  { value: "line", label: "Line", Icon: LineChart },
+                  { value: "scatter", label: "Scatter", Icon: ScatterChart },
+                  { value: "histogram", label: "Histogram", Icon: BarChart3 },
+                  { value: "pie", label: "Pie", Icon: PieChart },
+                ];
+                return (
+                  <div className="space-y-4">
+                    {/* Header */}
+                    <div className="rounded-xl border border-pink-200 bg-linear-to-br from-pink-50/80 to-rose-50/80 p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-pink-100 flex items-center justify-center">
+                          <LineChart className="w-4 h-4 text-pink-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">Chart View</p>
+                          <p className="text-xs text-slate-500">Visualize your data with interactive charts</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Connection Status */}
+                    <div className={`rounded-xl border p-3 ${connectedSourceNode ? "border-green-200 bg-green-50/60" : "border-amber-200 bg-amber-50/60"}`}>
+                      <div className="flex items-center gap-2">
+                        {connectedSourceNode ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                        ) : (
+                          <span className="text-amber-500 text-sm">⚠</span>
+                        )}
+                        <span className={`text-xs font-bold uppercase tracking-wider ${connectedSourceNode ? "text-green-800" : "text-amber-800"}`}>
+                          {connectedSourceNode ? "Data Source Connected" : "No Data Source"}
+                        </span>
+                      </div>
+                      <p className={`text-xs mt-1 ${connectedSourceNode ? "text-green-700" : "text-amber-700"}`}>
+                        {connectedSourceNode
+                          ? `Connected to: ${connectedSourceNode.data.label}`
+                          : "Connect a data source node to create charts"}
+                      </p>
+                      {config.dataset_id && (
+                        <div className="mt-1.5 text-[10px] text-slate-400 font-mono truncate">
+                          Dataset ID: {config.dataset_id as string}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Chart Type Selector */}
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <p className="text-sm font-medium text-slate-700 mb-3">Chart Type</p>
+                      <div className="grid grid-cols-5 gap-2">
+                        {chartTypes.map((ct) => (
+                          <button
+                            key={ct.value}
+                            onClick={() => handleFieldChange("chart_type", ct.value)}
+                            className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all duration-150 ${
+                              chartType === ct.value
+                                ? "border-pink-500 bg-pink-50 shadow-sm"
+                                : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100"
+                            }`}
+                          >
+                            <ct.Icon className={`w-5 h-5 ${chartType === ct.value ? "text-pink-600" : "text-slate-400"}`} />
+                            <span className={`text-[11px] font-medium ${chartType === ct.value ? "text-pink-700" : "text-slate-500"}`}>
+                              {ct.label}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Column Selectors */}
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+                      <p className="text-sm font-medium text-slate-700">Column Configuration</p>
+
+                      {!isPieChart ? (
+                        <>
+                          {/* X-Axis */}
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1.5">X-Axis Column</label>
+                            <select
+                              value={(config.x_column as string) || ""}
+                              onChange={(e) => handleFieldChange("x_column", e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                            >
+                              <option value="">-- Select X-Axis --</option>
+                              {availableColumns.map((col) => (
+                                <option key={col} value={col}>{col}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {/* Y-Axis */}
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1.5">Y-Axis Column</label>
+                            <select
+                              value={(config.y_columns as string) || ""}
+                              onChange={(e) => handleFieldChange("y_columns", e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                            >
+                              <option value="">-- Select Y-Axis --</option>
+                              {availableColumns.map((col) => (
+                                <option key={col} value={col}>{col}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {/* Label Column (Pie) */}
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1.5">Label Column</label>
+                            <select
+                              value={(config.label_column as string) || ""}
+                              onChange={(e) => handleFieldChange("label_column", e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                            >
+                              <option value="">-- Select Label Column --</option>
+                              {availableColumns.map((col) => (
+                                <option key={col} value={col}>{col}</option>
+                              ))}
+                            </select>
+                            <p className="text-[11px] text-slate-400 mt-1">Column for pie chart slice labels</p>
+                          </div>
+                          {/* Value Column (Pie) */}
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1.5">Value Column</label>
+                            <select
+                              value={(config.value_column as string) || ""}
+                              onChange={(e) => handleFieldChange("value_column", e.target.value)}
+                              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                            >
+                              <option value="">-- Select Value Column --</option>
+                              {availableColumns.map((col) => (
+                                <option key={col} value={col}>{col}</option>
+                              ))}
+                            </select>
+                            <p className="text-[11px] text-slate-400 mt-1">Column for pie chart slice values</p>
+                          </div>
+                        </>
+                      )}
+
+                      {availableColumns.length === 0 && connectedSourceNode && (
+                        <p className="text-xs text-amber-600">
+                          ⚠ Run the pipeline first to load available columns
+                        </p>
+                      )}
+                      {!connectedSourceNode && (
+                        <p className="text-xs text-amber-600">
+                          ⚠ Connect a data source node to see available columns
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()
+            ) : node.type === "split" ? (
+              <SplitConfigPanel
+                config={config}
+                onFieldChange={handleFieldChange}
+                connectedSourceNode={connectedSourceNode}
+                availableColumns={availableColumns}
+              />
+            ) : [
+              "linear_regression",
+              "logistic_regression",
+              "decision_tree",
+              "random_forest",
+            ].includes(node.type) ? (
+              <MLAlgorithmConfigPanel
+                nodeType={node.type}
+                config={config}
+                onFieldChange={handleFieldChange}
+                connectedSourceNode={connectedSourceNode}
+                availableColumns={availableColumns}
+              />
+            ) : [
+              "r2_score",
+              "mse_score",
+              "rmse_score",
+              "mae_score",
+              "confusion_matrix",
+              "classification_report",
+              "accuracy_score",
+              "roc_curve",
+              "feature_importance",
+              "residual_plot",
+              "prediction_table",
+            ].includes(node.type) ? (
+              <ResultMetricsConfigPanel
+                nodeType={node.type}
+                config={config}
+                onFieldChange={handleFieldChange}
+                connectedSourceNode={connectedSourceNode}
+              />
             ) : nodeDef.configFields && nodeDef.configFields.length > 0 ? (
               <div className="space-y-4">
                 {nodeDef.configFields.map((field) => {
@@ -785,7 +1587,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
 
                   return (
                     <div key={field.name}>
-                      <label className="block text-sm font-medium text-gray-200 mb-2">
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
                         {field.label}
                         {field.required && (
                           <span className="text-red-400 ml-1">*</span>
@@ -805,7 +1607,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                               isTrainDatasetIdField ||
                               isModelOutputIdField
                             }
-                            className={`w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            className={`w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                               isDatasetIdField ||
                               isTrainDatasetIdField ||
                               isModelOutputIdField
@@ -820,49 +1622,49 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                             }
                           />
                           {isDatasetIdField && connectedSourceNode && (
-                            <p className="text-xs text-green-400 mt-1">
+                            <p className="text-xs text-green-600 mt-1">
                               ✓ Connected to: {connectedSourceNode.data.label}
                             </p>
                           )}
                           {isDatasetIdField && !connectedSourceNode && (
-                            <p className="text-xs text-amber-400 mt-1">
+                            <p className="text-xs text-amber-600 mt-1">
                               ⚠ Connect an upload dataset node to this view node
                             </p>
                           )}
                           {isTrainDatasetIdField && connectedSourceNode && (
-                            <p className="text-xs text-green-400 mt-1">
+                            <p className="text-xs text-green-600 mt-1">
                               ✓ Connected to: {connectedSourceNode.data.label}
                             </p>
                           )}
                           {isTrainDatasetIdField &&
                             connectedSourceNode &&
                             !currentValue && (
-                              <p className="text-xs text-amber-400 mt-1">
+                              <p className="text-xs text-amber-600 mt-1">
                                 ⚠ Please execute the split node first to
                                 generate training dataset
                               </p>
                             )}
                           {isTrainDatasetIdField && !connectedSourceNode && (
-                            <p className="text-xs text-amber-400 mt-1">
+                            <p className="text-xs text-amber-600 mt-1">
                               ⚠ Connect a split node to auto-fill training
                               dataset
                             </p>
                           )}
                           {isModelOutputIdField && connectedSourceNode && (
-                            <p className="text-xs text-green-400 mt-1">
+                            <p className="text-xs text-green-600 mt-1">
                               ✓ Connected to: {connectedSourceNode.data.label}
                             </p>
                           )}
                           {isModelOutputIdField &&
                             connectedSourceNode &&
                             !currentValue && (
-                              <p className="text-xs text-amber-400 mt-1">
+                              <p className="text-xs text-amber-600 mt-1">
                                 ⚠ Please execute the ML algorithm node first to
                                 generate model
                               </p>
                             )}
                           {isModelOutputIdField && !connectedSourceNode && (
-                            <p className="text-xs text-amber-400 mt-1">
+                            <p className="text-xs text-amber-600 mt-1">
                               ⚠ Connect an ML algorithm node to auto-fill model
                               output
                             </p>
@@ -883,13 +1685,13 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                           min={field.min}
                           max={field.max}
                           step={field.step}
-                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       )}
 
                       {field.type === "range" && (
                         <div className="space-y-3">
-                          <div className="flex items-center justify-between text-sm text-gray-400">
+                          <div className="flex items-center justify-between text-sm text-slate-500">
                             <span>
                               Train:{" "}
                               {((currentValue as number) * 100).toFixed(0)}%
@@ -914,12 +1716,12 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                             min={field.min}
                             max={field.max}
                             step={field.step}
-                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+                            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer slider-thumb"
                             style={{
-                              background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${((currentValue as number) || 0.8) * 100}%, #1F2937 ${((currentValue as number) || 0.8) * 100}%, #1F2937 100%)`,
+                              background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${((currentValue as number) || 0.8) * 100}%, #E2E8F0 ${((currentValue as number) || 0.8) * 100}%, #E2E8F0 100%)`,
                             }}
                           />
-                          <div className="flex justify-between text-xs text-gray-500">
+                          <div className="flex justify-between text-xs text-slate-500">
                             <span>10%</span>
                             <span>50%</span>
                             <span>90%</span>
@@ -961,7 +1763,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                               node.type === "select_dataset" &&
                               field.name === "dataset_id"
                             }
-                            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <option value="">
                               {loadingDatasets &&
@@ -1031,7 +1833,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                           {node.type === "select_dataset" &&
                             field.name === "dataset_id" &&
                             config.dataset_id && (
-                              <p className="text-xs text-green-400 mt-1">
+                              <p className="text-xs text-green-600 mt-1">
                                 ✓ Selected: {config.filename as string}
                               </p>
                             )}
@@ -1040,7 +1842,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                           {field.name === "target_column" &&
                             availableColumns.length === 0 &&
                             connectedSourceNode && (
-                              <p className="text-xs text-amber-400 mt-1">
+                              <p className="text-xs text-amber-600 mt-1">
                                 ⚠ Execute the split node first to load available
                                 columns
                               </p>
@@ -1055,7 +1857,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                             handleFieldChange(field.name, e.target.value)
                           }
                           rows={4}
-                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder={field.description}
                         />
                       )}
@@ -1078,10 +1880,10 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                               }
                             }}
                             rows={8}
-                            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder={field.placeholder || field.description}
                           />
-                          <p className="text-xs text-gray-400 mt-1">
+                          <p className="text-xs text-slate-500 mt-1">
                             💡 Enter valid JSON configuration
                           </p>
                         </div>
@@ -1108,7 +1910,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                               // Send as array, not comma-separated string
                               handleFieldChange(field.name, selected);
                             }}
-                            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             size={Math.min(availableColumns.length || 5, 8)}
                           >
                             {/* Show available columns from connected source for autoFill fields */}
@@ -1125,12 +1927,12 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                             ) : null}
                           </select>
                           {availableColumns.length > 0 && field.autoFill && (
-                            <p className="text-xs text-gray-400 mt-1">
+                            <p className="text-xs text-slate-500 mt-1">
                               💡 Hold Ctrl/Cmd to select multiple columns
                             </p>
                           )}
                           {!connectedSourceNode && field.autoFill && (
-                            <p className="text-xs text-amber-400 mt-1">
+                            <p className="text-xs text-amber-600 mt-1">
                               ⚠ Connect a data source node first
                             </p>
                           )}
@@ -1144,7 +1946,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                           onChange={(e) =>
                             handleFieldChange(field.name, e.target.value)
                           }
-                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder={field.placeholder || field.description}
                         />
                       )}
@@ -1155,10 +1957,10 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                             (example: any, index: number) => (
                               <div
                                 key={index}
-                                className="p-4 bg-gray-800 rounded-lg border border-gray-600 space-y-3"
+                                className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3"
                               >
                                 <div className="flex items-center justify-between mb-2">
-                                  <span className="text-sm font-medium text-gray-300">
+                                  <span className="text-sm font-medium text-slate-600">
                                     Example {index + 1}
                                   </span>
                                   <button
@@ -1172,13 +1974,13 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                                         newExamples,
                                       );
                                     }}
-                                    className="text-red-400 hover:text-red-300 text-sm"
+                                    className="text-red-500 hover:text-red-600 text-sm"
                                   >
                                     Remove
                                   </button>
                                 </div>
                                 <div>
-                                  <label className="block text-xs text-gray-400 mb-1">
+                                  <label className="block text-xs text-slate-500 mb-1">
                                     User Input
                                   </label>
                                   <textarea
@@ -1197,12 +1999,12 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                                       );
                                     }}
                                     rows={2}
-                                    className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     placeholder="Enter user input example..."
                                   />
                                 </div>
                                 <div>
-                                  <label className="block text-xs text-gray-400 mb-1">
+                                  <label className="block text-xs text-slate-500 mb-1">
                                     Expected Output
                                   </label>
                                   <textarea
@@ -1221,7 +2023,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                                       );
                                     }}
                                     rows={2}
-                                    className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     placeholder="Enter expected output..."
                                   />
                                 </div>
@@ -1240,7 +2042,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                           >
                             + Add Example
                           </button>
-                          <p className="text-xs text-gray-400 mt-1">
+                          <p className="text-xs text-slate-500 mt-1">
                             Add examples to teach the AI how to respond in
                             specific situations
                           </p>
@@ -1255,9 +2057,9 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                             onChange={(e) =>
                               handleFieldChange(field.name, e.target.checked)
                             }
-                            className="w-4 h-4 bg-gray-800 border-gray-600 rounded text-blue-500 focus:ring-2 focus:ring-blue-500"
+                            className="w-4 h-4 bg-white border-slate-300 rounded text-blue-500 focus:ring-2 focus:ring-blue-500"
                           />
-                          <span className="text-sm text-gray-400">
+                          <span className="text-sm text-slate-500">
                             {field.description}
                           </span>
                         </label>
@@ -1272,18 +2074,18 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                               handleFieldChange(field.name, file);
                             }
                           }}
-                          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white file:cursor-pointer hover:file:bg-blue-700"
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white file:cursor-pointer hover:file:bg-blue-700"
                         />
                       )}
 
                       {field.description && field.type !== "checkbox" && (
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-slate-500 mt-1">
                           {field.description}
                         </p>
                       )}
 
                       {autoFilledValue && (
-                        <p className="text-xs text-green-400 mt-1">
+                        <p className="text-xs text-green-600 mt-1">
                           Auto-filled from dataset
                         </p>
                       )}
@@ -1292,17 +2094,17 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                 })}
               </div>
             ) : (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-slate-400">
                 <p>No configuration required for this node</p>
               </div>
             )}
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-gray-700 flex items-center justify-end gap-3">
+          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+              className="px-4 py-2 text-slate-500 hover:text-slate-800 transition-colors"
             >
               Cancel
             </button>

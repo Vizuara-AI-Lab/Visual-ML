@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { useParams, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -11,10 +11,11 @@ import { ConfigModal } from "../../components/playground/ConfigModal";
 import { ChatbotModal } from "../../components/playground/ChatbotModal";
 import { ViewNodeModal } from "../../components/playground/ViewNodeModal";
 import { ShareModal } from "../../components/playground/ShareModal";
+import { ExportModal } from "../../components/playground/ExportModal";
 import { Toolbar } from "../../components/playground/Toolbar";
-import { ResultsPanel } from "../../components/playground/ResultsPanel";
+import { ResultsDrawer } from "../../components/playground/results-drawer";
 import { usePlaygroundStore } from "../../store/playgroundStore";
-import { executePipeline } from "../../features/playground/api";
+import { executePipelineStream } from "../../features/playground/api";
 import type { NodeType, BaseNodeData } from "../../types/pipeline";
 import { useProjectState } from "../../hooks/queries/useProjectState";
 import { useSaveProject } from "../../hooks/mutations/useSaveProject";
@@ -35,6 +36,8 @@ export default function PlayGround() {
   const [chatbotNodeId, setChatbotNodeId] = useState<string | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const streamCleanupRef = useRef<(() => void) | null>(null);
 
   const [executionProgress, setExecutionProgress] = useState<{
     status: string;
@@ -56,10 +59,21 @@ export default function PlayGround() {
     currentProjectId,
     updateNode,
     addNode,
+    setNodeExecutionStatus,
+    setAllNodesPending,
+    clearExecutionStatus,
+    animateEdgesForNode,
+    addNodeResult,
+    addExecutionLog,
+    clearExecutionLogs,
   } = usePlaygroundStore();
 
   const { user } = useAuthStore();
-  const { preferences } = useMentorStore();
+  const { preferences, updatePreferences } = useMentorStore();
+
+  const handleToggleMentor = () => {
+    updatePreferences({ enabled: !preferences.enabled });
+  };
 
   // Enable AI mentor context awareness
   useMentorContext({
@@ -165,6 +179,18 @@ export default function PlayGround() {
     };
   }, []);
 
+  // Cleanup SSE stream on unmount only
+  useEffect(() => {
+    return () => {
+      streamCleanupRef.current?.();
+    };
+  }, []);
+
+  // Clear execution status when nodes or edges change (pipeline modified)
+  useEffect(() => {
+    clearExecutionStatus();
+  }, [nodes.length, edges.length, clearExecutionStatus]);
+
   const onNodeDragStart = (event: React.DragEvent, nodeType: string) => {
     event.dataTransfer.setData("application/reactflow", nodeType);
     event.dataTransfer.effectAllowed = "move";
@@ -230,17 +256,15 @@ export default function PlayGround() {
     setNodes((prevNodes) => [...prevNodes, ...newNodes]);
     setEdges((prevEdges) => [...prevEdges, ...newEdges]);
 
-    toast.success(`${template.label} template loaded!`, {
-      duration: 2000,
-      position: "top-right",
-      icon: "✅",
-    });
+    toast.success(`${template.label} template loaded!`);
   };
 
   const handleExecute = async () => {
     try {
       setIsExecuting(true);
       setResultsOpen(true);
+      clearExecutionStatus();
+      clearExecutionLogs();
 
       // 🛡️ VALIDATION: Check pipeline before execution
       const validationResult = validatePipeline(nodes, edges);
@@ -252,18 +276,7 @@ export default function PlayGround() {
             ? `${error.message}\n💡 ${error.suggestion}`
             : error.message;
 
-          toast.error(message, {
-            duration: 3000,
-            position: "top-right",
-            style: {
-              background: "#1F2937",
-              color: "#fff",
-              border: "1px solid #EF4444",
-              borderRadius: "8px",
-              padding: "16px",
-              maxWidth: "400px",
-            },
-          });
+          toast.error(message, { duration: 4000 });
         });
 
         setIsExecuting(false);
@@ -281,16 +294,10 @@ export default function PlayGround() {
             : warning.message;
 
           toast(message, {
-            duration: 3000,
-            position: "top-right",
+            duration: 4000,
             icon: "⚠️",
             style: {
-              background: "#1F2937",
-              color: "#fff",
-              border: "1px solid #F59E0B",
-              borderRadius: "8px",
-              padding: "16px",
-              maxWidth: "400px",
+              border: "1px solid rgba(251, 191, 36, 0.3)",
             },
           });
         });
@@ -300,6 +307,9 @@ export default function PlayGround() {
 
       // Topological sort to determine execution order
       const sortedNodes = topologicalSort(nodes, edges);
+
+      // Initialize all nodes as pending
+      setAllNodesPending(sortedNodes.map((n) => n.id));
 
       // Inject project_id into each node's input for nodes that need it (upload_file)
       const pipelineConfig = sortedNodes.map((node) => ({
@@ -312,130 +322,173 @@ export default function PlayGround() {
             ? { project_id: parseInt(currentProjectId) }
             : {}),
         },
+        label: node.data.label,
       }));
 
-      console.log("🚀 Executing pipeline with config:", pipelineConfig);
+      console.log("🚀 Executing pipeline with streaming...", pipelineConfig);
 
-      // Debug: Log each node's config
-      pipelineConfig.forEach((nodeConfig, index) => {
-        console.log(`📋 Node ${index + 1} (${nodeConfig.node_type}):`, {
-          node_id: nodeConfig.node_id,
-          input: nodeConfig.input,
-        });
-        if (nodeConfig.node_type === "transformation") {
-          console.log("  ⚠️ Transformation columns:", nodeConfig.input.columns);
-        }
-        if (nodeConfig.node_type === "feature_selection") {
-          console.log(
-            "  🎯 Feature Selection - target_column:",
-            nodeConfig.input.target_column,
-          );
-          console.log(
-            "  🎯 Feature Selection - scoring_function:",
-            nodeConfig.input.scoring_function,
-          );
-          console.log(
-            "  🎯 Feature Selection - method:",
-            nodeConfig.input.method,
-          );
-        }
-      });
-
-      const result = await executePipeline({
-        pipeline: pipelineConfig,
-        edges: edges.map((edge) => ({
-          source: edge.source,
-          target: edge.target,
-          sourceHandle: edge.sourceHandle || undefined,
-          targetHandle: edge.targetHandle || undefined,
-        })),
-        pipeline_name: "Playground Pipeline",
-      });
-
-      console.log("✅ Pipeline execution result:", result);
-
-      // Store results by node ID
-      const nodeResults: Record<string, any> = {};
-      if (result.results) {
-        result.results.forEach((nodeResult: any, index: number) => {
-          const nodeId = sortedNodes[index]?.id;
-          if (nodeId) {
-            console.log(
-              `📦 Node ${nodeId} (${sortedNodes[index]?.type}) result:`,
-              nodeResult,
-            );
-            nodeResults[nodeId] = nodeResult;
-          }
-        });
-      }
-
-      console.log("📊 All node results:", nodeResults);
-
-      // Update each node with its execution result
-      sortedNodes.forEach((node, index) => {
-        const nodeResult = result.results?.[index];
-        if (nodeResult && node.id) {
-          updateNode(node.id, {
-            result: nodeResult,
-          });
-        }
-      });
-
+      // Clear previous results and initialize empty result for streaming
       setExecutionResult({
-        success: result.success,
-        nodeResults,
+        success: true,
+        nodeResults: {},
         timestamp: new Date().toISOString(),
       });
 
-      setExecutionProgress(null);
+      // Execute pipeline with streaming
+      const cleanup = await executePipelineStream(
+        {
+          pipeline: pipelineConfig,
+          edges: edges.map((edge) => ({
+            source: edge.source,
+            target: edge.target,
+            sourceHandle: edge.sourceHandle || undefined,
+            targetHandle: edge.targetHandle || undefined,
+          })),
+          pipeline_name: "Playground Pipeline",
+        },
+        {
+          onNodeStarted: (event) => {
+            console.log("🟡 Node started:", event);
+            setNodeExecutionStatus(event.node_id, "running");
+            addExecutionLog({
+              timestamp: new Date().toISOString(),
+              event: "node_started",
+              nodeId: event.node_id,
+              nodeLabel: event.label,
+              message: `Started: ${event.label}`,
+            });
+          },
+          onNodeCompleted: (event) => {
+            console.log("🟢 Node completed:", event);
+            setNodeExecutionStatus(event.node_id, "completed");
+            animateEdgesForNode(event.node_id);
+
+            // Incrementally add this node's result to the results panel
+            addNodeResult(event.node_id, {
+              success: true,
+              output: event.result,
+            });
+
+            // Also store on the node data for view modals
+            updateNode(event.node_id, { result: event.result });
+
+            addExecutionLog({
+              timestamp: new Date().toISOString(),
+              event: "node_completed",
+              nodeId: event.node_id,
+              nodeLabel: event.label,
+              message: `Completed: ${event.label}`,
+            });
+          },
+          onNodeFailed: (event) => {
+            console.log("🔴 Node failed:", event);
+            setNodeExecutionStatus(event.node_id, "failed");
+
+            // Incrementally add this node's error to the results panel
+            addNodeResult(event.node_id, {
+              success: false,
+              error: event.error,
+            });
+
+            addExecutionLog({
+              timestamp: new Date().toISOString(),
+              event: "node_failed",
+              nodeId: event.node_id,
+              nodeLabel: event.label,
+              message: `Failed: ${event.label} — ${event.error}`,
+            });
+          },
+          onPipelineCompleted: (event) => {
+            console.log("✅ Pipeline completed:", event);
+
+            // Finalize the execution result — keep the incrementally-built nodeResults
+            const currentResult = usePlaygroundStore.getState().executionResult;
+            setExecutionResult({
+              ...currentResult,
+              success: true,
+              timestamp: new Date().toISOString(),
+            });
+
+            addExecutionLog({
+              timestamp: new Date().toISOString(),
+              event: "pipeline_completed",
+              message: `Pipeline completed successfully (${event.nodes_executed} nodes)`,
+            });
+
+            setIsExecuting(false);
+            streamCleanupRef.current = null;
+          },
+          onPipelineFailed: (event) => {
+            console.log("❌ Pipeline failed:", event);
+
+            // Format user-friendly error message
+            let userFriendlyError = event.error || "Pipeline execution failed";
+            let errorSuggestion: string | undefined = undefined;
+
+            // Handle specific error types
+            if (userFriendlyError.includes("Missing values found")) {
+              const columnMatch = userFriendlyError.match(/column '([^']+)'/);
+              const column = columnMatch ? columnMatch[1] : "a column";
+              userFriendlyError = `Missing values detected in "${column}"`;
+              errorSuggestion = "Please handle missing values before encoding.";
+            } else if (userFriendlyError.includes("column_configs")) {
+              userFriendlyError = "No columns configured for encoding";
+              errorSuggestion =
+                "Please configure encoding settings for at least one column.";
+            }
+
+            // Keep incrementally-built nodeResults, add error info
+            const currentResult = usePlaygroundStore.getState().executionResult;
+            setExecutionResult({
+              ...currentResult,
+              success: false,
+              error: userFriendlyError,
+              errorSuggestion: errorSuggestion,
+              timestamp: new Date().toISOString(),
+            });
+
+            addExecutionLog({
+              timestamp: new Date().toISOString(),
+              event: "pipeline_failed",
+              message: `Pipeline failed: ${userFriendlyError}`,
+            });
+
+            setIsExecuting(false);
+            streamCleanupRef.current = null;
+          },
+          onError: (error) => {
+            console.error("SSE Error:", error);
+            toast.error("Connection error: " + error.message);
+            setIsExecuting(false);
+            streamCleanupRef.current = null;
+          },
+        },
+      );
+
+      // Store cleanup function for abort functionality
+      streamCleanupRef.current = cleanup;
     } catch (error) {
       console.error("Pipeline execution failed:", error);
-
       setExecutionProgress(null);
 
-      // Format user-friendly error message with details and suggestion
+      // Format user-friendly error message
       let userFriendlyError = "Pipeline execution failed";
       let errorDetails: Record<string, unknown> | undefined = undefined;
       let errorSuggestion: string | undefined = undefined;
 
       if (error && typeof error === "object" && "response" in error) {
         const responseError = (error as any).response?.data;
-
-        // FastAPI returns errors in "detail" field by default
         const errorMsg =
           responseError?.detail ||
           responseError?.message ||
           responseError?.error;
 
         if (errorMsg) {
-          // Handle specific error types with user-friendly messages
-          if (errorMsg.includes("Missing values found")) {
-            const columnMatch = errorMsg.match(/column '([^']+)'/);
-            const column = columnMatch ? columnMatch[1] : "a column";
-            userFriendlyError = `Missing values detected in "${column}"`;
-            errorSuggestion = "Please handle missing values before encoding.";
-          } else if (errorMsg.includes("column_configs")) {
-            userFriendlyError = "No columns configured for encoding";
-            errorSuggestion =
-              "Please configure encoding settings for at least one column.";
-          } else if (
-            errorMsg.includes("Dataset") &&
-            errorMsg.includes("not found")
-          ) {
-            userFriendlyError = "Dataset not found or empty";
-            errorSuggestion =
-              "Please ensure the data source is properly connected.";
-          } else {
-            // Extract just the reason part if it exists
-            const reasonMatch = errorMsg.match(/\[.*?\]: (.+)/);
-            userFriendlyError = reasonMatch ? reasonMatch[1] : errorMsg;
-          }
-
-          // Extract details and suggestion from response if available
+          userFriendlyError = errorMsg;
           if (responseError.details) {
             errorDetails = responseError.details;
           }
-          if (responseError.suggestion && !errorSuggestion) {
+          if (responseError.suggestion) {
             errorSuggestion = responseError.suggestion;
           }
         }
@@ -450,9 +503,20 @@ export default function PlayGround() {
         errorSuggestion: errorSuggestion,
         timestamp: new Date().toISOString(),
       });
-    } finally {
+
       setIsExecuting(false);
+      streamCleanupRef.current = null;
     }
+  };
+
+  const handleAbort = () => {
+    if (streamCleanupRef.current) {
+      streamCleanupRef.current();
+      streamCleanupRef.current = null;
+    }
+    setIsExecuting(false);
+    clearExecutionStatus();
+    toast.error("Pipeline execution aborted by user");
   };
 
   const handleClear = () => {
@@ -546,10 +610,7 @@ export default function PlayGround() {
       };
 
       addNode(newNode);
-      toast.success(`Added ${nodeDef.label} to canvas`, {
-        icon: "✨",
-        duration: 2000,
-      });
+      toast.success(`Added ${nodeDef.label} to canvas`);
     } catch (error) {
       console.error("Error adding node from mentor:", error);
       toast.error("Failed to add node");
@@ -563,28 +624,76 @@ export default function PlayGround() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-950">
-      <Toaster />
+      <Toaster
+        position="top-right"
+        gutter={10}
+        containerStyle={{ top: 16, right: 16 }}
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: "rgba(15, 23, 42, 0.92)",
+            backdropFilter: "blur(12px)",
+            color: "#f1f5f9",
+            borderRadius: "14px",
+            padding: "14px 18px",
+            fontSize: "13.5px",
+            fontWeight: 500,
+            lineHeight: "1.5",
+            maxWidth: "420px",
+            boxShadow:
+              "0 20px 40px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(148, 163, 184, 0.1)",
+            border: "1px solid rgba(148, 163, 184, 0.15)",
+          },
+          success: {
+            duration: 2500,
+            iconTheme: { primary: "#34d399", secondary: "#0f172a" },
+            style: {
+              border: "1px solid rgba(52, 211, 153, 0.3)",
+            },
+          },
+          error: {
+            duration: 5000,
+            iconTheme: { primary: "#f87171", secondary: "#0f172a" },
+            style: {
+              border: "1px solid rgba(248, 113, 113, 0.3)",
+            },
+          },
+          loading: {
+            iconTheme: { primary: "#94a3b8", secondary: "#0f172a" },
+            style: {
+              border: "1px solid rgba(148, 163, 184, 0.2)",
+            },
+          },
+        }}
+      />
       <Toolbar
         onExecute={handleExecute}
+        onAbort={handleAbort}
         onClear={handleClear}
         onSave={handleSave}
+        onExport={() => setExportModalOpen(true)}
         onShare={projectId ? handleShare : undefined}
         isExecuting={usePlaygroundStore.getState().isExecuting}
+        isShareLoading={saveProject.isPending}
         executionProgress={executionProgress}
         projectName={projectData?.name}
         onBack={() => navigate("/dashboard")}
+        isMentorEnabled={preferences.enabled}
+        onToggleMentor={handleToggleMentor}
       />
 
-      <div className="flex-1 flex overflow-hidden">
-        <ReactFlowProvider>
-          <Sidebar
-            onNodeDragStart={onNodeDragStart}
-            onTemplateClick={handleTemplateClick}
-          />
-          <Canvas onNodeClick={handleNodeClick} />
-        </ReactFlowProvider>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex overflow-hidden">
+          <ReactFlowProvider>
+            <Sidebar
+              onNodeDragStart={onNodeDragStart}
+              onTemplateClick={handleTemplateClick}
+            />
+            <Canvas onNodeClick={handleNodeClick} />
+          </ReactFlowProvider>
+        </div>
 
-        <ResultsPanel
+        <ResultsDrawer
           isOpen={resultsOpen}
           onClose={() => setResultsOpen(false)}
         />
@@ -607,6 +716,11 @@ export default function PlayGround() {
         onClose={() => setShareModalOpen(false)}
         projectId={projectId ? parseInt(projectId) : 0}
         projectName={projectData?.name || "Untitled Project"}
+      />
+
+      <ExportModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
       />
 
       <MentorAssistant
@@ -709,14 +823,11 @@ export default function PlayGround() {
                   })),
                 };
 
-                const analysis =
-                  await mentorApi.analyzePipeline(pipelineData);
+                const analysis = await mentorApi.analyzePipeline(pipelineData);
 
                 if (analysis.suggestions.length > 0) {
                   analysis.suggestions.slice(0, 2).forEach((suggestion) => {
-                    useMentorStore
-                      .getState()
-                      .showSuggestion(suggestion);
+                    useMentorStore.getState().showSuggestion(suggestion);
                   });
                 } else {
                   toast("No suggestions right now — keep building!", {
@@ -725,10 +836,7 @@ export default function PlayGround() {
                   });
                 }
               } catch (error) {
-                console.error(
-                  "[Mentor] Error fetching suggestions:",
-                  error,
-                );
+                console.error("[Mentor] Error fetching suggestions:", error);
                 toast.error("Failed to get suggestions");
               }
             }

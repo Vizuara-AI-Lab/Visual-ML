@@ -18,6 +18,10 @@ const PlaygroundPage = lazy(() => import("../pages/playground/PlayGround"));
 const Profile = lazy(() => import("../pages/auth/Profile"));
 const ForgotPassword = lazy(() => import("../pages/auth/ForgotPassword"));
 const SharedProject = lazy(() => import("../pages/SharedProject"));
+const AppBuilderPage = lazy(
+  () => import("../pages/app-builder/AppBuilderPage"),
+);
+const PublicApp = lazy(() => import("../pages/PublicApp"));
 const ProtectedRoute = lazy(
   () => import("../components/common/ProtectedRoute"),
 );
@@ -38,6 +42,9 @@ const App = () => {
 
           {/* Public shared project view */}
           <Route path="/shared/:shareToken" element={<SharedProject />} />
+
+          {/* Public custom app view */}
+          <Route path="/app/:slug" element={<PublicApp />} />
 
           <Route
             path="/dashboard"
@@ -68,6 +75,16 @@ const App = () => {
             element={
               <ProtectedRoute>
                 <PlaygroundPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* App Builder */}
+          <Route
+            path="/app-builder/:appId"
+            element={
+              <ProtectedRoute>
+                <AppBuilderPage />
               </ProtectedRoute>
             }
           />

@@ -3,6 +3,7 @@ Recommendation Engine
 
 Main intelligence hub that generates contextual mentor suggestions
 by combining dataset analysis, pipeline analysis, and user context.
+Uses simple, everyday examples to explain ML concepts.
 """
 
 from typing import Dict, List, Any, Optional
@@ -19,6 +20,7 @@ from app.mentor.schemas import (
 from app.mentor.services.dataset_analyzer import dataset_analyzer
 from app.mentor.services.pipeline_analyzer import pipeline_analyzer
 from app.mentor.guides import LINEAR_REGRESSION_GUIDE
+from app.mentor.node_explanations import get_simple_explanation_for_message, get_node_explanation
 from app.core.logging import logger
 
 
@@ -251,9 +253,25 @@ class RecommendationEngine:
 
         # Preprocessing recommendations
         if insights.recommendations:
-            rec_message = "**Recommended Preprocessing Steps:**\n\n" + "\n".join(
-                f"• {rec}" for rec in insights.recommendations[:4]
-            )
+            rec_messages = []
+            for rec in insights.recommendations[:4]:
+                # Add simple explanations for common recommendations
+                if "missing" in rec.lower():
+                    rec_messages.append(
+                        f"• {rec}\n  💡 {get_node_explanation('missing_value_handler', 'simple')}"
+                    )
+                elif "encod" in rec.lower():
+                    rec_messages.append(
+                        f"• {rec}\n  💡 {get_node_explanation('encoding', 'simple')}"
+                    )
+                elif "scal" in rec.lower():
+                    rec_messages.append(
+                        f"• {rec}\n  💡 {get_node_explanation('scaling', 'simple')}"
+                    )
+                else:
+                    rec_messages.append(f"• {rec}")
+
+            rec_message = "**Recommended Preprocessing Steps:**\n\n" + "\n\n".join(rec_messages)
 
             suggestions.append(
                 MentorSuggestion(
@@ -352,9 +370,10 @@ class RecommendationEngine:
 
         # Categorical encoding errors
         if "categorical" in error_lower or "non-numeric" in error_lower or "encode" in error_lower:
+            explanation = get_simple_explanation_for_message("encoding")
             return (
-                "Machine learning models need numeric inputs, but your data contains text/categorical columns. "
-                "Add an Encoding node before training to convert these to numbers.",
+                f"Machine learning models need numbers, but your data contains text/categories. "
+                f"{explanation}",
                 [
                     MentorAction(
                         label="Add Encoding Node",
@@ -366,9 +385,9 @@ class RecommendationEngine:
 
         # Missing values errors
         if "missing" in error_lower or "nan" in error_lower or "null" in error_lower:
+            explanation = get_simple_explanation_for_message("missing_value_handler")
             return (
-                "Your dataset has missing values (empty cells). "
-                "Add a Missing Value Handler node to clean your data before training.",
+                f"Your dataset has missing values (empty cells). {explanation}",
                 [
                     MentorAction(
                         label="Add Missing Value Handler",
@@ -390,7 +409,7 @@ class RecommendationEngine:
         )
 
     def _generate_gap_actions(self, gap: str) -> List[MentorAction]:
-        """Generate actions to fill pipeline gaps."""
+        """Generate actions to fill pipeline gaps with simple explanations."""
         actions = []
 
         gap_lower = gap.lower()
@@ -403,32 +422,40 @@ class RecommendationEngine:
             )
 
         if "split" in gap_lower:
+            # Add explanation for split node
+            explanation = get_node_explanation("split", "simple")
             actions.append(
                 MentorAction(
-                    label="Add Split Node", type="add_node", payload={"node_type": "split"}
+                    label=f"Add Split Node",
+                    type="add_node",
+                    payload={"node_type": "split", "explanation": explanation},
                 )
             )
 
         if "encoding" in gap_lower:
+            explanation = get_node_explanation("encoding", "simple")
             actions.append(
                 MentorAction(
-                    label="Add Encoding", type="add_node", payload={"node_type": "encoding"}
+                    label="Add Encoding",
+                    type="add_node",
+                    payload={"node_type": "encoding", "explanation": explanation},
                 )
             )
 
         if "missing" in gap_lower:
+            explanation = get_node_explanation("missing_value_handler", "simple")
             actions.append(
                 MentorAction(
                     label="Add Missing Value Handler",
                     type="add_node",
-                    payload={"node_type": "missing_value_handler"},
+                    payload={"node_type": "missing_value_handler", "explanation": explanation},
                 )
             )
 
         return actions
 
     def _generate_next_step_actions(self, next_steps: List[str]) -> List[MentorAction]:
-        """Generate actionable buttons from next steps."""
+        """Generate actionable buttons from next steps with simple explanations."""
         actions = []
 
         for step in next_steps[:3]:  # Limit to 3 actions
@@ -451,21 +478,39 @@ class RecommendationEngine:
                     )
                 )
             elif "split" in step_lower:
-                actions.append(
-                    MentorAction(label="Add Split", type="add_node", payload={"node_type": "split"})
-                )
-            elif "encoding" in step_lower:
+                explanation = get_node_explanation("split", "simple")
                 actions.append(
                     MentorAction(
-                        label="Add Encoding", type="add_node", payload={"node_type": "encoding"}
+                        label=f"Add Split",
+                        type="add_node",
+                        payload={"node_type": "split", "explanation": explanation},
+                    )
+                )
+            elif "encoding" in step_lower:
+                explanation = get_node_explanation("encoding", "simple")
+                actions.append(
+                    MentorAction(
+                        label="Add Encoding",
+                        type="add_node",
+                        payload={"node_type": "encoding", "explanation": explanation},
                     )
                 )
             elif "missing" in step_lower:
+                explanation = get_node_explanation("missing_value_handler", "simple")
                 actions.append(
                     MentorAction(
                         label="Handle Missing Values",
                         type="add_node",
-                        payload={"node_type": "missing_value_handler"},
+                        payload={"node_type": "missing_value_handler", "explanation": explanation},
+                    )
+                )
+            elif "scaling" in step_lower or "scale" in step_lower:
+                explanation = get_node_explanation("scaling", "simple")
+                actions.append(
+                    MentorAction(
+                        label="Add Scaling",
+                        type="add_node",
+                        payload={"node_type": "scaling", "explanation": explanation},
                     )
                 )
             elif "execute" in step_lower:
@@ -622,6 +667,71 @@ class RecommendationEngine:
             title="Next Step: Dataset",
             message=next_message,
             actions=actions,
+            timestamp=datetime.utcnow().isoformat(),
+            dismissible=True,
+        )
+
+    def explain_node(
+        self,
+        node_type: str,
+        personality: PersonalityStyle = PersonalityStyle.ENCOURAGING,
+        expertise_level: ExpertiseLevel = ExpertiseLevel.BEGINNER,
+    ) -> MentorSuggestion:
+        """
+        Generate detailed explanation for a specific node type with examples.
+
+        Args:
+            node_type: Type of node to explain
+            personality: Communication style
+            expertise_level: User's ML expertise
+
+        Returns:
+            MentorSuggestion with detailed explanation
+        """
+        # Get the full explanation with example
+        explanation = get_node_explanation(node_type, "full")
+        example = get_node_explanation(node_type, "example")
+
+        # Format the message based on expertise level
+        if expertise_level == ExpertiseLevel.BEGINNER:
+            # Include more details and examples for beginners
+            message = f"**{node_type.replace('_', ' ').title()}**\n\n{explanation}"
+            if example:
+                message += f"\n\n**Real-Life Example:**\n{example}"
+        else:
+            # More concise for advanced users
+            simple = get_node_explanation(node_type, "simple")
+            message = f"**{node_type.replace('_', ' ').title()}**\n\n{simple}"
+            if example and expertise_level == ExpertiseLevel.INTERMEDIATE:
+                message += f"\n\n{example}"
+
+        # Add personality-based encouragement
+        if personality == PersonalityStyle.ENCOURAGING:
+            message += "\n\n💡 Give it a try - it's easier than it sounds!"
+        elif personality == PersonalityStyle.EDUCATIONAL:
+            message += "\n\n📚 Understanding this concept will help you build better ML models!"
+
+        # Voice-friendly version (no markdown, simpler)
+        voice_text = (
+            f"{get_node_explanation(node_type, 'simple')}. {example}"
+            if example
+            else get_node_explanation(node_type, "simple")
+        )
+
+        return MentorSuggestion(
+            id=str(uuid.uuid4()),
+            type=SuggestionType.LEARNING_TIP,
+            priority=SuggestionPriority.INFO,
+            title=f"About {node_type.replace('_', ' ').title()}",
+            message=message,
+            voice_text=voice_text,
+            actions=[
+                MentorAction(
+                    label=f"Add {node_type.replace('_', ' ').title()}",
+                    type="add_node",
+                    payload={"node_type": node_type},
+                )
+            ],
             timestamp=datetime.utcnow().isoformat(),
             dismissible=True,
         )

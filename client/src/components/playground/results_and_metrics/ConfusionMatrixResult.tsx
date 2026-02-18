@@ -8,7 +8,6 @@ interface ConfusionMatrixProps {
 
 export function ConfusionMatrixResult({ result }: ConfusionMatrixProps) {
   // Debug logging
-  console.log("ConfusionMatrixResult - Full result:", result);
 
   const confusionMatrix = result.confusion_matrix ?? [];
   const classLabels = result.class_labels ?? [];
@@ -18,17 +17,6 @@ export function ConfusionMatrixResult({ result }: ConfusionMatrixProps) {
   const falsePositives = result.false_positives ?? {};
   const trueNegatives = result.true_negatives ?? {};
   const falseNegatives = result.false_negatives ?? {};
-
-  console.log("ConfusionMatrixResult - Parsed data:", {
-    confusionMatrix,
-    classLabels,
-    totalSamples,
-    accuracy,
-    truePositives,
-    falsePositives,
-    trueNegatives,
-    falseNegatives,
-  });
 
   // Calculate maximum value for color scaling
   const maxValue = Math.max(

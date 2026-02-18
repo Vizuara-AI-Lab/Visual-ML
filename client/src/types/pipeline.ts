@@ -34,10 +34,7 @@ export type NodeType =
   | "llm_node"
   | "system_prompt"
   | "chatbot_node"
-  | "example_node"
-  // Deployment nodes
-  | "model_export"
-  | "api_endpoint";
+  | "example_node";
 
 export type AlgorithmType = "linear_regression" | "logistic_regression";
 
@@ -169,4 +166,79 @@ export interface NodeMetadata {
   icon: string;
   category: "input" | "preprocessing" | "model" | "output";
   defaultConfig: Record<string, any>;
+}
+
+// SSE streaming event types
+export type NodeExecutionStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed";
+
+export interface NodeStartedEvent {
+  event: "node_started";
+  node_id: string;
+  node_type: NodeType;
+  label: string;
+}
+
+export interface NodeCompletedEvent {
+  event: "node_completed";
+  node_id: string;
+  node_type: NodeType;
+  label: string;
+  success: true;
+  result?: Record<string, any>;
+}
+
+export interface NodeFailedEvent {
+  event: "node_failed";
+  node_id: string;
+  node_type: NodeType;
+  label: string;
+  error: string;
+}
+
+export interface PipelineCompletedEvent {
+  event: "pipeline_completed";
+  success: true;
+  nodes_executed: number;
+  execution_time_seconds: number;
+  results: Array<Record<string, any>>;
+}
+
+export interface PipelineFailedEvent {
+  event: "pipeline_failed";
+  success: false;
+  error: string;
+}
+
+export type PipelineStreamEvent =
+  | NodeStartedEvent
+  | NodeCompletedEvent
+  | NodeFailedEvent
+  | PipelineCompletedEvent
+  | PipelineFailedEvent;
+
+export interface PipelineStreamCallbacks {
+  onNodeStarted?: (event: NodeStartedEvent) => void;
+  onNodeCompleted?: (event: NodeCompletedEvent) => void;
+  onNodeFailed?: (event: NodeFailedEvent) => void;
+  onPipelineCompleted?: (event: PipelineCompletedEvent) => void;
+  onPipelineFailed?: (event: PipelineFailedEvent) => void;
+  onError?: (error: Error) => void;
+}
+
+// Execution log entry for the results drawer timeline
+export interface ExecutionLogEntry {
+  timestamp: string;
+  event:
+    | "node_started"
+    | "node_completed"
+    | "node_failed"
+    | "pipeline_completed"
+    | "pipeline_failed";
+  nodeId?: string;
+  nodeLabel?: string;
+  message: string;
 }

@@ -1,8 +1,10 @@
 import React from "react";
 import Navbar from "./Navbar";
 import Hero from "./Hero";
+import StatsSection from "./StatsSection";
 import GenAISection from "./GenAISection";
 import Features from "./Features";
+import TestimonialsSection from "./TestimonialsSection";
 import Footer from "./Footer";
 
 const LandingPage: React.FC = () => {
@@ -10,9 +12,10 @@ const LandingPage: React.FC = () => {
     <div className="min-h-screen bg-linear-to-b from-white to-slate-50">
       <Navbar />
       <Hero />
+      <StatsSection />
       <GenAISection />
       <Features />
-
+      <TestimonialsSection />
       <Footer />
     </div>
   );

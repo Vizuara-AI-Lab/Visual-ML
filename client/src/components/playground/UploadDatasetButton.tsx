@@ -20,17 +20,9 @@ interface UploadDatasetButtonProps {
 }
 
 export const UploadDatasetButton = ({
-  nodeId,
   projectId,
   onUploadComplete,
 }: UploadDatasetButtonProps) => {
-  console.log(
-    "🔧 UploadDatasetButton MOUNTED with nodeId:",
-    nodeId,
-    "projectId:",
-    projectId,
-  );
-
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +33,6 @@ export const UploadDatasetButton = ({
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
-    console.log("📁 File selected:", file);
 
     if (!file) {
       console.log("❌ No file selected");
@@ -50,7 +41,6 @@ export const UploadDatasetButton = ({
 
     // Validate file type
     if (!file.name.toLowerCase().endsWith(".csv")) {
-      console.log("❌ Invalid file type:", file.name);
       setError("Only CSV files are allowed");
       return;
     }
@@ -58,13 +48,9 @@ export const UploadDatasetButton = ({
     // Validate file size (max 100MB)
     const maxSize = 100 * 1024 * 1024;
     if (file.size > maxSize) {
-      console.log("❌ File too large:", file.size);
       setError("File size must be less than 100MB");
       return;
     }
-
-    console.log("✅ File validation passed, starting upload...");
-    console.log("📊 Project ID:", projectId);
 
     setUploading(true);
     setError(null);
@@ -72,13 +58,10 @@ export const UploadDatasetButton = ({
     setProgress(0);
 
     try {
-      console.log("🚀 Calling uploadDataset API...");
       const result = await uploadDataset(file, projectId, (progress) => {
-        console.log("📈 Upload progress:", progress);
         setProgress(progress);
       });
 
-      console.log("✅ Upload successful:", result);
       setSuccess(true);
       setProgress(100);
 
@@ -131,16 +114,8 @@ export const UploadDatasetButton = ({
   };
 
   const handleClick = () => {
-    console.log("🖱️ Upload button clicked!");
-    console.log("📁 File input ref:", fileInputRef.current);
     fileInputRef.current?.click();
   };
-
-  console.log("🎨 UploadDatasetButton rendered", {
-    projectId,
-    uploading,
-    error,
-  });
 
   return (
     <div className="space-y-2">

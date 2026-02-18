@@ -75,7 +75,7 @@ class DecisionTreeRegressor:
             self.target_name = y.name if hasattr(y, "name") else "target"
 
             X_array = X.values
-            y_array = y.values
+            y_array = y.values 
 
             start_time = datetime.utcnow()
             self.model.fit(X_array, y_array)

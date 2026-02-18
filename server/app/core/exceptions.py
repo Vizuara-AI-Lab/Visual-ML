@@ -117,7 +117,7 @@ class PredictionError(ModelError):
     def __init__(self, reason: str, expected_features: Optional[list] = None):
         details = {"reason": reason}
         if expected_features:
-            details["expected_features"] = expected_features
+            details["expected features"] = expected_features
 
         super().__init__(
             message=f"Prediction failed: {reason}",

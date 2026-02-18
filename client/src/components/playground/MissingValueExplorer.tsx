@@ -119,15 +119,21 @@ function HealthScoreTab({
   afterStats: any;
   operationLog: any;
 }) {
-  const computeHealth = (stats: any) => {
+  // Compute health as percentage of complete cells, but floor so it never
+  // rounds *up* to 100% when missing values still exist.
+  const computeHealth = (stats: any): number => {
     const totalCells =
       (stats.total_rows || 1) * (stats.total_columns || 1);
     const totalMissing = stats.total_missing_values || 0;
-    return Math.round((1 - totalMissing / totalCells) * 100);
+    if (totalMissing === 0) return 100;
+    // Floor to 1 decimal place so 99.98% → 99.9, never rounds to 100
+    return Math.floor((1 - totalMissing / totalCells) * 1000) / 10;
   };
 
   const beforeHealth = computeHealth(beforeStats);
   const afterHealth = computeHealth(afterStats);
+  const beforeMissingCount = beforeStats.total_missing_values || 0;
+  const afterMissingCount = afterStats.total_missing_values || 0;
 
   const getColor = (score: number) => {
     if (score >= 80)
@@ -145,11 +151,12 @@ function HealthScoreTab({
     return { bg: "bg-red-500", text: "text-red-600", stroke: "#ef4444" };
   };
 
-  // Determine badges
+  // Determine badges — use actual missing count, not rounded health
   const badges: { label: string }[] = [];
-  if (afterHealth === 100) badges.push({ label: "Clean Dataset!" });
-  if ((afterStats.total_missing_values || 0) === 0)
+  if (afterMissingCount === 0) {
+    badges.push({ label: "Clean Dataset!" });
     badges.push({ label: "Zero Missing!" });
+  }
   const strategiesUsed = new Set(
     Object.values(operationLog || {})
       .map((op: any) => op.strategy)
@@ -165,11 +172,14 @@ function HealthScoreTab({
     ...Object.keys(afterMissing),
   ]);
 
-  const renderRing = (score: number, label: string) => {
+  const renderRing = (score: number, label: string, missingCount: number) => {
     const radius = 55;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (score / 100) * circumference;
     const colors = getColor(score);
+    // Show 1 decimal when < 100, integer when exactly 100
+    const displayScore =
+      score === 100 ? "100" : score.toFixed(1);
     return (
       <div className="flex flex-col items-center relative">
         <svg width="140" height="140" className="transform -rotate-90">
@@ -195,8 +205,15 @@ function HealthScoreTab({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className={`text-2xl font-bold ${colors.text}`}>{score}%</div>
+          <div className={`text-2xl font-bold ${colors.text}`}>
+            {displayScore}%
+          </div>
           <div className="text-xs text-gray-500">{label}</div>
+          <div className="text-[10px] text-gray-400 mt-0.5">
+            {missingCount === 0
+              ? "0 missing"
+              : `${missingCount.toLocaleString()} missing`}
+          </div>
         </div>
       </div>
     );
@@ -206,10 +223,40 @@ function HealthScoreTab({
     <div className="space-y-6">
       {/* Score comparison */}
       <div className="flex items-center justify-center gap-8 py-4">
-        {renderRing(beforeHealth, "Before")}
+        {renderRing(beforeHealth, "Before", beforeMissingCount)}
         <div className="text-3xl text-gray-300 font-light">&rarr;</div>
-        {renderRing(afterHealth, "After")}
+        {renderRing(afterHealth, "After", afterMissingCount)}
       </div>
+
+      {/* Summary stats */}
+      {beforeMissingCount > 0 && (
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <div className="text-lg font-bold text-red-700">
+              {beforeMissingCount.toLocaleString()}
+            </div>
+            <div className="text-[10px] text-red-600 uppercase tracking-wide font-medium">
+              Missing Before
+            </div>
+          </div>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+            <div className="text-lg font-bold text-green-700">
+              {afterMissingCount.toLocaleString()}
+            </div>
+            <div className="text-[10px] text-green-600 uppercase tracking-wide font-medium">
+              Missing After
+            </div>
+          </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="text-lg font-bold text-blue-700">
+              {(beforeMissingCount - afterMissingCount).toLocaleString()}
+            </div>
+            <div className="text-[10px] text-blue-600 uppercase tracking-wide font-medium">
+              Values Fixed
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Badges */}
       {badges.length > 0 && (
@@ -240,13 +287,20 @@ function HealthScoreTab({
               const afterPct = afterMissing[col]?.percentage || 0;
               const beforeComplete = 100 - beforePct;
               const afterComplete = 100 - afterPct;
+              const beforeCount = beforeMissing[col]?.count || 0;
+              const afterCount = afterMissing[col]?.count || 0;
               return (
                 <div key={col} className="space-y-1">
                   <div className="flex justify-between text-xs">
-                    <span className="font-medium text-gray-700">{col}</span>
+                    <span className="font-medium text-gray-700">
+                      {col}
+                      <span className="text-gray-400 ml-1 font-normal">
+                        ({beforeCount} &rarr; {afterCount} missing)
+                      </span>
+                    </span>
                     <span className="text-gray-500">
-                      {beforeComplete.toFixed(0)}% &rarr;{" "}
-                      {afterComplete.toFixed(0)}%
+                      {beforeComplete.toFixed(1)}% &rarr;{" "}
+                      {afterComplete.toFixed(1)}%
                     </span>
                   </div>
                   <div className="flex gap-1 h-3">

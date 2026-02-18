@@ -3,9 +3,11 @@ ML Pipeline API endpoints.
 Production-ready with rate limiting, caching, and admin protection.
 """
 
+import json
+import asyncio
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from app.schemas.pipeline import (
     NodeExecuteRequest,
     NodeExecuteResponse,
@@ -15,8 +17,6 @@ from app.schemas.pipeline import (
     TrainModelResponse,
     PredictRequest,
     PredictResponse,
-    PredictBatchRequest,
-    PredictBatchResponse,
     ModelListResponse,
     ModelListItem,
     ModelReloadRequest,
@@ -30,6 +30,85 @@ from app.utils.ids import generate_request_id
 from datetime import datetime
 
 router = APIRouter(prefix="/ml", tags=["ML Pipeline"])
+
+
+def make_json_serializable(obj: Any) -> Any:
+    """
+    Recursively convert objects to JSON-serializable format.
+    Handles datetime objects, NaN/Infinity, Pydantic models, and nested structures.
+    """
+    import math
+
+    # Handle None early
+    if obj is None:
+        return None
+
+    # Handle booleans before checking numeric types
+    if isinstance(obj, bool):
+        return obj
+
+    # Handle integers
+    if isinstance(obj, int):
+        return obj
+
+    # Handle NaN and Infinity for regular floats
+    if isinstance(obj, float):
+        if math.isnan(obj):
+            return None  # Convert NaN to null
+        elif math.isinf(obj):
+            return None  # Convert Infinity to null as well for safety
+        return obj
+
+    # Handle numpy types by checking type name string
+    type_name = type(obj).__name__
+    if type_name.startswith(("int", "uint", "long")) and type_name not in ("integer",):
+        try:
+            return int(obj)
+        except (ValueError, TypeError):
+            pass
+    elif "float" in type_name or type_name in ("number",):
+        try:
+            val = float(obj)
+            if math.isnan(val):
+                return None
+            elif math.isinf(val):
+                return None
+            return val
+        except (ValueError, TypeError):
+            pass
+    elif type_name == "ndarray":
+        try:
+            return make_json_serializable(obj.tolist())
+        except (AttributeError, TypeError):
+            pass
+
+    # Handle datetime
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+
+    # Handle dictionaries
+    if isinstance(obj, dict):
+        return {k: make_json_serializable(v) for k, v in obj.items()}
+
+    # Handle lists and tuples
+    if isinstance(obj, (list, tuple)):
+        return [make_json_serializable(item) for item in obj]
+
+    # Handle Pydantic models
+    if hasattr(obj, "model_dump") and callable(getattr(obj, "model_dump", None)):
+        try:
+            return make_json_serializable(obj.model_dump())
+        except Exception:
+            pass
+
+    # Handle other objects with __dict__
+    if hasattr(obj, "__dict__"):
+        try:
+            return make_json_serializable(obj.__dict__)
+        except Exception:
+            pass
+
+    return obj
 
 
 @router.post("/nodes/run", response_model=NodeExecuteResponse)
@@ -159,6 +238,156 @@ async def execute_pipeline(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+@router.post("/pipeline/run/stream")
+async def execute_pipeline_stream(
+    request: PipelineExecuteRequest, current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Execute a complete ML pipeline with real-time SSE progress updates.
+
+    **Authentication Required**
+
+    Streams Server-Sent Events (SSE) for each node execution:
+    - node_started: When a node begins execution
+    - node_completed: When a node finishes successfully
+    - node_failed: When a node execution fails
+    - pipeline_completed: When entire pipeline finishes
+    - pipeline_failed: When pipeline execution fails
+
+    Event format:
+    ```
+    data: {"event": "node_started", "node_id": "node_123", "node_type": "linear_regression", "label": "Linear Regression"}
+    data: {"event": "node_completed", "node_id": "node_123", "node_type": "linear_regression", "label": "Linear Regression", "success": true}
+    data: {"event": "pipeline_completed", "success": true, "nodes_executed": 5}
+    ```
+    """
+    request_id = generate_request_id()
+    set_request_id(request_id)
+
+    # Create async queue for event streaming
+    event_queue = asyncio.Queue()
+
+    async def generate():
+        """Generator function for SSE events."""
+        try:
+            # Start pipeline execution in background task
+            execution_task = asyncio.create_task(execute_pipeline_with_progress())
+
+            # Stream events as they arrive
+            while True:
+                try:
+                    # Wait for event with timeout
+                    event_data = await asyncio.wait_for(event_queue.get(), timeout=0.1)
+
+                    if event_data is None:
+                        # Sentinel value indicating completion
+                        break
+
+                    # Serialize to JSON with strict NaN handling
+                    try:
+                        json_str = json.dumps(event_data, allow_nan=False)
+                        yield f"data: {json_str}\n\n"
+                    except (ValueError, TypeError) as json_error:
+                        # If serialization fails, clean the data and retry
+                        logger.warning(f"JSON serialization error, cleaning data: {json_error}")
+                        cleaned_data = make_json_serializable(event_data)
+                        json_str = json.dumps(cleaned_data, allow_nan=False)
+                        yield f"data: {json_str}\n\n"
+
+                except asyncio.TimeoutError:
+                    # No event available, check if task is done
+                    if execution_task.done():
+                        # Check for any remaining events
+                        if event_queue.empty():
+                            break
+                    continue
+
+            # Wait for execution to complete
+            await execution_task
+
+        except Exception as e:
+            logger.error(f"SSE streaming error: {str(e)}", exc_info=True)
+            error_data = make_json_serializable(
+                {"event": "pipeline_failed", "success": False, "error": str(e)}
+            )
+            yield f"data: {json.dumps(error_data, allow_nan=False)}\n\n"
+
+    async def execute_pipeline_with_progress():
+        """Execute pipeline and send progress events to queue."""
+        try:
+            start_time = datetime.utcnow()
+
+            logger.info(f"Pipeline streaming execution request: {len(request.pipeline)} nodes")
+
+            # Convert to dict format
+            pipeline_config = [node.model_dump() for node in request.pipeline]
+            edges_config = [edge.model_dump() for edge in request.edges]
+
+            # Progress callback for SSE events
+            async def progress_callback(event_data: Dict[str, Any]):
+                """Send progress events to queue."""
+                # Make event data JSON-serializable before queuing
+                serializable_data = make_json_serializable(event_data)
+                await event_queue.put(serializable_data)
+
+            # Execute pipeline with streaming progress
+            dag_result = await ml_service.execute_pipeline(
+                pipeline=pipeline_config,
+                edges=edges_config,
+                dry_run=request.dry_run,
+                current_user=current_user,
+                progress_callback=progress_callback,
+            )
+
+            execution_time = (datetime.utcnow() - start_time).total_seconds()
+
+            # Extract success and results from DAG execution result
+            success = dag_result.get("success", False)
+            results = dag_result.get("results", [])
+            error_message = dag_result.get("error")
+
+            # Send final event
+            if success:
+                await event_queue.put(
+                    make_json_serializable(
+                        {
+                            "event": "pipeline_completed",
+                            "success": True,
+                            "nodes_executed": len(results),
+                            "execution_time_seconds": execution_time,
+                            "results": results,
+                        }
+                    )
+                )
+            else:
+                await event_queue.put(
+                    make_json_serializable(
+                        {"event": "pipeline_failed", "success": False, "error": error_message}
+                    )
+                )
+
+        except Exception as e:
+            logger.error(f"Pipeline execution error: {str(e)}", exc_info=True)
+            await event_queue.put(
+                make_json_serializable(
+                    {"event": "pipeline_failed", "success": False, "error": str(e)}
+                )
+            )
+        finally:
+            # Send sentinel to stop generator
+            await event_queue.put(None)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Prevents Nginx from buffering SSE
+        },
+    )
+
+
 @router.post("/train/regression", response_model=TrainModelResponse)
 async def train_regression_model(
     request: TrainModelRequest, admin_user: Dict[str, Any] = Depends(get_current_admin)
@@ -166,7 +395,6 @@ async def train_regression_model(
     """
     Train a regression model (Linear Regression).
 
-    **Admin Only**
 
     This endpoint trains a complete regression model including:
     - Data splitting
@@ -228,7 +456,6 @@ async def train_classification_model(
     """
     Train a classification model (Logistic Regression).
 
-    **Admin Only**
 
     This endpoint trains a complete classification model including:
     - Data splitting

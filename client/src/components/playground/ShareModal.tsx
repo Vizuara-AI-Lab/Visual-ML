@@ -1,6 +1,23 @@
 import { useState, useEffect } from "react";
-import { X, Copy, Check, Link2, Eye, Users, Settings } from "lucide-react";
+import { useNavigate } from "react-router";
+import {
+  X,
+  Copy,
+  Check,
+  Link2,
+  Eye,
+  Users,
+  Settings,
+  Blocks,
+  Plus,
+  Loader2,
+  ArrowRight,
+} from "lucide-react";
+import { toast } from "react-hot-toast";
 import { env } from "../../lib/env";
+import { useCustomApps, useCreateApp } from "../../features/app-builder";
+
+type ShareTab = "pipeline" | "custom-app";
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -23,6 +40,8 @@ export const ShareModal = ({
   projectId,
   projectName,
 }: ShareModalProps) => {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<ShareTab>("pipeline");
   const [shareSettings, setShareSettings] = useState<ShareSettings>({
     isPublic: false,
     allowCloning: true,
@@ -30,6 +49,11 @@ export const ShareModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appName, setAppName] = useState(projectName);
+
+  // Custom app hooks
+  const { data: apps, isLoading: appsLoading } = useCustomApps();
+  const createApp = useCreateApp();
 
   // Fetch current share status when modal opens
   useEffect(() => {
@@ -172,7 +196,120 @@ export const ShareModal = ({
           </button>
         </div>
 
+        {/* Tab Toggle */}
+        <div className="flex border-b border-slate-200">
+          <button
+            onClick={() => setActiveTab("pipeline")}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === "pipeline"
+                ? "text-blue-600 border-b-2 border-blue-600"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Link2 className="w-4 h-4" />
+            Share Pipeline
+          </button>
+          <button
+            onClick={() => setActiveTab("custom-app")}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === "custom-app"
+                ? "text-blue-600 border-b-2 border-blue-600"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Blocks className="w-4 h-4" />
+            Build Custom App
+          </button>
+        </div>
+
         {/* Content */}
+        {activeTab === "custom-app" ? (
+          <div className="p-6 space-y-6">
+            <div className="text-center py-2">
+              <h3 className="text-lg font-semibold text-slate-800 mb-1">
+                Custom App Builder
+              </h3>
+              <p className="text-sm text-slate-500">
+                Create a beautiful web interface for your pipeline
+              </p>
+            </div>
+
+            {/* Create new app */}
+            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
+              <label className="block text-sm font-medium text-slate-700">
+                App Name
+              </label>
+              <input
+                type="text"
+                value={appName}
+                onChange={(e) => setAppName(e.target.value)}
+                placeholder="My ML App"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <button
+                onClick={async () => {
+                  try {
+                    const app = await createApp.mutateAsync({
+                      pipeline_id: projectId,
+                      name: appName || projectName,
+                    });
+                    onClose();
+                    navigate(`/app-builder/${app.id}`);
+                  } catch {
+                    toast.error("Failed to create app");
+                  }
+                }}
+                disabled={createApp.isPending}
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                {createApp.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4" />
+                )}
+                Create New App
+              </button>
+            </div>
+
+            {/* Existing apps for this pipeline */}
+            {appsLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+              </div>
+            ) : apps && apps.filter((a) => a.pipelineId === projectId).length > 0 ? (
+              <div>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+                  Existing Apps
+                </p>
+                <div className="space-y-2">
+                  {apps
+                    .filter((a) => a.pipelineId === projectId)
+                    .map((app) => (
+                      <button
+                        key={app.id}
+                        onClick={() => {
+                          onClose();
+                          navigate(`/app-builder/${app.id}`);
+                        }}
+                        className="w-full flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-slate-800">
+                            {app.name}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {app.is_published ? "Published" : "Draft"} &middot;{" "}
+                            /app/{app.slug}
+                          </p>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-slate-400" />
+                      </button>
+                    ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : (
         <div className="p-6 space-y-6">
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -322,6 +459,7 @@ export const ShareModal = ({
             </div>
           )}
         </div>
+        )}
 
         {/* Footer */}
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
@@ -331,7 +469,7 @@ export const ShareModal = ({
           >
             Close
           </button>
-          {!shareSettings.shareToken && (
+          {activeTab === "pipeline" && !shareSettings.shareToken && (
             <button
               onClick={handleGenerateLink}
               disabled={isLoading || !shareSettings.isPublic}

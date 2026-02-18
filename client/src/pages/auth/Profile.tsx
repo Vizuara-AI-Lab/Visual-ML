@@ -17,7 +17,6 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import axiosInstance from "../../lib/axios";
 import Navbar from "../../landingpage/Navbar";
-import { MentorSettings } from "../../components/MentorSettings";
 
 interface UserProfile {
   id: number;
@@ -159,6 +158,17 @@ const Profile: React.FC = () => {
     try {
       const response = await axiosInstance.patch("/auth/student/me", formData);
       setProfile(response.data);
+
+      // Sync updated profile data to localStorage so Dashboard navbar reflects changes
+      const existingUser = localStorage.getItem("user");
+      if (existingUser) {
+        const userData = JSON.parse(existingUser);
+        userData.profilePic = response.data.profilePic || formData.profilePic;
+        userData.collegeOrSchool = response.data.collegeOrSchool || formData.collegeOrSchool;
+        userData.fullName = response.data.fullName || userData.fullName;
+        localStorage.setItem("user", JSON.stringify(userData));
+      }
+
       setSuccess("Profile updated successfully!");
       setTimeout(() => setSuccess(""), 3000);
     } catch (err: any) {
@@ -187,7 +197,7 @@ const Profile: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pt-20">
-      <Navbar />
+      <Navbar variant="profile" />
       {/* Background Pattern */}
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-40" />
@@ -492,9 +502,6 @@ const Profile: React.FC = () => {
                 </div>
               </form>
             </div>
-
-            {/* AI Mentor Settings Card */}
-            <MentorSettings />
           </div>
         </div>
       </div>

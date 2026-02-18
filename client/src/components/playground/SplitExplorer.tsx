@@ -109,8 +109,8 @@ export const SplitExplorer = ({
 // --- Split Visualizer Tab ---
 
 function SplitVisualizerTab({ data }: { data: any }) {
-  const trainPct = data.train_percentage || 80;
-  const testPct = data.test_percentage || 20;
+  const trainPct = data.train_pct || 80;
+  const testPct = data.test_pct || 20;
 
   return (
     <div className="space-y-4">
@@ -148,13 +148,13 @@ function SplitVisualizerTab({ data }: { data: any }) {
         <div className="flex justify-between mt-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-cyan-600">
-              {data.train_samples?.toLocaleString()}
+              {data.train_size?.toLocaleString()}
             </div>
             <div className="text-xs text-gray-500">Training samples</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-orange-500">
-              {data.test_samples?.toLocaleString()}
+              {data.test_size?.toLocaleString()}
             </div>
             <div className="text-xs text-gray-500">Test samples</div>
           </div>
@@ -184,7 +184,7 @@ function SplitVisualizerTab({ data }: { data: any }) {
       </div>
 
       {/* Sample rows preview */}
-      {data.train_sample_rows && data.train_sample_rows.length > 0 && (
+      {data.train_sample && data.train_sample.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <h4 className="text-sm font-semibold text-gray-900 mb-3">
             Sample Training Rows (first 3)
@@ -193,7 +193,7 @@ function SplitVisualizerTab({ data }: { data: any }) {
             <table className="min-w-full text-xs border-collapse">
               <thead className="bg-cyan-50">
                 <tr>
-                  {Object.keys(data.train_sample_rows[0]).map((col) => (
+                  {Object.keys(data.train_sample[0]).map((col) => (
                     <th
                       key={col}
                       className="border border-gray-200 px-3 py-2 text-left font-semibold"
@@ -204,7 +204,7 @@ function SplitVisualizerTab({ data }: { data: any }) {
                 </tr>
               </thead>
               <tbody>
-                {data.train_sample_rows.map((row: any, idx: number) => (
+                {data.train_sample.map((row: any, idx: number) => (
                   <tr
                     key={idx}
                     className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}
@@ -232,9 +232,27 @@ function SplitVisualizerTab({ data }: { data: any }) {
 // --- Class Balance Tab ---
 
 function ClassBalanceTab({ data }: { data: any }) {
-  const trainDist = data.train_distribution || {};
-  const testDist = data.test_distribution || {};
-  const classes = data.class_names || Object.keys(trainDist);
+  // Server sends train_distribution/test_distribution as arrays of {class, count, pct}
+  // Convert to object keyed by class name for easy lookup
+  const toMap = (arr: any) => {
+    if (!arr) return {};
+    if (Array.isArray(arr)) {
+      const map: Record<string, { count: number; pct: number }> = {};
+      for (const item of arr) {
+        map[String(item.class)] = { count: item.count || 0, pct: item.pct || 0 };
+      }
+      return map;
+    }
+    return arr;
+  };
+
+  const trainDist = toMap(data.train_distribution);
+  const testDist = toMap(data.test_distribution);
+  const classes =
+    data.class_names ||
+    (Array.isArray(data.train_distribution)
+      ? data.train_distribution.map((d: any) => String(d.class))
+      : Object.keys(trainDist));
 
   return (
     <div className="space-y-4">
@@ -251,10 +269,10 @@ function ClassBalanceTab({ data }: { data: any }) {
       </div>
 
       {/* Balance status */}
-      {data.balance_status && (
+      {data.is_balanced !== undefined && (
         <div
           className={`border rounded-lg p-4 ${
-            data.balance_status === "balanced"
+            data.is_balanced
               ? "bg-green-50 border-green-200"
               : "bg-yellow-50 border-yellow-200"
           }`}
@@ -262,7 +280,7 @@ function ClassBalanceTab({ data }: { data: any }) {
           <div className="flex items-center gap-2">
             <Info className="w-4 h-4" />
             <span className="text-sm font-medium">
-              {data.balance_status === "balanced"
+              {data.is_balanced
                 ? "Classes are well-balanced across train and test sets!"
                 : "There is some class imbalance - the model may need extra care."}
             </span>
@@ -290,8 +308,8 @@ function ClassBalanceTab({ data }: { data: any }) {
           {classes.map((cls: string) => {
             const trainData = trainDist[cls] || {};
             const testData = testDist[cls] || {};
-            const trainPct = trainData.percentage || 0;
-            const testPct = testData.percentage || 0;
+            const trainPct = trainData.pct || 0;
+            const testPct = testData.pct || 0;
 
             return (
               <div key={cls}>
@@ -359,7 +377,6 @@ function ClassBalanceTab({ data }: { data: any }) {
 
 function RatioExplorerTab({ data }: { data: any }) {
   const ratios = data.ratios || [];
-  const appliedRatio = data.applied_ratio || "80/20";
 
   return (
     <div className="space-y-4">
@@ -376,7 +393,9 @@ function RatioExplorerTab({ data }: { data: any }) {
 
       <div className="space-y-3">
         {ratios.map((ratio: any) => {
-          const isApplied = ratio.label === appliedRatio;
+          const isApplied = ratio.is_applied;
+          const trainPct = Math.round((ratio.train_ratio || 0.8) * 100);
+          const testPct = Math.round((ratio.test_ratio || 0.2) * 100);
           return (
             <div
               key={ratio.label}
@@ -398,8 +417,8 @@ function RatioExplorerTab({ data }: { data: any }) {
                   )}
                 </div>
                 <div className="text-xs text-gray-500">
-                  Train: {ratio.train_count?.toLocaleString()} | Test:{" "}
-                  {ratio.test_count?.toLocaleString()}
+                  Train: {ratio.train_size?.toLocaleString()} | Test:{" "}
+                  {ratio.test_size?.toLocaleString()}
                 </div>
               </div>
 
@@ -407,15 +426,15 @@ function RatioExplorerTab({ data }: { data: any }) {
               <div className="flex h-6 rounded overflow-hidden border border-gray-200 mb-3">
                 <div
                   className="bg-cyan-400 flex items-center justify-center text-white text-xs font-medium"
-                  style={{ width: `${ratio.train_pct}%` }}
+                  style={{ width: `${trainPct}%` }}
                 >
-                  {ratio.train_pct}%
+                  {trainPct}%
                 </div>
                 <div
                   className="bg-orange-300 flex items-center justify-center text-white text-xs font-medium"
-                  style={{ width: `${ratio.test_pct}%` }}
+                  style={{ width: `${testPct}%` }}
                 >
-                  {ratio.test_pct}%
+                  {testPct}%
                 </div>
               </div>
 

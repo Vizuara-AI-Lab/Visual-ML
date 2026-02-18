@@ -38,6 +38,7 @@ const AdminDashboard: React.FC = () => {
   const {
     data: students = [],
     isLoading,
+    isFetching,
     error,
   } = useStudentsList({
     search: debouncedSearch || undefined,
@@ -45,10 +46,6 @@ const AdminDashboard: React.FC = () => {
     isActive: filter.isActive ? filter.isActive === "true" : undefined,
   });
   const updateStudentMutation = useUpdateStudent();
-
-  const handleSearch = () => {
-    // Query will automatically refetch when filter state changes
-  };
 
   const handleLogout = () => {
     localStorage.clear();
@@ -318,13 +315,22 @@ const AdminDashboard: React.FC = () => {
           transition={{ duration: 0.5, delay: 0.5 }}
           className="bg-white/80 backdrop-blur-xl rounded-2xl border border-slate-200/60 shadow-xl shadow-slate-900/5 ring-1 ring-slate-900/5 overflow-hidden"
         >
-          <div className="p-6 border-b border-slate-200/60">
+          <div className="p-6 border-b border-slate-200/60 flex items-center justify-between">
             <h2 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
               Students ({students.length})
             </h2>
+            {isFetching && !isLoading && (
+              <div className="flex items-center gap-2 text-slate-500">
+                <div className="animate-spin h-4 w-4 border-2 border-slate-400 border-t-slate-900 rounded-full"></div>
+                <span className="text-xs font-medium">Updating...</span>
+              </div>
+            )}
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto relative">
+            {isFetching && !isLoading && (
+              <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-10" />
+            )}
             <table className="w-full">
               <thead className="bg-linear-to-r from-slate-50 to-slate-100/50 border-b border-slate-200/60">
                 <tr>

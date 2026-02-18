@@ -93,9 +93,11 @@ class Settings(BaseSettings):
     LAZY_LOAD_MODELS: bool = True
     ENABLE_MODEL_WARMUP: bool = False
 
-    # Admin
-    ADMIN_EMAIL: str = "admin@visualml.com"
-    ADMIN_PASSWORD: str = "change-this-password"
+    # Storage Cleanup
+    CLEANUP_ENABLED: bool = True          # Toggle periodic cleanup on/off
+    CLEANUP_INTERVAL_HOURS: int = 12      # How often to run cleanup
+    UPLOAD_MAX_AGE_HOURS: int = 24        # Delete uploads older than this
+    MODEL_MAX_AGE_HOURS: int = 72         # Delete model files older than this
 
     # Inworld TTS (AI Mentor)
     INWORLD_API_KEY: Optional[str] = None
@@ -109,9 +111,13 @@ class Settings(BaseSettings):
     # Frontend URL (for OAuth redirects)
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # Admin Credentials
+    ADMIN_EMAIL: str = "admin@visualml.com"
+    ADMIN_PASSWORD: str = "change-this-password"
+
     # Brevo Email Service
     BREVO_API_KEY: Optional[str] = ""
-    BREVO_SENDER_EMAIL: str = "mrsachinchaurasiya@gmail.com"
+    BREVO_SENDER_EMAIL: str = ""
     BREVO_SENDER_NAME: str = "Visual ML"
 
     # Redis URL for Celery

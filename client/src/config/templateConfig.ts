@@ -3,7 +3,7 @@
  * Pre-configured pipelines that can be loaded onto the canvas
  */
 
-import { Zap } from "lucide-react";
+import { Zap, TreePine, Trees, Bot } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { NodeType } from "../types/pipeline";
 
@@ -80,6 +80,78 @@ export const templates: Template[] = [
       { sourceIndex: 3, targetIndex: 4 }, // Encoding → Target & Split
       { sourceIndex: 4, targetIndex: 5 }, // Target & Split → Logistic Regression
       { sourceIndex: 5, targetIndex: 6 }, // Logistic Regression → Confusion Matrix
+    ],
+  },
+  {
+    id: "decision_tree",
+    label: "Decision Tree",
+    description: "Classification pipeline with Decision Tree and confusion matrix",
+    icon: TreePine,
+    color: "#10B981",
+    nodes: [
+      { type: "upload_file", position: { x: 100, y: 100 } },
+      { type: "table_view", position: { x: 100, y: 220 } },
+      { type: "missing_value_handler", position: { x: 100, y: 340 } },
+      { type: "encoding", position: { x: 100, y: 460 } },
+      { type: "split", position: { x: 100, y: 580 } },
+      { type: "decision_tree", position: { x: 100, y: 700 } },
+      { type: "confusion_matrix", position: { x: 400, y: 640 } },
+      { type: "rmse_score", position: { x: 400, y: 730 } },
+    ],
+    edges: [
+      { sourceIndex: 0, targetIndex: 1 }, // Upload → Table View
+      { sourceIndex: 1, targetIndex: 2 }, // Table View → Missing Value Handler
+      { sourceIndex: 2, targetIndex: 3 }, // Missing Value → Encoding
+      { sourceIndex: 3, targetIndex: 4 }, // Encoding → Target & Split
+      { sourceIndex: 4, targetIndex: 5 }, // Target & Split → Decision Tree
+      { sourceIndex: 5, targetIndex: 6 }, // Decision Tree → Confusion Matrix
+      { sourceIndex: 5, targetIndex: 7 }, // Decision Tree → RMSE
+    ],
+  },
+  {
+    id: "random_forest",
+    label: "Random Forest",
+    description: "Ensemble classification with Random Forest, scaling, and evaluation",
+    icon: Trees,
+    color: "#8B5CF6",
+    nodes: [
+      { type: "upload_file", position: { x: 100, y: 100 } },
+      { type: "table_view", position: { x: 100, y: 220 } },
+      { type: "missing_value_handler", position: { x: 100, y: 340 } },
+      { type: "encoding", position: { x: 100, y: 460 } },
+      { type: "scaling", position: { x: 100, y: 580 } },
+      { type: "split", position: { x: 100, y: 700 } },
+      { type: "random_forest", position: { x: 100, y: 820 } },
+      { type: "confusion_matrix", position: { x: 400, y: 760 } },
+      { type: "mae_score", position: { x: 400, y: 850 } },
+    ],
+    edges: [
+      { sourceIndex: 0, targetIndex: 1 }, // Upload → Table View
+      { sourceIndex: 1, targetIndex: 2 }, // Table View → Missing Value Handler
+      { sourceIndex: 2, targetIndex: 3 }, // Missing Value → Encoding
+      { sourceIndex: 3, targetIndex: 4 }, // Encoding → Scaling
+      { sourceIndex: 4, targetIndex: 5 }, // Scaling → Target & Split
+      { sourceIndex: 5, targetIndex: 6 }, // Target & Split → Random Forest
+      { sourceIndex: 6, targetIndex: 7 }, // Random Forest → Confusion Matrix
+      { sourceIndex: 6, targetIndex: 8 }, // Random Forest → MAE
+    ],
+  },
+  {
+    id: "genai_chatbot",
+    label: "GenAI Chatbot",
+    description: "AI chatbot with LLM provider, system prompt, and few-shot examples",
+    icon: Bot,
+    color: "#F59E0B",
+    nodes: [
+      { type: "llm_node", position: { x: 100, y: 100 } },
+      { type: "system_prompt", position: { x: 100, y: 260 } },
+      { type: "example_node", position: { x: 100, y: 420 } },
+      { type: "chatbot_node", position: { x: 450, y: 260 } },
+    ],
+    edges: [
+      { sourceIndex: 0, targetIndex: 3 }, // LLM Provider → Chatbot
+      { sourceIndex: 1, targetIndex: 3 }, // System Prompt → Chatbot
+      { sourceIndex: 2, targetIndex: 3 }, // Examples → Chatbot
     ],
   },
 ];

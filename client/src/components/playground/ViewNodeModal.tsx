@@ -2,8 +2,9 @@
  * View Node Modal - Display data from view nodes
  */
 
-import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { usePlaygroundStore } from "../../store/playgroundStore";
+import { getNodeByType } from "../../config/nodeDefinitions";
 import { ChartViewer } from "./ChartViewer";
 import { DataExplorer } from "./DataExplorer";
 import { MissingValueExplorer } from "./MissingValueExplorer";
@@ -13,12 +14,15 @@ import { FeatureSelectionExplorer } from "./FeatureSelectionExplorer";
 import { SplitExplorer } from "./SplitExplorer";
 import { LinearRegressionExplorer } from "./LinearRegressionExplorer";
 import { LogisticRegressionExplorer } from "./LogisticRegressionExplorer";
+import { TransformationResults } from "./TransformationResults";
+import { ScalingResults } from "./ScalingResults";
+import { FeatureEngineeringResults } from "./FeatureEngineeringResults";
 import {
-  Download,
-  Copy,
-  ChevronDown,
-  ChevronRight,
-  Search,
+  X,
+  Table2,
+  Eye,
+  BarChart3,
+  Columns3,
 } from "lucide-react";
 import {
   R2ScoreResult,
@@ -37,42 +41,81 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
   const { nodes, executionResult } = usePlaygroundStore();
 
   const node = nodeId ? nodes.find((n) => n.id === nodeId) : null;
-  const nodeResult = nodeId ? executionResult?.nodeResults?.[nodeId] : null;
+  const nodeDef = node ? getNodeByType(node.data.type) : null;
+  const rawNodeResult = nodeId ? executionResult?.nodeResults?.[nodeId] : null;
+  // Unwrap: nodeResults stores { success, output, error } — render functions expect the output directly
+  const nodeResult = rawNodeResult
+    ? {
+        ...(rawNodeResult.output as Record<string, unknown> || {}),
+        error: rawNodeResult.error,
+        success: rawNodeResult.success,
+      }
+    : null;
 
   // Early return AFTER all hooks have been called
   if (!nodeId) return null;
 
   if (!node) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg shadow-xl p-6">
-          <p className="text-gray-800">Node not found</p>
-          <button
+      <AnimatePresence>
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={onClose}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          />
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="relative bg-white rounded-xl shadow-2xl p-8 border border-slate-200 z-10"
           >
-            Close
-          </button>
+            <p className="text-slate-700 font-medium">Node not found</p>
+            <button
+              onClick={onClose}
+              className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+            >
+              Close
+            </button>
+          </motion.div>
         </div>
-      </div>
+      </AnimatePresence>
     );
   }
 
   if (!nodeResult) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg shadow-xl p-6">
-          <p className="text-gray-800">
-            No execution results available for this node
-          </p>
-          <button
+      <AnimatePresence>
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={onClose}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          />
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="relative bg-white rounded-xl shadow-2xl p-8 border border-slate-200 z-10"
           >
-            Close
-          </button>
+            <p className="text-slate-700 font-medium">
+              No execution results available for this node
+            </p>
+            <button
+              onClick={onClose}
+              className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+            >
+              Close
+            </button>
+          </motion.div>
         </div>
-      </div>
+      </AnimatePresence>
     );
   }
 
@@ -102,80 +145,118 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
 
   if (!isViewNode) return null;
 
+  const NodeIcon = nodeDef?.icon || Eye;
+  const nodeColor = nodeDef?.color || "#3B82F6";
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-11/12 h-5/6 flex flex-col">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-800">
-            {node.data.label} - Data View
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
-          >
-            ×
-          </button>
-        </div>
+    <AnimatePresence>
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          onClick={onClose}
+        />
 
-        {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
-          {nodeResult.error ? (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-800 font-semibold">Error:</p>
-              <p className="text-red-600 text-sm mt-2">
-                {typeof nodeResult.error === "string"
-                  ? nodeResult.error
-                  : nodeResult.error?.message || "Unknown error"}
-              </p>
-            </div>
-          ) : (
-            <div>
-              {nodeType === "table_view" && renderTableView(nodeResult)}
-              {nodeType === "data_preview" && renderDataPreview(nodeResult)}
-              {nodeType === "statistics_view" &&
-                renderStatisticsView(nodeResult)}
-              {nodeType === "column_info" && renderColumnInfo(nodeResult)}
-              {nodeType === "chart_view" && renderChartView(nodeResult)}
-              {nodeType === "missing_value_handler" &&
-                renderMissingValueHandler(nodeResult)}
-              {nodeType === "encoding" && renderEncoding(nodeResult)}
-              {nodeType === "transformation" && (
-                <TransformationResults result={nodeResult} />
-              )}
-              {nodeType === "scaling" && renderScaling(nodeResult)}
-              {nodeType === "feature_selection" && renderFeatureSelection(nodeResult)}
-              {nodeType === "r2_score" && <R2ScoreResult result={nodeResult} />}
-              {nodeType === "mse_score" && (
-                <MSEScoreResult result={nodeResult} />
-              )}
-              {nodeType === "rmse_score" && (
-                <RMSEScoreResult result={nodeResult} />
-              )}
-              {nodeType === "mae_score" && (
-                <MAEScoreResult result={nodeResult} />
-              )}
-              {nodeType === "confusion_matrix" && (
-                <ConfusionMatrixResult result={nodeResult} />
-              )}
-              {nodeType === "split" && renderSplit(nodeResult)}
-              {nodeType === "linear_regression" && renderLinearRegression(nodeResult)}
-              {nodeType === "logistic_regression" && renderLogisticRegression(nodeResult)}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0, y: 20 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.95, opacity: 0, y: 20 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          className="relative bg-white border border-slate-200 rounded-xl shadow-2xl w-11/12 h-5/6 flex flex-col overflow-hidden z-10"
+        >
+          {/* Header */}
+          <div
+            className="px-6 py-4 border-b border-slate-200 flex items-center justify-between"
+            style={{ borderTopColor: nodeColor, borderTopWidth: "3px" }}
           >
-            Close
-          </button>
-        </div>
+            <div className="flex items-center gap-3">
+              <div
+                className="p-2 rounded-lg"
+                style={{ backgroundColor: `${nodeColor}20` }}
+              >
+                <NodeIcon
+                  className="w-5 h-5"
+                  style={{ color: nodeColor }}
+                />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  {node.data.label}
+                </h2>
+                <p className="text-sm text-slate-500">
+                  {nodeDef?.description || "Data View"}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-slate-500" />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-auto p-6">
+            {nodeResult.error ? (
+              <div className="p-5 bg-red-50 border border-red-200 rounded-xl">
+                <p className="text-red-800 font-semibold text-sm">Error</p>
+                <p className="text-red-600 text-sm mt-2 leading-relaxed">
+                  {typeof nodeResult.error === "string"
+                    ? nodeResult.error
+                    : nodeResult.error?.message || "Unknown error"}
+                </p>
+              </div>
+            ) : (
+              <div>
+                {nodeType === "table_view" && renderTableView(nodeResult)}
+                {nodeType === "data_preview" && renderDataPreview(nodeResult)}
+                {nodeType === "statistics_view" &&
+                  renderStatisticsView(nodeResult)}
+                {nodeType === "column_info" && renderColumnInfo(nodeResult)}
+                {nodeType === "chart_view" && renderChartView(nodeResult)}
+                {nodeType === "missing_value_handler" &&
+                  renderMissingValueHandler(nodeResult)}
+                {nodeType === "encoding" && renderEncoding(nodeResult)}
+                {nodeType === "transformation" && (
+                  <TransformationResults result={nodeResult} />
+                )}
+                {nodeType === "scaling" && renderScaling(nodeResult)}
+                {nodeType === "feature_selection" && renderFeatureSelection(nodeResult)}
+                {nodeType === "r2_score" && <R2ScoreResult result={nodeResult} />}
+                {nodeType === "mse_score" && (
+                  <MSEScoreResult result={nodeResult} />
+                )}
+                {nodeType === "rmse_score" && (
+                  <RMSEScoreResult result={nodeResult} />
+                )}
+                {nodeType === "mae_score" && (
+                  <MAEScoreResult result={nodeResult} />
+                )}
+                {nodeType === "confusion_matrix" && (
+                  <ConfusionMatrixResult result={nodeResult} />
+                )}
+                {nodeType === "split" && renderSplit(nodeResult)}
+                {nodeType === "linear_regression" && renderLinearRegression(nodeResult)}
+                {nodeType === "logistic_regression" && renderLogisticRegression(nodeResult)}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-slate-500 hover:text-slate-800 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </motion.div>
       </div>
-    </div>
+    </AnimatePresence>
   );
 };
 
@@ -185,38 +266,50 @@ function renderTableView(result: any) {
   const columns = result.columns || [];
 
   return (
-    <div className="overflow-auto">
-      <table className="min-w-full border-collapse border border-gray-300">
-        <thead className="bg-gray-100">
-          <tr>
-            {columns.map((col: string) => (
-              <th
-                key={col}
-                className="border border-gray-300 px-4 py-2 text-left font-semibold"
-              >
-                {col}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((row: any, idx: number) => (
-            <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+    <div className="space-y-4">
+      {/* Summary badge */}
+      <div className="flex items-center gap-3">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-slate-100 rounded-full border border-slate-200/60">
+          <Table2 className="w-3.5 h-3.5 text-slate-600" />
+          <span className="text-xs font-semibold text-slate-700">
+            {data.length} rows  ×  {columns.length} columns
+          </span>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-auto rounded-xl border border-slate-200/60 shadow-sm">
+        <table className="min-w-full">
+          <thead>
+            <tr className="bg-slate-50/80">
+              <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">#</th>
               {columns.map((col: string) => (
-                <td key={col} className="border border-gray-300 px-4 py-2">
-                  {row[col] === null ? (
-                    <span className="text-gray-400 italic">null</span>
-                  ) : (
-                    String(row[col])
-                  )}
-                </td>
+                <th
+                  key={col}
+                  className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60"
+                >
+                  {col}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="mt-4 text-sm text-gray-600">
-        Showing {data.length} rows × {columns.length} columns
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {data.map((row: any, idx: number) => (
+              <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                <td className="px-4 py-2.5 text-xs text-slate-400 font-mono">{idx + 1}</td>
+                {columns.map((col: string) => (
+                  <td key={col} className="px-4 py-2.5 text-sm text-slate-700">
+                    {row[col] === null ? (
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-400 rounded text-xs italic">null</span>
+                    ) : (
+                      String(row[col])
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -227,7 +320,6 @@ function renderDataPreview(result: any) {
   const tailData = result.tail_data || [];
   const totalRows = result.total_rows || 0;
 
-  // Extract columns from first row of head_data or tail_data
   const columns =
     headData.length > 0
       ? Object.keys(headData[0])
@@ -235,121 +327,71 @@ function renderDataPreview(result: any) {
         ? Object.keys(tailData[0])
         : [];
 
+  const renderPreviewTable = (rows: any[], label: string) => (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-semibold text-slate-800">{label}</span>
+        <span className="text-xs text-slate-400 font-medium">{rows.length} rows</span>
+      </div>
+      <div className="overflow-auto rounded-xl border border-slate-200/60 shadow-sm">
+        <table className="min-w-full">
+          <thead>
+            <tr className="bg-slate-50/80">
+              <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">#</th>
+              {columns.map((col: string) => (
+                <th
+                  key={col}
+                  className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60"
+                >
+                  {col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((row: any, idx: number) => (
+              <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                <td className="px-4 py-2.5 text-xs text-slate-400 font-mono">{idx + 1}</td>
+                {columns.map((col: string) => (
+                  <td key={col} className="px-4 py-2.5 text-sm text-slate-700">
+                    {row[col] === null || row[col] === undefined ? (
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-400 rounded text-xs italic">null</span>
+                    ) : (
+                      String(row[col])
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      {/* Summary */}
-      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-purple-900">
-              Dataset Preview
-            </h3>
-            <p className="text-sm text-purple-700 mt-1">
-              Total rows:{" "}
-              <span className="font-semibold">
-                {totalRows.toLocaleString()}
-              </span>{" "}
-              | Columns: <span className="font-semibold">{columns.length}</span>
-            </p>
-          </div>
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-slate-50/80 rounded-xl border border-slate-200/60 p-4">
+          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Rows</div>
+          <div className="text-2xl font-bold text-slate-900">{totalRows.toLocaleString()}</div>
+        </div>
+        <div className="bg-slate-50/80 rounded-xl border border-slate-200/60 p-4">
+          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Columns</div>
+          <div className="text-2xl font-bold text-slate-900">{columns.length}</div>
+        </div>
+        <div className="bg-slate-50/80 rounded-xl border border-slate-200/60 p-4">
+          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Preview</div>
+          <div className="text-2xl font-bold text-slate-900">{headData.length + tailData.length} rows</div>
         </div>
       </div>
 
-      {/* Head Data */}
-      {headData.length > 0 && (
-        <div>
-          <h4 className="text-md font-semibold text-gray-800 mb-3">
-            First {headData.length} Rows
-          </h4>
-          <div className="overflow-auto">
-            <table className="min-w-full border-collapse border border-gray-300">
-              <thead className="bg-gray-100">
-                <tr>
-                  {columns.map((col: string) => (
-                    <th
-                      key={col}
-                      className="border border-gray-300 px-4 py-2 text-left font-semibold text-sm"
-                    >
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {headData.map((row: any, idx: number) => (
-                  <tr
-                    key={idx}
-                    className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}
-                  >
-                    {columns.map((col: string) => (
-                      <td
-                        key={col}
-                        className="border border-gray-300 px-4 py-2 text-sm"
-                      >
-                        {row[col] === null || row[col] === undefined ? (
-                          <span className="text-gray-400 italic">null</span>
-                        ) : (
-                          String(row[col])
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {headData.length > 0 && renderPreviewTable(headData, "First Rows")}
+      {tailData.length > 0 && renderPreviewTable(tailData, "Last Rows")}
 
-      {/* Tail Data */}
-      {tailData.length > 0 && (
-        <div>
-          <h4 className="text-md font-semibold text-gray-800 mb-3">
-            Last {tailData.length} Rows
-          </h4>
-          <div className="overflow-auto">
-            <table className="min-w-full border-collapse border border-gray-300">
-              <thead className="bg-gray-100">
-                <tr>
-                  {columns.map((col: string) => (
-                    <th
-                      key={col}
-                      className="border border-gray-300 px-4 py-2 text-left font-semibold text-sm"
-                    >
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {tailData.map((row: any, idx: number) => (
-                  <tr
-                    key={idx}
-                    className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}
-                  >
-                    {columns.map((col: string) => (
-                      <td
-                        key={col}
-                        className="border border-gray-300 px-4 py-2 text-sm"
-                      >
-                        {row[col] === null || row[col] === undefined ? (
-                          <span className="text-gray-400 italic">null</span>
-                        ) : (
-                          String(row[col])
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Empty state */}
       {headData.length === 0 && tailData.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
+        <div className="text-center py-12 text-slate-400 font-medium">
           No preview data available
         </div>
       )}
@@ -363,80 +405,60 @@ function renderStatisticsView(result: any) {
 
   if (columnNames.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
+      <div className="text-center py-12 text-slate-400 font-medium">
         No statistics available
       </div>
     );
   }
 
+  const formatStat = (val: any) =>
+    typeof val === "number" ? val.toFixed(2) : val;
+
   return (
     <div className="space-y-6">
-      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-green-900">
-          Statistical Summary
-        </h3>
-        <p className="text-sm text-green-700 mt-1">
-          Statistics for {columnNames.length} numeric column
-          {columnNames.length !== 1 ? "s" : ""}
-        </p>
+      {/* Summary badge */}
+      <div className="flex items-center gap-3">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-emerald-50 rounded-full border border-emerald-200/60">
+          <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
+          <span className="text-xs font-semibold text-emerald-700">
+            {columnNames.length} numeric column{columnNames.length !== 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
 
-      <div className="space-y-4">
-        {columnNames.map((colName) => {
-          const colStats = stats[colName];
-          return (
-            <div
-              key={colName}
-              className="bg-white border border-gray-200 rounded-lg p-4"
-            >
-              <h4 className="text-md font-semibold text-gray-800 mb-3">
-                {colName}
-              </h4>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                <div className="bg-gray-50 rounded p-3">
-                  <div className="text-xs text-gray-600 mb-1">Mean</div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {typeof colStats.mean === "number"
-                      ? colStats.mean.toFixed(2)
-                      : colStats.mean}
-                  </div>
-                </div>
-                <div className="bg-gray-50 rounded p-3">
-                  <div className="text-xs text-gray-600 mb-1">Std Dev</div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {typeof colStats.std === "number"
-                      ? colStats.std.toFixed(2)
-                      : colStats.std}
-                  </div>
-                </div>
-                <div className="bg-gray-50 rounded p-3">
-                  <div className="text-xs text-gray-600 mb-1">Min</div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {typeof colStats.min === "number"
-                      ? colStats.min.toFixed(2)
-                      : colStats.min}
-                  </div>
-                </div>
-                <div className="bg-gray-50 rounded p-3">
-                  <div className="text-xs text-gray-600 mb-1">Max</div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {typeof colStats.max === "number"
-                      ? colStats.max.toFixed(2)
-                      : colStats.max}
-                  </div>
-                </div>
-                <div className="bg-gray-50 rounded p-3">
-                  <div className="text-xs text-gray-600 mb-1">Median</div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {typeof colStats.median === "number"
-                      ? colStats.median.toFixed(2)
-                      : colStats.median}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+      {/* Stats table - compact and scannable */}
+      <div className="overflow-auto rounded-xl border border-slate-200/60 shadow-sm">
+        <table className="min-w-full">
+          <thead>
+            <tr className="bg-slate-50/80">
+              <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60 sticky left-0 bg-slate-50/80 z-10">Column</th>
+              <th className="px-4 py-3 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">Mean</th>
+              <th className="px-4 py-3 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">Std Dev</th>
+              <th className="px-4 py-3 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">Min</th>
+              <th className="px-4 py-3 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">25%</th>
+              <th className="px-4 py-3 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">Median</th>
+              <th className="px-4 py-3 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">75%</th>
+              <th className="px-4 py-3 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">Max</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {columnNames.map((colName) => {
+              const s = stats[colName];
+              return (
+                <tr key={colName} className="hover:bg-slate-50/60 transition-colors">
+                  <td className="px-4 py-3 text-sm font-semibold text-slate-900 sticky left-0 bg-white z-10">{colName}</td>
+                  <td className="px-4 py-3 text-sm text-slate-700 text-right font-mono">{formatStat(s.mean)}</td>
+                  <td className="px-4 py-3 text-sm text-slate-700 text-right font-mono">{formatStat(s.std)}</td>
+                  <td className="px-4 py-3 text-sm text-slate-700 text-right font-mono">{formatStat(s.min)}</td>
+                  <td className="px-4 py-3 text-sm text-slate-500 text-right font-mono">{formatStat(s["25%"])}</td>
+                  <td className="px-4 py-3 text-sm text-slate-700 text-right font-mono font-semibold">{formatStat(s.median ?? s["50%"])}</td>
+                  <td className="px-4 py-3 text-sm text-slate-500 text-right font-mono">{formatStat(s["75%"])}</td>
+                  <td className="px-4 py-3 text-sm text-slate-700 text-right font-mono">{formatStat(s.max)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -447,7 +469,7 @@ function renderColumnInfo(result: any) {
 
   if (columnInfo.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
+      <div className="text-center py-12 text-slate-400 font-medium">
         No column information available
       </div>
     );
@@ -455,63 +477,54 @@ function renderColumnInfo(result: any) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-blue-900">
-          Column Information
-        </h3>
-        <p className="text-sm text-blue-700 mt-1">
-          Detailed information for {columnInfo.length} column
-          {columnInfo.length !== 1 ? "s" : ""}
-        </p>
+      {/* Summary badge */}
+      <div className="flex items-center gap-3">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-sky-50 rounded-full border border-sky-200/60">
+          <Columns3 className="w-3.5 h-3.5 text-sky-600" />
+          <span className="text-xs font-semibold text-sky-700">
+            {columnInfo.length} column{columnInfo.length !== 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
-      <div className="overflow-auto">
-        <table className="min-w-full border-collapse border border-gray-300">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
-                Column Name
-              </th>
-              <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
-                Data Type
-              </th>
-              <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
-                Missing Values
-              </th>
-              <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
-                Unique Values
-              </th>
+
+      {/* Table */}
+      <div className="overflow-auto rounded-xl border border-slate-200/60 shadow-sm">
+        <table className="min-w-full">
+          <thead>
+            <tr className="bg-slate-50/80">
+              <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">#</th>
+              <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">Column Name</th>
+              <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">Data Type</th>
+              <th className="px-4 py-3 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">Missing</th>
+              <th className="px-4 py-3 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200/60">Unique</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100">
             {columnInfo.map((col: any, idx: number) => (
-              <tr
-                key={idx}
-                className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}
-              >
-                <td className="border border-gray-300 px-4 py-2 font-medium">
-                  {col.column}
-                </td>
-                <td className="border border-gray-300 px-4 py-2">
-                  <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+              <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
+                <td className="px-4 py-3 text-xs text-slate-400 font-mono">{idx + 1}</td>
+                <td className="px-4 py-3 text-sm font-semibold text-slate-900">{col.column}</td>
+                <td className="px-4 py-3">
+                  <span className="inline-flex px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-mono font-medium border border-slate-200/60">
                     {col.dtype}
-                  </code>
+                  </span>
                 </td>
-                <td className="border border-gray-300 px-4 py-2">
+                <td className="px-4 py-3 text-center">
                   {col.missing !== undefined ? (
-                    <span
-                      className={
-                        col.missing > 0
-                          ? "text-red-600 font-medium"
-                          : "text-green-600"
-                      }
-                    >
-                      {col.missing}
-                    </span>
+                    col.missing > 0 ? (
+                      <span className="inline-flex px-2.5 py-1 bg-red-50 text-red-700 rounded-lg text-xs font-semibold border border-red-200/60">
+                        {col.missing}
+                      </span>
+                    ) : (
+                      <span className="inline-flex px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-semibold border border-emerald-200/60">
+                        0
+                      </span>
+                    )
                   ) : (
-                    <span className="text-gray-400">-</span>
+                    <span className="text-slate-300">-</span>
                   )}
                 </td>
-                <td className="border border-gray-300 px-4 py-2">
+                <td className="px-4 py-3 text-center text-sm text-slate-700 font-medium">
                   {col.unique !== undefined ? col.unique : "-"}
                 </td>
               </tr>
@@ -527,7 +540,11 @@ function renderChartView(result: any) {
   if (result?.exploration_data) {
     return <DataExplorer result={result} />;
   }
-  return <ChartViewer result={result} />;
+  return (
+    <div className="rounded-xl border border-slate-200/60 bg-white p-2 shadow-sm">
+      <ChartViewer result={result} />
+    </div>
+  );
 }
 
 function renderMissingValueHandler(result: any) {
@@ -611,19 +628,7 @@ function renderSplit(result: any) {
 }
 
 function renderLinearRegression(result: any) {
-  const hasActivityData =
-    result.coefficient_analysis || result.prediction_playground || result.equation_data || result.quiz_questions;
-
-  if (hasActivityData) {
-    return (
-      <LinearRegressionExplorer
-        result={result}
-        renderResults={() => <MLModelResults result={result} modelType="Linear Regression" />}
-      />
-    );
-  }
-
-  return <MLModelResults result={result} modelType="Linear Regression" />;
+  return <LinearRegressionExplorer result={result} />;
 }
 
 function renderLogisticRegression(result: any) {
@@ -1088,971 +1093,3 @@ function renderPreviewTable(data: any[], columns: string[], changes: any[]) {
   );
 }
 
-// Transformation Results Component
-function TransformationResults({ result }: { result: any }) {
-  const [downloading, setDownloading] = useState(false);
-
-  const transformationType =
-    result.transformation_summary?.polynomial?.method ||
-    Object.values(result.transformation_summary || {}).find(
-      (v: any) => v?.method,
-    )?.method ||
-    "N/A";
-
-  const transformedColumns = result.transformed_columns || [];
-  const originalColumns = result.original_columns || 0;
-  const finalColumns = result.final_columns || 0;
-  const newColumns = result.new_columns || [];
-  const transformedDatasetId = result.transformed_dataset_id;
-  const warnings = result.transformation_summary?.warnings || [];
-  const executionTime = result.execution_time_ms
-    ? `${(result.execution_time_ms / 1000).toFixed(2)}s`
-    : "N/A";
-
-  // Download transformed CSV
-  const downloadCSV = async () => {
-    if (!transformedDatasetId) {
-      alert("No dataset ID available for download");
-      return;
-    }
-
-    setDownloading(true);
-    try {
-      const { downloadFileFromUploads } =
-        await import("../../lib/api/datasetApi");
-      await downloadFileFromUploads(transformedDatasetId);
-    } catch (error) {
-      console.error("Download failed:", error);
-      alert("Failed to download dataset. Please try again.");
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Status Banner */}
-      <div className="bg-linear-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center">
-            <span className="text-white text-xl">✓</span>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-purple-900">
-              Transformation Complete
-            </h3>
-            <p className="text-sm text-purple-700">
-              Data successfully transformed using {transformationType}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Warnings Section */}
-      {warnings.length > 0 && (
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <div className="text-orange-500 text-xl">⚠</div>
-            <div className="flex-1">
-              <h4 className="text-sm font-semibold text-orange-900 mb-2">
-                Warnings
-              </h4>
-              <ul className="space-y-1">
-                {warnings.map((warning: string, idx: number) => (
-                  <li key={idx} className="text-sm text-orange-800">
-                    • {warning}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Transformation Summary */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <h4 className="text-sm font-semibold text-gray-900 mb-4">
-          Transformation Summary
-        </h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-              Method
-            </div>
-            <div className="text-lg font-semibold text-gray-900 capitalize">
-              {transformationType}
-            </div>
-          </div>
-
-          <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-              Columns Transformed
-            </div>
-            <div className="text-lg font-semibold text-gray-900">
-              {transformedColumns.length}
-            </div>
-          </div>
-
-          <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-              Total Columns
-            </div>
-            <div className="text-lg font-semibold text-gray-900">
-              {originalColumns} → {finalColumns}
-            </div>
-            {newColumns.length > 0 && (
-              <div className="text-xs text-green-600 mt-1">
-                +{newColumns.length} new
-              </div>
-            )}
-          </div>
-
-          <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-              Execution Time
-            </div>
-            <div className="text-lg font-semibold text-gray-900">
-              {executionTime}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Output Dataset */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-xs text-blue-700 uppercase tracking-wide mb-1">
-              Output Dataset ID
-            </div>
-            <code className="text-sm font-mono text-blue-900">
-              {transformedDatasetId || "N/A"}
-            </code>
-          </div>
-          <button
-            onClick={downloadCSV}
-            disabled={downloading || !transformedDatasetId}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            <Download className="w-4 h-4" />
-            {downloading ? "Downloading..." : "Download CSV"}
-          </button>
-        </div>
-      </div>
-
-      {/* Transformed Columns List */}
-      {transformedColumns.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">
-            Transformed Columns ({transformedColumns.length})
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            {transformedColumns.map((col: string, idx: number) => (
-              <span
-                key={idx}
-                className="px-3 py-1.5 bg-purple-50 text-purple-800 rounded-md text-sm font-medium border border-purple-200"
-              >
-                {col}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* New Columns (for polynomial) */}
-      {newColumns.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">
-            New Columns Created ({newColumns.length})
-          </h4>
-          <div className="max-h-60 overflow-y-auto">
-            <div className="flex flex-wrap gap-2">
-              {newColumns.slice(0, 20).map((col: string, idx: number) => (
-                <span
-                  key={idx}
-                  className="px-3 py-1.5 bg-green-50 text-green-800 rounded-md text-sm font-medium border border-green-200"
-                >
-                  {col}
-                </span>
-              ))}
-              {newColumns.length > 20 && (
-                <span className="px-3 py-1.5 bg-gray-50 text-gray-600 rounded-md text-sm font-medium border border-gray-200">
-                  +{newColumns.length - 20} more...
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Before/After Preview (if available) */}
-      {result.preview_data && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">
-            Before → After Preview
-          </h4>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">
-                    Column
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">
-                    Before
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">
-                    After
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {result.preview_data.map((row: any, idx: number) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 font-medium text-gray-900">
-                      {row.column}
-                    </td>
-                    <td className="px-4 py-2 text-gray-700">{row.before}</td>
-                    <td className="px-4 py-2 text-gray-700">{row.after}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Scaling Results Component
-function ScalingResults({ result }: { result: any }) {
-  const [downloading, setDownloading] = useState(false);
-
-  const scalingMethod =
-    result.scaling_method || result.scaling_summary?.method || "N/A";
-  const scaledColumns = result.scaled_columns || [];
-  const originalRows = result.scaling_summary?.original_rows || 0;
-  const finalRows = result.scaling_summary?.final_rows || 0;
-  const rowsDropped = originalRows - finalRows;
-  const executionTime = result.execution_time_ms
-    ? `${(result.execution_time_ms / 1000).toFixed(2)}s`
-    : "N/A";
-  const scaledDatasetId = result.scaled_dataset_id;
-
-  // Download actual scaled CSV
-  const downloadCSV = async () => {
-    if (!scaledDatasetId) {
-      alert("No dataset ID available for download");
-      return;
-    }
-
-    setDownloading(true);
-    try {
-      // Import the download function for uploads folder
-      const { downloadFileFromUploads } =
-        await import("../../lib/api/datasetApi");
-      await downloadFileFromUploads(scaledDatasetId);
-    } catch (error) {
-      console.error("Download failed:", error);
-      alert("Failed to download dataset. Please try again.");
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Status Banner */}
-      <div className="bg-linear-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-            <span className="text-white text-xl">✓</span>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-green-900">
-              Scaling Complete
-            </h3>
-            <p className="text-sm text-green-700">
-              Data successfully scaled using {scalingMethod}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Key Metrics Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-            Method
-          </div>
-          <div className="text-lg font-semibold text-gray-900 capitalize">
-            {scalingMethod}
-          </div>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-            Columns Scaled
-          </div>
-          <div className="text-lg font-semibold text-gray-900">
-            {scaledColumns.length}
-          </div>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-            Row Count
-          </div>
-          <div className="text-lg font-semibold text-gray-900">
-            {finalRows.toLocaleString()}
-          </div>
-          {rowsDropped > 0 && (
-            <div className="text-xs text-orange-600 mt-1">
-              -{rowsDropped} cleaned
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
-            Execution Time
-          </div>
-          <div className="text-lg font-semibold text-gray-900">
-            {executionTime}
-          </div>
-        </div>
-      </div>
-
-      {/* Output Dataset */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-xs text-blue-700 uppercase tracking-wide mb-1">
-              Output Dataset ID
-            </div>
-            <code className="text-sm font-mono text-blue-900">
-              {scaledDatasetId || "N/A"}
-            </code>
-          </div>
-          <button
-            onClick={downloadCSV}
-            disabled={downloading || !scaledDatasetId}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            <Download className="w-4 h-4" />
-            {downloading ? "Downloading..." : "Download CSV"}
-          </button>
-        </div>
-      </div>
-
-      {/* Scaled Columns List */}
-      {scaledColumns.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">
-            Scaled Columns ({scaledColumns.length})
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            {scaledColumns.map((col: string, idx: number) => (
-              <span
-                key={idx}
-                className="px-3 py-1.5 bg-teal-50 text-teal-800 rounded-md text-sm font-medium border border-teal-200"
-              >
-                {col}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Before/After Preview (if available) */}
-      {result.preview_data && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">
-            Before → After Preview
-          </h4>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">
-                    Column
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">
-                    Before
-                  </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">
-                    After
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {result.preview_data.map((row: any, idx: number) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 font-medium text-gray-900">
-                      {row.column}
-                    </td>
-                    <td className="px-4 py-2 text-gray-700">{row.before}</td>
-                    <td className="px-4 py-2 text-gray-700">{row.after}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Feature Engineering Results Component
-function FeatureEngineeringResults({
-  result,
-  nodeTypeName,
-}: {
-  result: any;
-  nodeTypeName: string;
-}) {
-  const [showRawConfig, setShowRawConfig] = useState(false);
-  const [showAllColumns, setShowAllColumns] = useState(false);
-  const [columnSearch, setColumnSearch] = useState("");
-  const [downloading, setDownloading] = useState(false);
-
-  const isEncodingNode = nodeTypeName === "Encoding";
-
-  // Filter columns based on search
-  const newColumns = result.new_columns || [];
-  const filteredColumns = columnSearch
-    ? newColumns.filter((col: string) =>
-        col.toLowerCase().includes(columnSearch.toLowerCase()),
-      )
-    : newColumns;
-
-  const columnsToShow = showAllColumns
-    ? filteredColumns
-    : filteredColumns.slice(0, 10);
-  const hasMoreColumns = filteredColumns.length > 10;
-
-  // Get the dataset ID
-  const datasetId =
-    result.encoded_dataset_id ||
-    result.transformed_dataset_id ||
-    result.scaled_dataset_id ||
-    result.selected_dataset_id;
-
-  // Download complete dataset with all columns as CSV
-  const downloadDataset = async () => {
-    if (!datasetId) {
-      alert("No dataset ID available for download");
-      return;
-    }
-
-    setDownloading(true);
-    try {
-      const { downloadFileFromUploads } =
-        await import("../../lib/api/datasetApi");
-      await downloadFileFromUploads(datasetId);
-    } catch (error) {
-      console.error("Download failed:", error);
-      alert("Failed to download dataset. Please try again.");
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  // Download columns as CSV
-  const downloadColumns = () => {
-    const csv = newColumns.join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${nodeTypeName.toLowerCase()}_columns.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Copy config JSON
-  const copyConfig = () => {
-    const config = JSON.stringify(
-      result.encoding_summary ||
-        result.transformation_summary ||
-        result.scaling_summary ||
-        result.selection_summary,
-      null,
-      2,
-    );
-    navigator.clipboard.writeText(config);
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Compact Summary Cards */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Stats Card */}
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
-            📊 Column Statistics
-          </h3>
-          <div className="space-y-2">
-            {result.original_columns !== undefined && (
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-700">Original:</span>
-                <span className="font-semibold text-gray-900 text-lg">
-                  {result.original_columns}
-                </span>
-              </div>
-            )}
-            {result.final_columns !== undefined && (
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-700">Final:</span>
-                <span className="font-semibold text-gray-900 text-lg">
-                  {result.final_columns}
-                </span>
-              </div>
-            )}
-            {newColumns.length > 0 && (
-              <div className="flex justify-between items-center pt-2 border-t border-blue-200">
-                <span className="text-sm text-gray-700">New Columns:</span>
-                <span className="font-semibold text-blue-600 text-lg">
-                  +{newColumns.length}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Output Dataset Card */}
-        <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-green-900 mb-3 flex items-center gap-2">
-            ✅ Output Dataset
-          </h3>
-          <code className="text-xs bg-white px-3 py-2 rounded border border-green-300 block break-all mb-3">
-            {datasetId || "N/A"}
-          </code>
-          <button
-            onClick={downloadDataset}
-            disabled={downloading || !datasetId}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed text-sm font-medium"
-          >
-            <Download className="w-4 h-4" />
-            {downloading ? "Downloading..." : "Download Complete Dataset"}
-          </button>
-        </div>
-      </div>
-
-      {/* Encoding-specific Summary */}
-      {isEncodingNode && result.encoding_summary && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Encoding Configuration Summary
-          </h3>
-          <div className="space-y-4">
-            {Object.entries(result.encoding_summary).map(
-              ([column, config]: [string, any]) => (
-                <div
-                  key={column}
-                  className="bg-gray-50 rounded-lg p-4 border border-gray-200"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <h4 className="font-semibold text-gray-900">{column}</h4>
-                    <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-medium">
-                      {config.method || "N/A"}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    {config.unique_values !== undefined && (
-                      <div>
-                        <span className="text-gray-600">
-                          Unique Categories:
-                        </span>
-                        <span className="ml-2 font-semibold text-gray-900">
-                          {config.unique_values}
-                        </span>
-                      </div>
-                    )}
-                    {config.handle_unknown && (
-                      <div>
-                        <span className="text-gray-600">Handle Unknown:</span>
-                        <span className="ml-2 font-semibold text-gray-900">
-                          {config.handle_unknown}
-                        </span>
-                      </div>
-                    )}
-                    {config.handle_missing && (
-                      <div>
-                        <span className="text-gray-600">Handle Missing:</span>
-                        <span className="ml-2 font-semibold text-gray-900">
-                          {config.handle_missing}
-                        </span>
-                      </div>
-                    )}
-                    {config.new_columns && (
-                      <div className="col-span-2">
-                        <span className="text-gray-600">
-                          Generated Columns:
-                        </span>
-                        <span className="ml-2 font-semibold text-blue-600">
-                          {Array.isArray(config.new_columns)
-                            ? config.new_columns.length
-                            : 0}{" "}
-                          columns
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ),
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* New Columns Section */}
-      {newColumns.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">
-              Generated Columns ({newColumns.length})
-            </h3>
-            <div className="flex gap-2">
-              <button
-                onClick={downloadColumns}
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-600 text-white rounded-md hover:bg-slate-700 text-sm"
-              >
-                <Download className="w-4 h-4" />
-                Column Names
-              </button>
-            </div>
-          </div>
-
-          {/* Search */}
-          {newColumns.length > 10 && (
-            <div className="mb-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search columns..."
-                  value={columnSearch}
-                  onChange={(e) => setColumnSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              {columnSearch && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Found {filteredColumns.length} columns
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Column List */}
-          <div className="flex flex-wrap gap-2">
-            {columnsToShow.map((col: string, idx: number) => (
-              <span
-                key={idx}
-                className="px-3 py-1 bg-blue-50 text-blue-800 rounded-md text-sm border border-blue-200"
-              >
-                {col}
-              </span>
-            ))}
-          </div>
-
-          {/* Show More/Less */}
-          {hasMoreColumns && !columnSearch && (
-            <button
-              onClick={() => setShowAllColumns(!showAllColumns)}
-              className="mt-4 text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-            >
-              {showAllColumns ? (
-                <>
-                  <ChevronDown className="w-4 h-4" />
-                  Show Less
-                </>
-              ) : (
-                <>
-                  <ChevronRight className="w-4 h-4" />+
-                  {filteredColumns.length - 10} more columns...
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Enhanced Feature Selection Results */}
-      {result.selected_feature_names &&
-        result.selected_feature_names.length > 0 && (
-          <div className="space-y-4">
-            {/* Method Summary Card */}
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-purple-900 mb-3 flex items-center gap-2">
-                🎯 Selection Method
-              </h3>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-700">Method:</span>
-                  <span className="font-semibold text-gray-900">
-                    {result.selection_summary?.method?.toUpperCase() || "N/A"}
-                  </span>
-                </div>
-                {result.selection_summary?.variance_threshold !== undefined && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-700">
-                      Variance Threshold:
-                    </span>
-                    <span className="font-semibold text-purple-600">
-                      {result.selection_summary.variance_threshold}
-                    </span>
-                  </div>
-                )}
-                {result.selection_summary?.correlation_threshold !==
-                  undefined && (
-                  <>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-700">
-                        Correlation Threshold:
-                      </span>
-                      <span className="font-semibold text-purple-600">
-                        {result.selection_summary.correlation_threshold}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-700">Mode:</span>
-                      <span className="font-semibold text-gray-900">
-                        {result.selection_summary.correlation_mode || "N/A"}
-                      </span>
-                    </div>
-                  </>
-                )}
-                {result.selection_summary?.n_features && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-700">Target K:</span>
-                    <span className="font-semibold text-purple-600">
-                      {result.selection_summary.n_features}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center pt-2 border-t border-purple-200">
-                  <span className="text-sm text-gray-700">Reduction:</span>
-                  <span className="font-semibold text-red-600">
-                    {result.selection_summary?.reduction_percentage || 0}%
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Dataset Shape Comparison */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                📊 Dataset Shape Comparison
-              </h3>
-              <div className="flex items-center justify-center gap-6">
-                <div className="text-center">
-                  <div className="text-sm text-gray-600 mb-1">Before</div>
-                  <div className="text-2xl font-bold text-gray-900">
-                    {result.selection_summary?.original_features || 0}
-                  </div>
-                  <div className="text-xs text-gray-500">features</div>
-                </div>
-                <div className="text-3xl text-gray-400">→</div>
-                <div className="text-center">
-                  <div className="text-sm text-gray-600 mb-1">After</div>
-                  <div className="text-2xl font-bold text-green-600">
-                    {result.selected_feature_names.length}
-                  </div>
-                  <div className="text-xs text-gray-500">features</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Selected Features */}
-            <div className="bg-white border border-green-200 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-green-900 mb-3">
-                ✅ Selected Features ({result.selected_feature_names.length})
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {result.selected_feature_names.map(
-                  (feature: string, idx: number) => (
-                    <span
-                      key={idx}
-                      className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium border border-green-300"
-                    >
-                      {feature}
-                    </span>
-                  ),
-                )}
-              </div>
-            </div>
-
-            {/* Removed Features */}
-            {result.removed_feature_names &&
-              result.removed_feature_names.length > 0 && (
-                <div className="bg-white border border-red-200 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-red-900 mb-3">
-                    ❌ Removed Features ({result.removed_feature_names.length})
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {result.removed_feature_names.map(
-                      (feature: string, idx: number) => (
-                        <span
-                          key={idx}
-                          className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium border border-red-300"
-                        >
-                          {feature}
-                        </span>
-                      ),
-                    )}
-                  </div>
-                </div>
-              )}
-          </div>
-        )}
-
-      {/* Enhanced Feature Importance/Score Ranking Table */}
-      {result.feature_scores &&
-        Object.keys(result.feature_scores).length > 0 && (
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                📈 Feature Ranking (
-                {result.selection_summary?.method === "variance"
-                  ? "Variance"
-                  : "Max Correlation"}{" "}
-                Scores)
-              </h3>
-              <span className="text-sm text-gray-600">
-                {Object.keys(result.feature_scores).length} features
-              </span>
-            </div>
-            <div className="overflow-auto max-h-96 border border-gray-300 rounded">
-              <table className="min-w-full border-collapse">
-                <thead className="bg-gray-100 sticky top-0">
-                  <tr>
-                    <th className="border-b border-gray-300 px-4 py-3 text-left text-xs font-semibold text-gray-700">
-                      Rank
-                    </th>
-                    <th className="border-b border-gray-300 px-4 py-3 text-left text-xs font-semibold text-gray-700">
-                      Feature Name
-                    </th>
-                    <th className="border-b border-gray-300 px-4 py-3 text-right text-xs font-semibold text-gray-700">
-                      Score
-                    </th>
-                    <th className="border-b border-gray-300 px-4 py-3 text-center text-xs font-semibold text-gray-700">
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(result.feature_scores)
-                    .sort(([, a]: any, [, b]: any) => {
-                      // For variance: higher is better (sort descending)
-                      // For correlation: lower is better (sort ascending)
-                      if (result.selection_summary?.method === "correlation") {
-                        return a - b; // ascending
-                      }
-                      return b - a; // descending (variance)
-                    })
-                    .map(([feature, score]: any, idx: number) => {
-                      const isSelected =
-                        result.selected_feature_names?.includes(feature);
-                      return (
-                        <tr
-                          key={idx}
-                          className={`${
-                            idx % 2 === 0 ? "bg-white" : "bg-gray-50"
-                          } hover:bg-gray-100 transition-colors`}
-                        >
-                          <td className="border-b border-gray-200 px-4 py-2 text-sm text-gray-600">
-                            #{idx + 1}
-                          </td>
-                          <td className="border-b border-gray-200 px-4 py-2 text-sm font-medium text-gray-900">
-                            {feature}
-                          </td>
-                          <td className="border-b border-gray-200 px-4 py-2 text-sm text-right font-mono">
-                            {typeof score === "number"
-                              ? score.toFixed(6)
-                              : score}
-                          </td>
-                          <td className="border-b border-gray-200 px-4 py-2 text-center">
-                            {isSelected ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800 border border-green-300">
-                                ✓ Selected
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800 border border-red-300">
-                                ✗ Removed
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-            {result.selection_summary?.method === "variance" && (
-              <p className="text-xs text-gray-600 mt-2">
-                💡 Higher variance = more information retained. Features below
-                threshold {result.selection_summary.variance_threshold} were
-                removed.
-              </p>
-            )}
-            {result.selection_summary?.method === "correlation" && (
-              <p className="text-xs text-gray-600 mt-2">
-                💡 Lower correlation = less redundancy. Features with max
-                correlation above{" "}
-                {result.selection_summary.correlation_threshold} were removed.
-              </p>
-            )}
-          </div>
-        )}
-
-      {/* Advanced / Debug Section */}
-      {(result.encoding_summary ||
-        result.transformation_summary ||
-        result.scaling_summary ||
-        result.selection_summary) && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <button
-            onClick={() => setShowRawConfig(!showRawConfig)}
-            className="flex items-center justify-between w-full text-left"
-          >
-            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              {showRawConfig ? (
-                <ChevronDown className="w-4 h-4" />
-              ) : (
-                <ChevronRight className="w-4 h-4" />
-              )}
-              Advanced / Debug: Raw Configuration
-            </h3>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                copyConfig();
-              }}
-              className="flex items-center gap-1 px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
-            >
-              <Copy className="w-3 h-3" />
-              Copy JSON
-            </button>
-          </button>
-
-          {showRawConfig && (
-            <pre className="text-xs bg-gray-900 text-green-400 p-4 rounded mt-3 overflow-auto max-h-96 border border-gray-700">
-              {JSON.stringify(
-                result.encoding_summary ||
-                  result.transformation_summary ||
-                  result.scaling_summary ||
-                  result.selection_summary,
-                null,
-                2,
-              )}
-            </pre>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}

@@ -4,7 +4,12 @@
 
 import { create } from "zustand";
 import { type Node, type Edge } from "@xyflow/react";
-import type { BaseNodeData } from "../types/pipeline";
+import type {
+  BaseNodeData,
+  NodeExecutionStatus,
+  ExecutionLogEntry,
+} from "../types/pipeline";
+import { getNodeByType } from "../config/nodeDefinitions";
 
 export interface DatasetMetadata {
   dataset_id: string;
@@ -68,6 +73,14 @@ interface PlaygroundStore {
   executionResults: PipelineExecutionResult | null;
   setExecutionResults: (results: PipelineExecutionResult | null) => void;
 
+  // Real-time execution status tracking
+  nodeExecutionStatus: Record<string, NodeExecutionStatus>;
+  setNodeExecutionStatus: (nodeId: string, status: NodeExecutionStatus) => void;
+  setAllNodesPending: (nodeIds: string[]) => void;
+  clearExecutionStatus: () => void;
+  animateEdgesForNode: (nodeId: string) => void;
+  addNodeResult: (nodeId: string, result: { success: boolean; output?: unknown; error?: string }) => void;
+
   // Project state
   currentProjectId: string | null;
   setCurrentProjectId: (id: string | null) => void;
@@ -83,6 +96,11 @@ interface PlaygroundStore {
     datasetMetadata: any;
     executionResult: any;
   };
+
+  // Execution logs for results drawer timeline
+  executionLogs: ExecutionLogEntry[];
+  addExecutionLog: (entry: ExecutionLogEntry) => void;
+  clearExecutionLogs: () => void;
 
   // Utility methods
   getNodeById: (nodeId: string) => Node<BaseNodeData> | undefined;
@@ -100,7 +118,9 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
   isExecuting: false,
   executionResult: null,
   executionResults: null,
+  nodeExecutionStatus: {},
   currentProjectId: null,
+  executionLogs: [],
 
   // Node actions
   setNodes: (nodesOrUpdater) =>
@@ -169,16 +189,127 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
   setExecutionResult: (result) => set({ executionResult: result }),
   setExecutionResults: (results) => set({ executionResults: results }),
 
+  // Execution logs
+  addExecutionLog: (entry) =>
+    set((state) => ({
+      executionLogs: [...state.executionLogs, entry],
+    })),
+  clearExecutionLogs: () => set({ executionLogs: [] }),
+
+  // Real-time execution status
+  setNodeExecutionStatus: (nodeId, status) =>
+    set((state) => ({
+      nodeExecutionStatus: {
+        ...state.nodeExecutionStatus,
+        [nodeId]: status,
+      },
+    })),
+
+  setAllNodesPending: (nodeIds) =>
+    set({
+      nodeExecutionStatus: Object.fromEntries(
+        nodeIds.map((id) => [id, "pending" as NodeExecutionStatus]),
+      ),
+    }),
+
+  clearExecutionStatus: () =>
+    set({
+      nodeExecutionStatus: {},
+    }),
+
+  addNodeResult: (nodeId, result) =>
+    set((state) => ({
+      executionResult: {
+        ...(state.executionResult || { success: true, timestamp: new Date().toISOString() }),
+        nodeResults: {
+          ...(state.executionResult?.nodeResults || {}),
+          [nodeId]: result,
+        },
+      },
+    })),
+
+  animateEdgesForNode: (nodeId) =>
+    set((state) => {
+      // Find outgoing edges from this node
+      const outgoingEdges = state.edges.filter(
+        (edge) => edge.source === nodeId,
+      );
+
+      if (outgoingEdges.length === 0) return {};
+
+      // Temporarily animate outgoing edges
+      const updatedEdges = state.edges.map((edge) => {
+        if (edge.source === nodeId) {
+          return {
+            ...edge,
+            animated: true,
+            style: {
+              ...edge.style,
+              stroke: "#10B981", // Green color for data flow
+              strokeWidth: 2,
+            },
+          };
+        }
+        return edge;
+      });
+
+      // Reset animation after 2 seconds
+      setTimeout(() => {
+        const currentState = usePlaygroundStore.getState();
+        const resetEdges = currentState.edges.map((edge) => {
+          if (edge.source === nodeId) {
+            return {
+              ...edge,
+              animated: false,
+              style: {
+                ...edge.style,
+                stroke: undefined,
+                strokeWidth: undefined,
+              },
+            };
+          }
+          return edge;
+        });
+        usePlaygroundStore.setState({ edges: resetEdges });
+      }, 2000);
+
+      return { edges: updatedEdges };
+    }),
+
   // Project state
   setCurrentProjectId: (id) => set({ currentProjectId: id }),
 
-  loadProjectState: (state) =>
+  loadProjectState: (state) => {
+    // Enrich loaded nodes with icon/color/type from nodeDefinitions.
+    // The backend doesn't persist React components (icon) or color,
+    // so we reconstruct them from the node's top-level `type` field.
+    const enrichedNodes = (Array.isArray(state.nodes) ? state.nodes : []).map(
+      (node: Node<BaseNodeData>) => {
+        const nodeType = node.data?.type || node.type;
+        const nodeDef = nodeType ? getNodeByType(nodeType) : null;
+        if (nodeDef) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              type: node.data?.type || nodeDef.type,
+              color: node.data?.color || nodeDef.color,
+              icon: node.data?.icon || nodeDef.icon,
+              label: node.data?.label || nodeDef.label,
+            },
+          };
+        }
+        return node;
+      }
+    );
+
     set({
-      nodes: Array.isArray(state.nodes) ? state.nodes : [],
+      nodes: enrichedNodes,
       edges: Array.isArray(state.edges) ? state.edges : [],
       datasetMetadata: state.datasetMetadata || null,
       executionResult: state.executionResult || null,
-    }),
+    });
+  },
 
   getProjectState: () => {
     const state = get();
@@ -232,6 +363,8 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
       datasetMetadata: null,
       executionResult: null,
       executionResults: null,
+      nodeExecutionStatus: {},
+      executionLogs: [],
     }),
 
   // Clear
@@ -241,5 +374,7 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
       edges: [],
       selectedNodeId: null,
       executionResults: null,
+      nodeExecutionStatus: {},
+      executionLogs: [],
     }),
 }));

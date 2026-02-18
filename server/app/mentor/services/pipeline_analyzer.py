@@ -4,12 +4,13 @@ Pipeline Analyzer Service
 Analyzes ML pipeline structure to provide intelligent guidance:
 - Detect missing pipeline steps
 - Validate node connections
-- Suggest next appropriate nodes
+- Suggest next appropriate nodes with simple examples
 - Check model compatibility with data
 """
 
 from typing import Dict, List, Any, Optional, Set, Tuple
 from app.core.logging import logger
+from app.mentor.node_explanations import get_node_explanation
 
 
 class PipelineAnalyzer:
@@ -241,7 +242,7 @@ class PipelineAnalyzer:
         has_ml_model: bool,
         dataset_metadata: Optional[Dict] = None,
     ) -> List[str]:
-        """Suggest logical next steps based on current state."""
+        """Suggest logical next steps based on current state with simple explanations."""
         next_steps = []
 
         if not has_data_source:
@@ -252,8 +253,9 @@ class PipelineAnalyzer:
             # First priority: suggest Column Info to understand the dataset
             has_column_info = "column_info" in node_types
             if not has_column_info:
+                column_info_exp = get_node_explanation("column_info", "simple")
                 next_steps.append(
-                    "Add Column Info node to understand your dataset columns, data types, and missing values"
+                    f"Add Column Info node - {column_info_exp}"
                 )
 
             # Suggest data preparation
@@ -262,27 +264,32 @@ class PipelineAnalyzer:
                 categorical_cols = dataset_metadata.get("categorical_columns", [])
 
                 if sum(missing_values.values()) > 0 and "missing_value_handler" not in node_types:
-                    next_steps.append("Add Missing Value Handler to clean your data")
+                    missing_exp = get_node_explanation("missing_value_handler", "simple")
+                    next_steps.append(f"Add Missing Value Handler - {missing_exp}")
 
                 if categorical_cols and "encoding" not in node_types:
+                    encoding_exp = get_node_explanation("encoding", "simple")
                     next_steps.append(
-                        f"Add Encoding node to convert {len(categorical_cols)} categorical columns to numeric"
+                        f"Add Encoding node - {encoding_exp} (You have {len(categorical_cols)} categorical columns)"
                     )
 
             if not has_split:
-                next_steps.append("Add Split node to separate training and test data")
+                split_exp = get_node_explanation("split", "simple")
+                next_steps.append(f"Add Split node - {split_exp}")
 
             next_steps.append(
-                "Choose a model to train (Linear Regression, Logistic Regression, Decision Tree, etc.)"
+                "Choose a model to train (Linear Regression for numbers, Logistic Regression for categories, etc.)"
             )
 
         elif has_ml_model and not has_split:
-            next_steps.insert(0, "Add Split node before your model for proper validation")
+            split_exp = get_node_explanation("split", "simple")
+            next_steps.insert(0, f"Add Split node before your model - {split_exp}")
 
         elif has_data_source and has_split and has_ml_model:
             # Pipeline is ready
             if not any(nt in self.RESULT_NODES for nt in node_types):
-                next_steps.append("Add Metrics or Visualization nodes to analyze results")
+                metrics_exp = get_node_explanation("metrics", "simple")
+                next_steps.append(f"Add Metrics node - {metrics_exp}")
             next_steps.append("Execute your pipeline to train and evaluate the model")
 
         return next_steps

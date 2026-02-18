@@ -24,9 +24,6 @@ const mlAlgorithmCommonRules = {
     "confusion_matrix",
     // Evaluation
     "evaluate",
-    // Deployment
-    "model_export",
-    "api_endpoint",
   ],
 };
 
@@ -47,8 +44,6 @@ export const mlAlgorithmValidationRules: ValidationRegistry = {
         "rmse_score",
         "mae_score",
         "evaluate",
-        "model_export",
-        "api_endpoint",
       ];
 
       if (!regressionMetrics.includes(targetNode.data.type)) {
@@ -77,8 +72,6 @@ export const mlAlgorithmValidationRules: ValidationRegistry = {
       const classificationMetrics = [
         "confusion_matrix",
         "evaluate",
-        "model_export",
-        "api_endpoint",
       ];
 
       if (!classificationMetrics.includes(targetNode.data.type)) {
