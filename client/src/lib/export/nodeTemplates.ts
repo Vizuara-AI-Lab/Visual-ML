@@ -40,23 +40,59 @@ const selectDataset: TemplateFunction = (config, outVar) => ({
 
 const sampleDataset: TemplateFunction = (config, outVar) => {
   const name = String(config.dataset_name || "iris");
-  const loaderMap: Record<string, { fn: string; imp: string }> = {
-    iris: { fn: "load_iris", imp: "from sklearn.datasets import load_iris" },
+  const loaderMap: Record<string, { fn: string; imp: string; hasFeatureNames?: boolean }> = {
+    iris: { fn: "load_iris", imp: "from sklearn.datasets import load_iris", hasFeatureNames: true },
     boston: {
       fn: "fetch_california_housing",
       imp: "from sklearn.datasets import fetch_california_housing",
+      hasFeatureNames: true,
     },
-    wine: { fn: "load_wine", imp: "from sklearn.datasets import load_wine" },
+    california_housing: {
+      fn: "fetch_california_housing",
+      imp: "from sklearn.datasets import fetch_california_housing",
+      hasFeatureNames: true,
+    },
+    wine: { fn: "load_wine", imp: "from sklearn.datasets import load_wine", hasFeatureNames: true },
     diabetes: {
       fn: "load_diabetes",
       imp: "from sklearn.datasets import load_diabetes",
+      hasFeatureNames: true,
+    },
+    breast_cancer: {
+      fn: "load_breast_cancer",
+      imp: "from sklearn.datasets import load_breast_cancer",
+      hasFeatureNames: true,
+    },
+    digits: {
+      fn: "load_digits",
+      imp: "from sklearn.datasets import load_digits",
+      hasFeatureNames: false,
     },
   };
+
+  // Datasets loaded via URL (not sklearn)
+  const csvMap: Record<string, { url: string }> = {
+    tips: { url: "https://raw.githubusercontent.com/mwaskom/seaborn-data/master/tips.csv" },
+    titanic: { url: "https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv" },
+  };
+
+  if (name in csvMap) {
+    const csv = csvMap[name];
+    return {
+      imports: ["import pandas as pd"],
+      code: `${outVar} = pd.read_csv(${pyStr(csv.url)})\nprint(f"Dataset loaded: {${outVar}.shape[0]} rows, {${outVar}.shape[1]} columns")`,
+      comment: `## Load Sample Dataset (${name})`,
+    };
+  }
+
   const loader = loaderMap[name] || loaderMap.iris;
+  const colExpr = loader.hasFeatureNames
+    ? "_data.feature_names"
+    : `[f"pixel_{i}" for i in range(_data.data.shape[1])]`;
 
   return {
     imports: ["import pandas as pd", loader.imp],
-    code: `_data = ${loader.fn}()\n${outVar} = pd.DataFrame(_data.data, columns=_data.feature_names)\n${outVar}["target"] = _data.target\nprint(f"Dataset loaded: {${outVar}.shape[0]} rows, {${outVar}.shape[1]} columns")`,
+    code: `_data = ${loader.fn}()\n${outVar} = pd.DataFrame(_data.data, columns=${colExpr})\n${outVar}["target"] = _data.target\nprint(f"Dataset loaded: {${outVar}.shape[0]} rows, {${outVar}.shape[1]} columns")`,
     comment: `## Load Sample Dataset (${name})`,
   };
 };
@@ -463,13 +499,11 @@ export const NODE_TEMPLATES: Partial<Record<NodeType, TemplateFunction>> = {
   column_info: noopTemplate,
   chart_view: noopTemplate,
 
-  // GenAI / deployment — not exportable
+  // GenAI nodes — not exportable
   llm_node: noopTemplate,
   system_prompt: noopTemplate,
   chatbot_node: noopTemplate,
   example_node: noopTemplate,
-  model_export: noopTemplate,
-  api_endpoint: noopTemplate,
 
   // Transformation (currently commented out in node defs)
   transformation: noopTemplate,
@@ -486,7 +520,5 @@ export const SKIP_NODE_TYPES = new Set<string>([
   "system_prompt",
   "chatbot_node",
   "example_node",
-  "model_export",
-  "api_endpoint",
   "transformation",
 ]);

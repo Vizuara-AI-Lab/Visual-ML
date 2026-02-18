@@ -85,6 +85,8 @@ const Features: React.FC = () => {
 
   return (
     <section id="features" className="relative bg-slate-50">
+      {/* Anchor for "How It Works" nav link */}
+      <div id="how-it-works" className="absolute -top-20" />
       {/* Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-40" />

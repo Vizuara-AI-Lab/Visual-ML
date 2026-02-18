@@ -4,13 +4,10 @@ import {
   LogOut,
   FolderKanban,
   Database,
-  PlayCircle,
+  Share2,
   Settings,
   Plus,
   Search,
-  Clock,
-  CheckCircle,
-  XCircle,
   Trash2,
   Sparkles,
   TrendingUp,
@@ -29,17 +26,9 @@ interface User {
   isPremium: boolean;
 }
 
-interface Run {
-  id: string;
-  projectId: string;
-  status: "pending" | "running" | "completed" | "failed";
-  createdAt: string;
-}
-
 const StudentDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
-  const [recentRuns] = useState<Run[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
@@ -84,18 +73,7 @@ const StudentDashboard: React.FC = () => {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <CheckCircle className="h-5 w-5 text-green-600" />;
-      case "failed":
-        return <XCircle className="h-5 w-5 text-red-600" />;
-      case "running":
-        return <Clock className="h-5 w-5 text-blue-600 animate-spin" />;
-      default:
-        return <Clock className="h-5 w-5 text-gray-400" />;
-    }
-  };
+  const sharedProjectsCount = projects.filter((p) => p.is_public).length;
 
   const filteredProjects = projects.filter((project) =>
     project.name.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -103,17 +81,17 @@ const StudentDashboard: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-50">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-50 via-white to-slate-50">
         <div className="relative">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200 border-t-slate-900"></div>
-          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-slate-900/10 to-transparent blur-xl"></div>
+          <div className="absolute inset-0 rounded-full bg-linear-to-tr from-slate-900/10 to-transparent blur-xl"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-slate-50">
       {/* Premium Background Pattern */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30 pointer-events-none" />
 
@@ -123,9 +101,9 @@ const StudentDashboard: React.FC = () => {
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center space-x-4">
               <div className="flex items-center gap-2">
-                <div className="relative w-8 h-8 rounded-lg bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-md shadow-slate-900/25">
+                <div className="relative w-8 h-8 rounded-lg bg-linear-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-md shadow-slate-900/25">
                   <Sparkles className="w-4 h-4 text-white" />
-                  <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-white/20 to-transparent" />
+                  <div className="absolute inset-0 rounded-lg bg-linear-to-br from-white/20 to-transparent" />
                 </div>
                 <h1 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
                   Visual ML
@@ -147,7 +125,7 @@ const StudentDashboard: React.FC = () => {
                     className="h-10 w-10 rounded-full ring-2 ring-slate-200 shadow-md"
                   />
                 ) : (
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-lg shadow-slate-900/25">
+                  <div className="h-10 w-10 rounded-full bg-linear-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-lg shadow-slate-900/25">
                     <span className="text-white font-semibold">
                       {user?.emailId?.[0]?.toUpperCase()}
                     </span>
@@ -200,7 +178,7 @@ const StudentDashboard: React.FC = () => {
                 <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">
                   Projects
                 </p>
-                <p className="text-4xl font-bold bg-gradient-to-br from-slate-900 to-slate-700 bg-clip-text text-transparent mt-2">
+                <p className="text-4xl font-bold bg-linear-to-br from-slate-900 to-slate-700 bg-clip-text text-transparent mt-2">
                   {projects.length}
                 </p>
                 <div className="flex items-center gap-1.5 mt-2">
@@ -210,9 +188,9 @@ const StudentDashboard: React.FC = () => {
                   </span>
                 </div>
               </div>
-              <div className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-lg shadow-slate-900/25 group-hover:scale-110 transition-transform">
+              <div className="relative w-14 h-14 rounded-xl bg-linear-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-lg shadow-slate-900/25 group-hover:scale-110 transition-transform">
                 <FolderKanban className="h-7 w-7 text-white" />
-                <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent" />
+                <div className="absolute inset-0 rounded-xl bg-linear-to-br from-white/20 to-transparent" />
               </div>
             </div>
           </motion.div>
@@ -228,16 +206,16 @@ const StudentDashboard: React.FC = () => {
                 <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">
                   Datasets
                 </p>
-                <p className="text-4xl font-bold bg-gradient-to-br from-slate-900 to-slate-700 bg-clip-text text-transparent mt-2">
+                <p className="text-4xl font-bold bg-linear-to-br from-slate-900 to-slate-700 bg-clip-text text-transparent mt-2">
                   {allDatasetsData?.total || 0}
                 </p>
                 <div className="flex items-center gap-1.5 mt-2">
                   <span className="text-xs text-slate-500">Ready to use</span>
                 </div>
               </div>
-              <div className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/25 group-hover:scale-110 transition-transform">
+              <div className="relative w-14 h-14 rounded-xl bg-linear-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/25 group-hover:scale-110 transition-transform">
                 <Database className="h-7 w-7 text-white" />
-                <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent" />
+                <div className="absolute inset-0 rounded-xl bg-linear-to-br from-white/20 to-transparent" />
               </div>
             </div>
           </motion.div>
@@ -251,21 +229,21 @@ const StudentDashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">
-                  Deployed
+                  Shared
                 </p>
-                <p className="text-4xl font-bold bg-gradient-to-br from-slate-900 to-slate-700 bg-clip-text text-transparent mt-2">
-                  {recentRuns.length}
+                <p className="text-4xl font-bold bg-linear-to-br from-slate-900 to-slate-700 bg-clip-text text-transparent mt-2">
+                  {sharedProjectsCount}
                 </p>
                 <div className="flex items-center gap-1.5 mt-2">
                   <Zap className="w-3.5 h-3.5 text-violet-600" />
                   <span className="text-xs text-violet-600 font-semibold">
-                    Live
+                    Public
                   </span>
                 </div>
               </div>
-              <div className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-500/25 group-hover:scale-110 transition-transform">
-                <PlayCircle className="h-7 w-7 text-white" />
-                <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent" />
+              <div className="relative w-14 h-14 rounded-xl bg-linear-to-br from-violet-500 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-500/25 group-hover:scale-110 transition-transform">
+                <Share2 className="h-7 w-7 text-white" />
+                <div className="absolute inset-0 rounded-xl bg-linear-to-br from-white/20 to-transparent" />
               </div>
             </div>
           </motion.div>
@@ -309,8 +287,8 @@ const StudentDashboard: React.FC = () => {
             {filteredProjects.length === 0 ? (
               <div className="text-center py-16">
                 <div className="relative inline-block">
-                  <div className="absolute inset-0 bg-gradient-to-br from-slate-200 to-slate-100 rounded-full blur-2xl opacity-50"></div>
-                  <div className="relative w-20 h-20 mx-auto bg-gradient-to-br from-slate-100 to-slate-50 rounded-2xl flex items-center justify-center shadow-lg">
+                  <div className="absolute inset-0 bg-linear-to-br from-slate-200 to-slate-100 rounded-full blur-2xl opacity-50"></div>
+                  <div className="relative w-20 h-20 mx-auto bg-linear-to-br from-slate-100 to-slate-50 rounded-2xl flex items-center justify-center shadow-lg">
                     <FolderKanban className="h-10 w-10 text-slate-400" />
                   </div>
                 </div>
@@ -343,7 +321,7 @@ const StudentDashboard: React.FC = () => {
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-md shadow-slate-900/25">
+                          <div className="w-8 h-8 rounded-lg bg-linear-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-md shadow-slate-900/25">
                             <FolderKanban className="w-4 h-4 text-white" />
                           </div>
                           <h3 className="font-bold text-slate-900 group-hover:text-slate-900">
@@ -398,59 +376,6 @@ const StudentDashboard: React.FC = () => {
           onSuccess={handleCreateProject}
         />
 
-        {/* Recent Runs */}
-        {recentRuns.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.5 }}
-            className="mt-8 bg-white/80 backdrop-blur-xl rounded-2xl border border-slate-200/60 shadow-xl shadow-slate-900/5 ring-1 ring-slate-900/5"
-          >
-            <div className="p-6 border-b border-slate-200/60">
-              <h2 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-                Recent Runs
-              </h2>
-            </div>
-            <div className="p-6">
-              <div className="space-y-3">
-                {recentRuns.map((run, index) => (
-                  <motion.div
-                    key={run.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                    className="flex items-center justify-between p-4 bg-white/60 backdrop-blur-sm border border-slate-200/60 rounded-xl hover:shadow-lg hover:shadow-slate-900/5 transition-all ring-1 ring-slate-900/5"
-                  >
-                    <div className="flex items-center space-x-3">
-                      {getStatusIcon(run.status)}
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">
-                          Run #{run.id.slice(0, 8)}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {new Date(run.createdAt).toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                    <span
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-full border ${
-                        run.status === "completed"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : run.status === "failed"
-                            ? "bg-red-50 text-red-700 border-red-200"
-                            : run.status === "running"
-                              ? "bg-blue-50 text-blue-700 border-blue-200"
-                              : "bg-slate-50 text-slate-700 border-slate-200"
-                      }`}
-                    >
-                      {run.status}
-                    </span>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        )}
       </main>
     </div>
   );

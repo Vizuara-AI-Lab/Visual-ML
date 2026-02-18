@@ -3,6 +3,7 @@ import { Eye, EyeOff, Mail, Lock, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
 import axiosInstance from "../../lib/axios";
 import { useNavigate } from "react-router";
+import Navbar from "../../landingpage/Navbar";
 
 const SignIn: React.FC = () => {
   const navigate = useNavigate();
@@ -110,7 +111,8 @@ const SignIn: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-50 px-4 py-12 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-50 px-4 pt-24 pb-12 relative overflow-hidden">
+      <Navbar variant="auth-signin" />
       {/* Premium Background Pattern */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30" />
 

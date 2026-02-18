@@ -14,7 +14,6 @@ from app.core.exceptions import BaseMLException
 from app.api.v1 import (
     pipelines,
     genai_pipelines,
-    knowledge_base,
     secrets,
     projects,
     datasets,
@@ -22,29 +21,49 @@ from app.api.v1 import (
     genai,
     tasks,
     sharing,
+    custom_apps,
 )
 from app.mentor import router as mentor_router
+from app.utils.cleanup import start_cleanup_loop
+from app.db.session import init_db
 from pathlib import Path
+import asyncio
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Application lifespan manager.
-    Handles startup and shutdown logic. 
+    Handles startup and shutdown logic.
     """
     # Startup
     logger.info(f"Environment: {settings.ENVIRONMENT}")
 
+    # Ensure all DB tables exist (idempotent — creates only missing tables)
+    init_db()
+    logger.info("Database tables initialized")
+
     # Create necessary directories
     Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
     Path(settings.MODEL_ARTIFACTS_DIR).mkdir(parents=True, exist_ok=True)
+
+    # Start periodic storage cleanup in the background
+    cleanup_task = None
+    if settings.CLEANUP_ENABLED:
+        cleanup_task = asyncio.create_task(start_cleanup_loop())
+        logger.info("Storage cleanup scheduler started")
 
     logger.info("Application startup complete")
 
     yield
 
     # Shutdown
+    if cleanup_task is not None:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
     logger.info("Shutting down application")
 
 
@@ -148,14 +167,15 @@ app.include_router(mentor_router.router, prefix=settings.API_V1_PREFIX)
 app.include_router(
     genai_pipelines.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["GenAI Pipelines"]
 )
-app.include_router(
-    knowledge_base.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["Knowledge Base"]
-)
+ 
 app.include_router(secrets.router, prefix=settings.API_V1_PREFIX + "/genai", tags=["API Secrets"])
 app.include_router(genai.router, prefix=settings.API_V1_PREFIX)
 app.include_router(projects.router, prefix=settings.API_V1_PREFIX)
 app.include_router(
     sharing.router, prefix=settings.API_V1_PREFIX + "/projects", tags=["Project Sharing"]
+)
+app.include_router(
+    custom_apps.router, prefix=settings.API_V1_PREFIX + "/custom-apps", tags=["Custom Apps"]
 )
 
 
@@ -169,3 +189,4 @@ if __name__ == "__main__":
         reload=settings.DEBUG,
         log_level=settings.LOG_LEVEL.lower(),
     )
+ 

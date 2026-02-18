@@ -280,7 +280,4 @@ Visual-ML/
 
 
 
-## 📝 Developer
-This project was developed solely by Sachin Chaurasiya during his internship at Vizuara Technology.
-
 

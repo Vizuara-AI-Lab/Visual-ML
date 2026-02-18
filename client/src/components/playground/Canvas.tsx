@@ -61,9 +61,6 @@ const nodeTypes: Record<string, React.ComponentType<any>> = {
   system_prompt: MLNode,
   chatbot_node: MLNode,
   example_node: MLNode,
-  // Deployment Nodes
-  model_export: MLNode,
-  api_endpoint: MLNode,
 };
 
 // Custom styled edge
@@ -172,13 +169,11 @@ export const Canvas = ({ onNodeClick }: CanvasProps) => {
 
       const type = event.dataTransfer.getData("application/reactflow");
       if (!type) {
-        console.log("❌ No node type in drag data");
         return;
       }
 
       const nodeDef = getNodeByType(type as NodeType);
       if (!nodeDef) {
-        console.log("❌ No node definition found for type:", type);
         return;
       }
 
@@ -203,7 +198,6 @@ export const Canvas = ({ onNodeClick }: CanvasProps) => {
         },
       };
 
-      console.log("📊 Current nodes count:", nodes.length);
       addNode(newNode);
     },
     [addNode, screenToFlowPosition, nodes.length],
@@ -228,9 +222,7 @@ export const Canvas = ({ onNodeClick }: CanvasProps) => {
         snapGrid={[15, 15]}
       >
         <Background color="#cbd5e1" gap={20} size={1.5} />
-        <Controls
-          className="rounded-xl! border-slate-200! shadow-md! [&>button]:rounded-lg! [&>button]:border-slate-200!"
-        />
+        <Controls className="rounded-xl! border-slate-200! shadow-md! [&>button]:rounded-lg! [&>button]:border-slate-200!" />
       </ReactFlow>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { useParams, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -13,7 +13,7 @@ import { ViewNodeModal } from "../../components/playground/ViewNodeModal";
 import { ShareModal } from "../../components/playground/ShareModal";
 import { ExportModal } from "../../components/playground/ExportModal";
 import { Toolbar } from "../../components/playground/Toolbar";
-import { ResultsPanel } from "../../components/playground/ResultsPanel";
+import { ResultsDrawer } from "../../components/playground/results-drawer";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 import { executePipelineStream } from "../../features/playground/api";
 import type { NodeType, BaseNodeData } from "../../types/pipeline";
@@ -37,7 +37,7 @@ export default function PlayGround() {
   const [resultsOpen, setResultsOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [streamCleanup, setStreamCleanup] = useState<(() => void) | null>(null);
+  const streamCleanupRef = useRef<(() => void) | null>(null);
 
   const [executionProgress, setExecutionProgress] = useState<{
     status: string;
@@ -63,10 +63,17 @@ export default function PlayGround() {
     setAllNodesPending,
     clearExecutionStatus,
     animateEdgesForNode,
+    addNodeResult,
+    addExecutionLog,
+    clearExecutionLogs,
   } = usePlaygroundStore();
 
   const { user } = useAuthStore();
-  const { preferences } = useMentorStore();
+  const { preferences, updatePreferences } = useMentorStore();
+
+  const handleToggleMentor = () => {
+    updatePreferences({ enabled: !preferences.enabled });
+  };
 
   // Enable AI mentor context awareness
   useMentorContext({
@@ -172,14 +179,12 @@ export default function PlayGround() {
     };
   }, []);
 
-  // Cleanup SSE stream on unmount
+  // Cleanup SSE stream on unmount only
   useEffect(() => {
     return () => {
-      if (streamCleanup) {
-        streamCleanup();
-      }
+      streamCleanupRef.current?.();
     };
-  }, [streamCleanup]);
+  }, []);
 
   // Clear execution status when nodes or edges change (pipeline modified)
   useEffect(() => {
@@ -251,11 +256,7 @@ export default function PlayGround() {
     setNodes((prevNodes) => [...prevNodes, ...newNodes]);
     setEdges((prevEdges) => [...prevEdges, ...newEdges]);
 
-    toast.success(`${template.label} template loaded!`, {
-      duration: 2000,
-      position: "top-right",
-      icon: "✅",
-    });
+    toast.success(`${template.label} template loaded!`);
   };
 
   const handleExecute = async () => {
@@ -263,6 +264,7 @@ export default function PlayGround() {
       setIsExecuting(true);
       setResultsOpen(true);
       clearExecutionStatus();
+      clearExecutionLogs();
 
       // 🛡️ VALIDATION: Check pipeline before execution
       const validationResult = validatePipeline(nodes, edges);
@@ -274,18 +276,7 @@ export default function PlayGround() {
             ? `${error.message}\n💡 ${error.suggestion}`
             : error.message;
 
-          toast.error(message, {
-            duration: 3000,
-            position: "top-right",
-            style: {
-              background: "#1F2937",
-              color: "#fff",
-              border: "1px solid #EF4444",
-              borderRadius: "8px",
-              padding: "16px",
-              maxWidth: "400px",
-            },
-          });
+          toast.error(message, { duration: 4000 });
         });
 
         setIsExecuting(false);
@@ -303,16 +294,10 @@ export default function PlayGround() {
             : warning.message;
 
           toast(message, {
-            duration: 3000,
-            position: "top-right",
+            duration: 4000,
             icon: "⚠️",
             style: {
-              background: "#1F2937",
-              color: "#fff",
-              border: "1px solid #F59E0B",
-              borderRadius: "8px",
-              padding: "16px",
-              maxWidth: "400px",
+              border: "1px solid rgba(251, 191, 36, 0.3)",
             },
           });
         });
@@ -342,8 +327,12 @@ export default function PlayGround() {
 
       console.log("🚀 Executing pipeline with streaming...", pipelineConfig);
 
-      // Store results by node ID as they come in
-      const nodeResults: Record<string, any> = {};
+      // Clear previous results and initialize empty result for streaming
+      setExecutionResult({
+        success: true,
+        nodeResults: {},
+        timestamp: new Date().toISOString(),
+      });
 
       // Execute pipeline with streaming
       const cleanup = await executePipelineStream(
@@ -361,54 +350,73 @@ export default function PlayGround() {
           onNodeStarted: (event) => {
             console.log("🟡 Node started:", event);
             setNodeExecutionStatus(event.node_id, "running");
-            toast.loading(`Running: ${event.label}`, {
-              id: event.node_id,
-              duration: Infinity,
+            addExecutionLog({
+              timestamp: new Date().toISOString(),
+              event: "node_started",
+              nodeId: event.node_id,
+              nodeLabel: event.label,
+              message: `Started: ${event.label}`,
             });
           },
           onNodeCompleted: (event) => {
             console.log("🟢 Node completed:", event);
             setNodeExecutionStatus(event.node_id, "completed");
             animateEdgesForNode(event.node_id);
-            toast.success(`Completed: ${event.label}`, {
-              id: event.node_id,
-              duration: 2000,
+
+            // Incrementally add this node's result to the results panel
+            addNodeResult(event.node_id, {
+              success: true,
+              output: event.result,
+            });
+
+            // Also store on the node data for view modals
+            updateNode(event.node_id, { result: event.result });
+
+            addExecutionLog({
+              timestamp: new Date().toISOString(),
+              event: "node_completed",
+              nodeId: event.node_id,
+              nodeLabel: event.label,
+              message: `Completed: ${event.label}`,
             });
           },
           onNodeFailed: (event) => {
             console.log("🔴 Node failed:", event);
             setNodeExecutionStatus(event.node_id, "failed");
-            toast.error(`Failed: ${event.label}\n${event.error}`, {
-              id: event.node_id,
-              duration: 5000,
+
+            // Incrementally add this node's error to the results panel
+            addNodeResult(event.node_id, {
+              success: false,
+              error: event.error,
+            });
+
+            addExecutionLog({
+              timestamp: new Date().toISOString(),
+              event: "node_failed",
+              nodeId: event.node_id,
+              nodeLabel: event.label,
+              message: `Failed: ${event.label} — ${event.error}`,
             });
           },
           onPipelineCompleted: (event) => {
             console.log("✅ Pipeline completed:", event);
 
-            // Store results by node ID
-            if (event.results) {
-              event.results.forEach((nodeResult: any, index: number) => {
-                const nodeId = sortedNodes[index]?.id;
-                if (nodeId) {
-                  nodeResults[nodeId] = nodeResult;
-                  updateNode(nodeId, { result: nodeResult });
-                }
-              });
-            }
-
+            // Finalize the execution result — keep the incrementally-built nodeResults
+            const currentResult = usePlaygroundStore.getState().executionResult;
             setExecutionResult({
+              ...currentResult,
               success: true,
-              nodeResults,
               timestamp: new Date().toISOString(),
             });
 
-            toast.success("Pipeline execution completed!", {
-              duration: 3000,
+            addExecutionLog({
+              timestamp: new Date().toISOString(),
+              event: "pipeline_completed",
+              message: `Pipeline completed successfully (${event.nodes_executed} nodes)`,
             });
 
             setIsExecuting(false);
-            setStreamCleanup(null);
+            streamCleanupRef.current = null;
           },
           onPipelineFailed: (event) => {
             console.log("❌ Pipeline failed:", event);
@@ -429,33 +437,36 @@ export default function PlayGround() {
                 "Please configure encoding settings for at least one column.";
             }
 
+            // Keep incrementally-built nodeResults, add error info
+            const currentResult = usePlaygroundStore.getState().executionResult;
             setExecutionResult({
+              ...currentResult,
               success: false,
               error: userFriendlyError,
               errorSuggestion: errorSuggestion,
               timestamp: new Date().toISOString(),
             });
 
-            toast.error(userFriendlyError, {
-              duration: 5000,
+            addExecutionLog({
+              timestamp: new Date().toISOString(),
+              event: "pipeline_failed",
+              message: `Pipeline failed: ${userFriendlyError}`,
             });
 
             setIsExecuting(false);
-            setStreamCleanup(null);
+            streamCleanupRef.current = null;
           },
           onError: (error) => {
             console.error("SSE Error:", error);
-            toast.error("Connection error: " + error.message, {
-              duration: 5000,
-            });
+            toast.error("Connection error: " + error.message);
             setIsExecuting(false);
-            setStreamCleanup(null);
+            streamCleanupRef.current = null;
           },
         },
       );
 
       // Store cleanup function for abort functionality
-      setStreamCleanup(() => cleanup);
+      streamCleanupRef.current = cleanup;
     } catch (error) {
       console.error("Pipeline execution failed:", error);
       setExecutionProgress(null);
@@ -494,20 +505,18 @@ export default function PlayGround() {
       });
 
       setIsExecuting(false);
-      setStreamCleanup(null);
+      streamCleanupRef.current = null;
     }
   };
 
   const handleAbort = () => {
-    if (streamCleanup) {
-      streamCleanup();
-      setStreamCleanup(null);
+    if (streamCleanupRef.current) {
+      streamCleanupRef.current();
+      streamCleanupRef.current = null;
     }
     setIsExecuting(false);
     clearExecutionStatus();
-    toast.error("Pipeline execution aborted by user", {
-      duration: 3000,
-    });
+    toast.error("Pipeline execution aborted by user");
   };
 
   const handleClear = () => {
@@ -601,10 +610,7 @@ export default function PlayGround() {
       };
 
       addNode(newNode);
-      toast.success(`Added ${nodeDef.label} to canvas`, {
-        icon: "✨",
-        duration: 2000,
-      });
+      toast.success(`Added ${nodeDef.label} to canvas`);
     } catch (error) {
       console.error("Error adding node from mentor:", error);
       toast.error("Failed to add node");
@@ -618,7 +624,48 @@ export default function PlayGround() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-950">
-      <Toaster />
+      <Toaster
+        position="top-right"
+        gutter={10}
+        containerStyle={{ top: 16, right: 16 }}
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: "rgba(15, 23, 42, 0.92)",
+            backdropFilter: "blur(12px)",
+            color: "#f1f5f9",
+            borderRadius: "14px",
+            padding: "14px 18px",
+            fontSize: "13.5px",
+            fontWeight: 500,
+            lineHeight: "1.5",
+            maxWidth: "420px",
+            boxShadow:
+              "0 20px 40px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(148, 163, 184, 0.1)",
+            border: "1px solid rgba(148, 163, 184, 0.15)",
+          },
+          success: {
+            duration: 2500,
+            iconTheme: { primary: "#34d399", secondary: "#0f172a" },
+            style: {
+              border: "1px solid rgba(52, 211, 153, 0.3)",
+            },
+          },
+          error: {
+            duration: 5000,
+            iconTheme: { primary: "#f87171", secondary: "#0f172a" },
+            style: {
+              border: "1px solid rgba(248, 113, 113, 0.3)",
+            },
+          },
+          loading: {
+            iconTheme: { primary: "#94a3b8", secondary: "#0f172a" },
+            style: {
+              border: "1px solid rgba(148, 163, 184, 0.2)",
+            },
+          },
+        }}
+      />
       <Toolbar
         onExecute={handleExecute}
         onAbort={handleAbort}
@@ -627,21 +674,26 @@ export default function PlayGround() {
         onExport={() => setExportModalOpen(true)}
         onShare={projectId ? handleShare : undefined}
         isExecuting={usePlaygroundStore.getState().isExecuting}
+        isShareLoading={saveProject.isPending}
         executionProgress={executionProgress}
         projectName={projectData?.name}
         onBack={() => navigate("/dashboard")}
+        isMentorEnabled={preferences.enabled}
+        onToggleMentor={handleToggleMentor}
       />
 
-      <div className="flex-1 flex overflow-hidden">
-        <ReactFlowProvider>
-          <Sidebar
-            onNodeDragStart={onNodeDragStart}
-            onTemplateClick={handleTemplateClick}
-          />
-          <Canvas onNodeClick={handleNodeClick} />
-        </ReactFlowProvider>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex overflow-hidden">
+          <ReactFlowProvider>
+            <Sidebar
+              onNodeDragStart={onNodeDragStart}
+              onTemplateClick={handleTemplateClick}
+            />
+            <Canvas onNodeClick={handleNodeClick} />
+          </ReactFlowProvider>
+        </div>
 
-        <ResultsPanel
+        <ResultsDrawer
           isOpen={resultsOpen}
           onClose={() => setResultsOpen(false)}
         />

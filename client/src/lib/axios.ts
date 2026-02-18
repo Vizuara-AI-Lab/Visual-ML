@@ -3,7 +3,7 @@ import { env } from "./env";
 
 const axiosInstance = axios.create({
   baseURL: env.API_URL,
-  withCredentials: true, 
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
@@ -24,8 +24,6 @@ axiosInstance.interceptors.request.use(
     return Promise.reject(error);
   },
 );
-
-
 
 // Response interceptor to handle token refresh
 axiosInstance.interceptors.response.use(

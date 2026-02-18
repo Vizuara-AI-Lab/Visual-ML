@@ -21,7 +21,6 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { genaiCategory } from "./genaiNodes";
-import { deploymentCategory } from "./deploymentNodes";
 import { mlAlgorithmsCategory } from "./mlAlgorithms";
 import { resultNodes } from "./resultNodes";
 
@@ -159,9 +158,18 @@ export const nodeCategories: NodeCategory[] = [
             type: "select",
             options: [
               { value: "iris", label: "Iris (Classification)" },
-              { value: "boston", label: "Boston Housing (Regression)" },
               { value: "wine", label: "Wine Quality (Classification)" },
+              { value: "breast_cancer", label: "Breast Cancer (Classification)" },
+              { value: "digits", label: "Digits (Classification)" },
+              { value: "titanic", label: "Titanic (Classification)" },
+              { value: "penguins", label: "Palmer Penguins (Classification)" },
+              { value: "heart_disease", label: "Heart Disease (Classification)" },
               { value: "diabetes", label: "Diabetes (Regression)" },
+              { value: "boston", label: "California Housing (Regression)" },
+              { value: "tips", label: "Tips (Regression)" },
+              { value: "auto_mpg", label: "Auto MPG (Regression)" },
+              { value: "student", label: "Student Performance (Regression)" },
+              { value: "linnerud", label: "Linnerud (Multivariate)" },
             ],
             defaultValue: "iris",
           },
@@ -739,7 +747,6 @@ export const nodeCategories: NodeCategory[] = [
     nodes: resultNodes,
   },
   genaiCategory,
-  deploymentCategory,
 ];
 
 export const getAllNodes = (): NodeDefinition[] => {

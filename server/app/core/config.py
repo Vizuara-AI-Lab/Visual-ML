@@ -93,6 +93,12 @@ class Settings(BaseSettings):
     LAZY_LOAD_MODELS: bool = True
     ENABLE_MODEL_WARMUP: bool = False
 
+    # Storage Cleanup
+    CLEANUP_ENABLED: bool = True          # Toggle periodic cleanup on/off
+    CLEANUP_INTERVAL_HOURS: int = 12      # How often to run cleanup
+    UPLOAD_MAX_AGE_HOURS: int = 24        # Delete uploads older than this
+    MODEL_MAX_AGE_HOURS: int = 72         # Delete model files older than this
+
     # Inworld TTS (AI Mentor)
     INWORLD_API_KEY: Optional[str] = None
     INWORLD_WORKSPACE_ID: Optional[str] = None

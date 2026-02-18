@@ -19,7 +19,6 @@ import { targetSplitValidationRules } from "./targetSplitValidation";
 import { mlAlgorithmValidationRules } from "./mlAlgorithmValidation";
 import { resultValidationRules } from "./resultValidation";
 import { genaiValidationRules } from "./genaiValidation";
-import { deploymentValidationRules } from "./deploymentValidation";
 
 /**
  * Master validation registry - all node types and their rules
@@ -33,7 +32,6 @@ export const validationRegistry: ValidationRegistry = {
   ...mlAlgorithmValidationRules,
   ...resultValidationRules,
   ...genaiValidationRules,
-  ...deploymentValidationRules,
 };
 
 /**
@@ -303,8 +301,6 @@ function getNodeLabel(nodeType: string): string {
     system_prompt: "System Prompt",
     chatbot_node: "Chatbot",
     example_node: "Examples",
-    model_export: "Export Model",
-    api_endpoint: "API Endpoint",
   };
 
   return labelMap[nodeType] || nodeType;

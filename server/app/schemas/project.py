@@ -48,7 +48,9 @@ class ProjectListItem(BaseModel):
     description: Optional[str]
     createdAt: datetime
     updatedAt: datetime
-    
+    is_public: bool = False
+    share_token: Optional[str] = None
+
     class Config:
         from_attributes = True
 

@@ -34,10 +34,7 @@ export type NodeType =
   | "llm_node"
   | "system_prompt"
   | "chatbot_node"
-  | "example_node"
-  // Deployment nodes
-  | "model_export"
-  | "api_endpoint";
+  | "example_node";
 
 export type AlgorithmType = "linear_regression" | "logistic_regression";
 
@@ -191,6 +188,7 @@ export interface NodeCompletedEvent {
   node_type: NodeType;
   label: string;
   success: true;
+  result?: Record<string, any>;
 }
 
 export interface NodeFailedEvent {
@@ -229,4 +227,18 @@ export interface PipelineStreamCallbacks {
   onPipelineCompleted?: (event: PipelineCompletedEvent) => void;
   onPipelineFailed?: (event: PipelineFailedEvent) => void;
   onError?: (error: Error) => void;
+}
+
+// Execution log entry for the results drawer timeline
+export interface ExecutionLogEntry {
+  timestamp: string;
+  event:
+    | "node_started"
+    | "node_completed"
+    | "node_failed"
+    | "pipeline_completed"
+    | "pipeline_failed";
+  nodeId?: string;
+  nodeLabel?: string;
+  message: string;
 }

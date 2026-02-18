@@ -229,7 +229,6 @@ export const ChatbotModal = ({ nodeId, onClose }: ChatbotModalProps) => {
         }
       }
     } catch (error) {
-      console.error("Chat error:", error);
       setMessages((prev) => {
         const newMessages = [...prev];
         newMessages[newMessages.length - 1] = {

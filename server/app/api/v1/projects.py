@@ -308,6 +308,7 @@ async def get_project_state(
             "position": {"x": node.positionX or 0, "y": node.positionY or 0},
             "data": {
                 "label": node.label or node.nodeType,
+                "type": node.nodeType,
                 "config": node.config or {},
                 "isConfigured": bool(node.config),
             },

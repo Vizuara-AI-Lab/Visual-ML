@@ -7,6 +7,8 @@ import {
   Share2,
   StopCircle,
   Code,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 
 interface ToolbarProps {
@@ -17,6 +19,7 @@ interface ToolbarProps {
   onShare?: () => void;
   onExport?: () => void;
   isExecuting: boolean;
+  isShareLoading?: boolean;
   executionProgress?: {
     status: string;
     percent: number;
@@ -25,6 +28,8 @@ interface ToolbarProps {
   } | null;
   projectName?: string;
   onBack?: () => void;
+  isMentorEnabled?: boolean;
+  onToggleMentor?: () => void;
 }
 
 export const Toolbar = ({
@@ -35,9 +40,12 @@ export const Toolbar = ({
   onShare,
   onExport,
   isExecuting,
+  isShareLoading,
   executionProgress,
   projectName,
   onBack,
+  isMentorEnabled,
+  onToggleMentor,
 }: ToolbarProps) => {
   return (
     <div className="h-16 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 flex items-center justify-between px-6 shadow-lg shadow-slate-900/5">
@@ -135,11 +143,42 @@ export const Toolbar = ({
         {onShare && (
           <button
             onClick={onShare}
-            className="px-4 py-2 hover:bg-blue-50 text-blue-600 hover:text-blue-700 rounded-lg flex items-center gap-2 transition-all border border-transparent hover:border-blue-200"
+            disabled={isShareLoading}
+            className="px-4 py-2 hover:bg-blue-50 text-blue-600 hover:text-blue-700 disabled:text-blue-400 disabled:cursor-not-allowed rounded-lg flex items-center gap-2 transition-all border border-transparent hover:border-blue-200 disabled:hover:bg-transparent disabled:hover:border-transparent"
             title="Share Project"
           >
-            <Share2 className="w-4 h-4" />
-            <span className="font-medium">Share</span>
+            {isShareLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Share2 className="w-4 h-4" />
+            )}
+            <span className="font-medium">
+              {isShareLoading ? "Saving..." : "Share"}
+            </span>
+          </button>
+        )}
+
+        {onToggleMentor && (
+          <button
+            onClick={onToggleMentor}
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all border ${
+              isMentorEnabled
+                ? "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 hover:text-amber-700"
+                : "text-slate-400 border-transparent hover:bg-slate-100/50 hover:text-slate-600"
+            }`}
+            title={isMentorEnabled ? "Disable AI Mentor" : "Enable AI Mentor"}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span className="font-medium">Mentor</span>
+            <span
+              className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full ${
+                isMentorEnabled
+                  ? "bg-amber-200/60 text-amber-700"
+                  : "bg-slate-200/60 text-slate-500"
+              }`}
+            >
+              {isMentorEnabled ? "ON" : "OFF"}
+            </span>
           </button>
         )}
 

@@ -56,62 +56,69 @@ export const executePipelineStream = async (
         // Resolve with cleanup function immediately
         resolve(() => {
           abortController.abort();
-          reader.cancel();
+          reader.cancel().catch(() => {});
         });
 
         // Read stream
-        let buffer = "";
-        while (true) {
-          const { done, value } = await reader.read();
+        try {
+          let buffer = "";
+          while (true) {
+            const { done, value } = await reader.read();
 
-          if (done) {
-            break;
-          }
-
-          // Decode chunk
-          buffer += decoder.decode(value, { stream: true });
-
-          // Process complete SSE messages
-          const messages = buffer.split("\n\n");
-          buffer = messages.pop() || ""; // Keep incomplete message in buffer
-
-          for (const message of messages) {
-            if (!message.trim() || !message.startsWith("data: ")) {
-              continue;
+            if (done) {
+              break;
             }
 
-            try {
-              const jsonStr = message.replace(/^data: /, "");
-              const event = JSON.parse(jsonStr) as PipelineStreamEvent;
+            // Decode chunk
+            buffer += decoder.decode(value, { stream: true });
 
-              // Route event to appropriate callback
-              switch (event.event) {
-                case "node_started":
-                  callbacks.onNodeStarted?.(event);
-                  break;
-                case "node_completed":
-                  callbacks.onNodeCompleted?.(event);
-                  break;
-                case "node_failed":
-                  callbacks.onNodeFailed?.(event);
-                  break;
-                case "pipeline_completed":
-                  callbacks.onPipelineCompleted?.(event);
-                  break;
-                case "pipeline_failed":
-                  callbacks.onPipelineFailed?.(event);
-                  break;
+            // Process complete SSE messages
+            const messages = buffer.split("\n\n");
+            buffer = messages.pop() || ""; // Keep incomplete message in buffer
+
+            for (const message of messages) {
+              if (!message.trim() || !message.startsWith("data: ")) {
+                continue;
               }
-            } catch (error) {
-              console.error("Error parsing SSE event:", error);
-              callbacks.onError?.(error as Error);
+
+              try {
+                const jsonStr = message.replace(/^data: /, "");
+                const event = JSON.parse(jsonStr) as PipelineStreamEvent;
+
+                // Route event to appropriate callback
+                switch (event.event) {
+                  case "node_started":
+                    callbacks.onNodeStarted?.(event);
+                    break;
+                  case "node_completed":
+                    callbacks.onNodeCompleted?.(event);
+                    break;
+                  case "node_failed":
+                    callbacks.onNodeFailed?.(event);
+                    break;
+                  case "pipeline_completed":
+                    callbacks.onPipelineCompleted?.(event);
+                    break;
+                  case "pipeline_failed":
+                    callbacks.onPipelineFailed?.(event);
+                    break;
+                }
+              } catch (error) {
+                console.error("Error parsing SSE event:", error);
+                callbacks.onError?.(error as Error);
+              }
             }
+          }
+        } catch (readError) {
+          // Ignore AbortError from intentional stream cancellation
+          if ((readError as Error).name !== "AbortError") {
+            throw readError;
           }
         }
       })
       .catch((error) => {
         if (error.name === "AbortError") {
-          console.log("SSE stream aborted by user");
+          // Intentional abort — not an error
         } else {
           console.error("SSE stream error:", error);
           callbacks.onError?.(error);

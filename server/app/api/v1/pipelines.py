@@ -38,19 +38,19 @@ def make_json_serializable(obj: Any) -> Any:
     Handles datetime objects, NaN/Infinity, Pydantic models, and nested structures.
     """
     import math
-    
+
     # Handle None early
     if obj is None:
         return None
-    
+
     # Handle booleans before checking numeric types
     if isinstance(obj, bool):
         return obj
-    
+
     # Handle integers
     if isinstance(obj, int):
         return obj
-    
+
     # Handle NaN and Infinity for regular floats
     if isinstance(obj, float):
         if math.isnan(obj):
@@ -58,15 +58,15 @@ def make_json_serializable(obj: Any) -> Any:
         elif math.isinf(obj):
             return None  # Convert Infinity to null as well for safety
         return obj
-    
+
     # Handle numpy types by checking type name string
     type_name = type(obj).__name__
-    if type_name.startswith(('int', 'uint', 'long')) and type_name not in ('integer',):
+    if type_name.startswith(("int", "uint", "long")) and type_name not in ("integer",):
         try:
             return int(obj)
         except (ValueError, TypeError):
             pass
-    elif 'float' in type_name or type_name in ('number',):
+    elif "float" in type_name or type_name in ("number",):
         try:
             val = float(obj)
             if math.isnan(val):
@@ -76,42 +76,38 @@ def make_json_serializable(obj: Any) -> Any:
             return val
         except (ValueError, TypeError):
             pass
-    elif type_name == 'ndarray':
+    elif type_name == "ndarray":
         try:
             return make_json_serializable(obj.tolist())
         except (AttributeError, TypeError):
             pass
-    
+
     # Handle datetime
     if isinstance(obj, datetime):
         return obj.isoformat()
-    
+
     # Handle dictionaries
     if isinstance(obj, dict):
         return {k: make_json_serializable(v) for k, v in obj.items()}
-    
+
     # Handle lists and tuples
     if isinstance(obj, (list, tuple)):
         return [make_json_serializable(item) for item in obj]
-    
+
     # Handle Pydantic models
     if hasattr(obj, "model_dump") and callable(getattr(obj, "model_dump", None)):
         try:
             return make_json_serializable(obj.model_dump())
         except Exception:
             pass
-    
+
     # Handle other objects with __dict__
     if hasattr(obj, "__dict__"):
         try:
             return make_json_serializable(obj.__dict__)
         except Exception:
             pass
-    
-    return obj
-            pass
-    
-    return obj
+
     return obj
 
 
@@ -311,7 +307,9 @@ async def execute_pipeline_stream(
 
         except Exception as e:
             logger.error(f"SSE streaming error: {str(e)}", exc_info=True)
-            error_data = make_json_serializable({'event': 'pipeline_failed', 'success': False, 'error': str(e)})
+            error_data = make_json_serializable(
+                {"event": "pipeline_failed", "success": False, "error": str(e)}
+            )
             yield f"data: {json.dumps(error_data, allow_nan=False)}\n\n"
 
     async def execute_pipeline_with_progress():
@@ -379,7 +377,15 @@ async def execute_pipeline_stream(
             # Send sentinel to stop generator
             await event_queue.put(None)
 
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Prevents Nginx from buffering SSE
+        },
+    )
 
 
 @router.post("/train/regression", response_model=TrainModelResponse)

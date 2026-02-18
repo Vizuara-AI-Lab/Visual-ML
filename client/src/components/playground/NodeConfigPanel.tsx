@@ -12,6 +12,32 @@ import {
   type DatasetMetadata,
 } from "../../lib/api/datasetApi";
 import { FeatureEngineeringConfigPanel } from "./FeatureEngineeringConfigPanel";
+import {
+  Upload,
+  Database,
+  FileSpreadsheet,
+  CheckCircle2,
+  FlaskConical,
+} from "lucide-react";
+
+const SAMPLE_DATASETS: Record<
+  string,
+  { label: string; description: string; rows: string; cols: string; task: string }
+> = {
+  iris: { label: "Iris", description: "Classify iris flower species from petal & sepal measurements", rows: "150", cols: "5", task: "Classification" },
+  wine: { label: "Wine Quality", description: "Predict wine quality from physicochemical properties", rows: "178", cols: "13", task: "Classification" },
+  breast_cancer: { label: "Breast Cancer", description: "Classify tumors as malignant or benign using cell features", rows: "569", cols: "30", task: "Classification" },
+  digits: { label: "Digits", description: "Handwritten digit recognition (0-9) from 8x8 pixel images", rows: "1,797", cols: "64", task: "Classification" },
+  titanic: { label: "Titanic", description: "Predict passenger survival on the Titanic", rows: "891", cols: "12", task: "Classification" },
+  penguins: { label: "Palmer Penguins", description: "Classify penguin species from body measurements", rows: "344", cols: "7", task: "Classification" },
+  heart_disease: { label: "Heart Disease", description: "Predict the presence of heart disease from clinical features", rows: "303", cols: "14", task: "Classification" },
+  diabetes: { label: "Diabetes", description: "Predict diabetes progression one year after baseline", rows: "442", cols: "10", task: "Regression" },
+  boston: { label: "California Housing", description: "Predict median house values in California districts", rows: "20,640", cols: "8", task: "Regression" },
+  tips: { label: "Tips", description: "Predict tip amount from restaurant billing data", rows: "244", cols: "7", task: "Regression" },
+  auto_mpg: { label: "Auto MPG", description: "Predict fuel efficiency of automobiles", rows: "398", cols: "8", task: "Regression" },
+  student: { label: "Student Performance", description: "Predict student academic performance", rows: "395", cols: "33", task: "Regression" },
+  linnerud: { label: "Linnerud", description: "Relate exercise to physiological measurements", rows: "20", cols: "6", task: "Multivariate" },
+};
 
 interface NodeConfigPanelProps {
   node: Node<BaseNodeData>;
@@ -20,10 +46,6 @@ interface NodeConfigPanelProps {
 }
 
 const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
-  console.log("🎛️ NodeConfigPanel rendered for node:", node);
-  console.log("📝 Node type:", node.data.type);
-  console.log("⚙️ Node data:", node.data);
-
   const [config, setConfig] = useState<Record<string, unknown>>(
     node.data.config || {},
   );
@@ -35,8 +57,6 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
   );
   const edges = usePlaygroundStore((state) => state.edges);
   const nodes = usePlaygroundStore((state) => state.nodes);
-
-  console.log("🆔 Current project ID:", currentProjectId);
 
   const nodeData = node.data as BaseNodeData;
 
@@ -74,20 +94,6 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
   };
 
   const availableColumns = getAvailableColumns();
-
-  console.log(
-    "🔍 NodeConfigPanel - Connected source node:",
-    connectedSourceNode?.data.type,
-  );
-  console.log("🔍 NodeConfigPanel - Available columns:", availableColumns);
-  console.log(
-    "🔍 NodeConfigPanel - Source config:",
-    connectedSourceNode?.data.config,
-  );
-  console.log(
-    "🔍 NodeConfigPanel - Source result:",
-    connectedSourceNode?.data.result,
-  );
 
   // Re-render when nodes change (e.g., when parent node config updates)
   const [, forceUpdate] = useState({});
@@ -329,63 +335,111 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
 
     switch (nodeData.type) {
       case "upload_file":
-        console.log("📤 Rendering upload_file config");
         return (
           <div className="space-y-4">
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800 mb-3">
-                Upload a CSV file to use in your ML pipeline
-              </p>
-              {currentProjectId ? (
-                <UploadDatasetButton
-                  nodeId={node.id}
-                  projectId={parseInt(currentProjectId)}
-                  onUploadComplete={(datasetData) => {
-                    console.log(
-                      "✅ Upload complete for node",
-                      node.id,
-                      "auto-filling config:",
-                      datasetData,
-                    );
-                    // Auto-fill dataset metadata
-                    const newConfig = {
-                      dataset_id: datasetData.dataset_id,
-                      filename: datasetData.filename,
-                      n_rows: datasetData.n_rows,
-                      n_columns: datasetData.n_columns,
-                      columns: datasetData.columns,
-                      dtypes: datasetData.dtypes,
-                    };
-                    setConfig(newConfig);
-                    // Immediately update node so downstream nodes can access columns
-                    onUpdate(node.id, newConfig);
-                  }}
-                />
-              ) : (
-                <div className="text-red-600 text-sm">
-                  No project selected. Please save your pipeline first.
+            {/* Upload Area */}
+            <div className="rounded-xl border-2 border-dashed border-blue-300 bg-linear-to-br from-blue-50/80 to-indigo-50/80 p-5">
+              <div className="flex flex-col items-center gap-3 text-center">
+                <div className="w-11 h-11 rounded-full bg-blue-100 flex items-center justify-center">
+                  <Upload className="w-5 h-5 text-blue-600" />
                 </div>
-              )}
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">
+                    Upload CSV Dataset
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Select a CSV file from your computer
+                  </p>
+                </div>
+                {currentProjectId ? (
+                  <UploadDatasetButton
+                    nodeId={node.id}
+                    projectId={parseInt(currentProjectId)}
+                    onUploadComplete={(datasetData) => {
+                      const newConfig = {
+                        dataset_id: datasetData.dataset_id,
+                        filename: datasetData.filename,
+                        n_rows: datasetData.n_rows,
+                        n_columns: datasetData.n_columns,
+                        columns: datasetData.columns,
+                        dtypes: datasetData.dtypes,
+                      };
+                      setConfig(newConfig);
+                      onUpdate(node.id, newConfig);
+                    }}
+                  />
+                ) : (
+                  <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-medium">
+                    No project selected. Save your pipeline first.
+                  </div>
+                )}
+              </div>
             </div>
 
+            {/* Dataset Info Card */}
             {(config.dataset_id as string) && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg space-y-2">
-                <h4 className="font-semibold text-green-900 text-sm">
-                  Dataset Loaded
-                </h4>
-                <div className="text-xs text-green-800 space-y-1">
-                  <p>
-                    <strong>File:</strong> {String(config.filename)}
-                  </p>
-                  <p>
-                    <strong>Rows:</strong> {String(config.n_rows)}
-                  </p>
-                  <p>
-                    <strong>Columns:</strong> {String(config.n_columns)}
-                  </p>
-                  <p>
-                    <strong>Dataset ID:</strong> {String(config.dataset_id)}
-                  </p>
+              <div className="rounded-xl border border-emerald-200 bg-linear-to-br from-emerald-50/80 to-green-50/80 overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-emerald-200/60 bg-emerald-100/40 flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                    Dataset Loaded
+                  </span>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <FileSpreadsheet className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="text-sm font-semibold text-slate-800 truncate">
+                      {String(config.filename)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-white/80 rounded-lg border border-slate-200/60 px-3 py-2">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Rows
+                      </div>
+                      <div className="text-lg font-bold text-slate-900">
+                        {Number(config.n_rows).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="bg-white/80 rounded-lg border border-slate-200/60 px-3 py-2">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Columns
+                      </div>
+                      <div className="text-lg font-bold text-slate-900">
+                        {String(config.n_columns)}
+                      </div>
+                    </div>
+                  </div>
+                  {Array.isArray(config.columns) &&
+                    (config.columns as string[]).length > 0 && (
+                      <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                          Column Preview
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {(config.columns as string[])
+                            .slice(0, 6)
+                            .map((col: string) => (
+                              <span
+                                key={col}
+                                className="px-2 py-0.5 bg-white rounded-md text-[11px] text-slate-600 border border-slate-200/80 font-medium"
+                              >
+                                {col}
+                              </span>
+                            ))}
+                          {(config.columns as string[]).length > 6 && (
+                            <span className="px-2 py-0.5 bg-slate-100 rounded-md text-[11px] text-slate-500 font-medium">
+                              +{(config.columns as string[]).length - 6} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  <div className="pt-2 border-t border-emerald-200/40">
+                    <div className="text-[10px] text-slate-400 font-mono truncate">
+                      ID: {String(config.dataset_id)}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -393,84 +447,222 @@ const NodeConfigPanel = ({ node, onUpdate, onClose }: NodeConfigPanelProps) => {
         );
 
       case "select_dataset":
-        console.log("📋 Rendering select_dataset config");
         return (
           <div className="space-y-4">
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm text-green-800 mb-3">
-                Select a dataset from your previously uploaded datasets
-              </p>
-              {loadingDatasets ? (
-                <div className="text-sm text-gray-600">Loading datasets...</div>
-              ) : userDatasets.length > 0 ? (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Available Datasets
-                  </label>
-                  <select
-                    value={(config.dataset_id as string) || ""}
-                    onChange={(e) => {
-                      const selectedDataset = userDatasets.find(
-                        (ds) => ds.dataset_id === e.target.value,
-                      );
-                      if (selectedDataset) {
-                        const newConfig = {
-                          dataset_id: selectedDataset.dataset_id,
-                          filename: selectedDataset.filename,
-                          n_rows: selectedDataset.n_rows,
-                          n_columns: selectedDataset.n_columns,
-                          columns: selectedDataset.columns,
-                          dtypes: selectedDataset.dtypes,
-                        };
-                        setConfig(newConfig);
-                        // Immediately update node so downstream nodes can access columns
-                        onUpdate(node.id, newConfig);
-                      }
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="">-- Select a dataset --</option>
-                    {userDatasets.map((dataset) => (
-                      <option
-                        key={dataset.dataset_id}
-                        value={dataset.dataset_id}
-                      >
-                        {dataset.filename} ({dataset.n_rows} rows,{" "}
-                        {dataset.n_columns} cols)
-                      </option>
-                    ))}
-                  </select>
+            {/* Header + Selector */}
+            <div className="rounded-xl border border-emerald-200 bg-linear-to-br from-emerald-50/80 to-teal-50/80 p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center">
+                  <Database className="w-4.5 h-4.5 text-emerald-600" />
                 </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">
+                    Select Existing Dataset
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Choose from previously uploaded datasets
+                  </p>
+                </div>
+              </div>
+
+              {loadingDatasets ? (
+                <div className="flex items-center gap-2 py-3 justify-center">
+                  <div className="w-4 h-4 border-2 border-emerald-300 border-t-emerald-600 rounded-full animate-spin" />
+                  <span className="text-sm text-slate-600">
+                    Loading datasets...
+                  </span>
+                </div>
+              ) : userDatasets.length > 0 ? (
+                <select
+                  value={(config.dataset_id as string) || ""}
+                  onChange={(e) => {
+                    const selectedDataset = userDatasets.find(
+                      (ds) => ds.dataset_id === e.target.value,
+                    );
+                    if (selectedDataset) {
+                      const newConfig = {
+                        dataset_id: selectedDataset.dataset_id,
+                        filename: selectedDataset.filename,
+                        n_rows: selectedDataset.n_rows,
+                        n_columns: selectedDataset.n_columns,
+                        columns: selectedDataset.columns,
+                        dtypes: selectedDataset.dtypes,
+                      };
+                      setConfig(newConfig);
+                      onUpdate(node.id, newConfig);
+                    }
+                  }}
+                  className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                >
+                  <option value="">-- Select a dataset --</option>
+                  {userDatasets.map((dataset) => (
+                    <option
+                      key={dataset.dataset_id}
+                      value={dataset.dataset_id}
+                    >
+                      {dataset.filename} ({dataset.n_rows} rows,{" "}
+                      {dataset.n_columns} cols)
+                    </option>
+                  ))}
+                </select>
               ) : (
-                <div className="text-sm text-gray-600">
+                <div className="py-3 px-4 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 text-center">
                   No datasets available. Upload a dataset first.
                 </div>
               )}
             </div>
 
+            {/* Selected Dataset Info */}
             {(config.dataset_id as string) && (
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
-                <h4 className="font-semibold text-blue-900 text-sm">
-                  Selected Dataset
-                </h4>
-                <div className="text-xs text-blue-800 space-y-1">
-                  <p>
-                    <strong>File:</strong> {String(config.filename)}
-                  </p>
-                  <p>
-                    <strong>Rows:</strong> {String(config.n_rows)}
-                  </p>
-                  <p>
-                    <strong>Columns:</strong> {String(config.n_columns)}
-                  </p>
-                  <p>
-                    <strong>Dataset ID:</strong> {String(config.dataset_id)}
-                  </p>
+              <div className="rounded-xl border border-blue-200 bg-linear-to-br from-blue-50/80 to-sky-50/80 overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-blue-200/60 bg-blue-100/40 flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="text-xs font-bold text-blue-800 uppercase tracking-wider">
+                    Selected Dataset
+                  </span>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <FileSpreadsheet className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="text-sm font-semibold text-slate-800 truncate">
+                      {String(config.filename)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-white/80 rounded-lg border border-slate-200/60 px-3 py-2">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Rows
+                      </div>
+                      <div className="text-lg font-bold text-slate-900">
+                        {Number(config.n_rows).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="bg-white/80 rounded-lg border border-slate-200/60 px-3 py-2">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Columns
+                      </div>
+                      <div className="text-lg font-bold text-slate-900">
+                        {String(config.n_columns)}
+                      </div>
+                    </div>
+                  </div>
+                  {Array.isArray(config.columns) &&
+                    (config.columns as string[]).length > 0 && (
+                      <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                          Column Preview
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {(config.columns as string[])
+                            .slice(0, 6)
+                            .map((col: string) => (
+                              <span
+                                key={col}
+                                className="px-2 py-0.5 bg-white rounded-md text-[11px] text-slate-600 border border-slate-200/80 font-medium"
+                              >
+                                {col}
+                              </span>
+                            ))}
+                          {(config.columns as string[]).length > 6 && (
+                            <span className="px-2 py-0.5 bg-slate-100 rounded-md text-[11px] text-slate-500 font-medium">
+                              +{(config.columns as string[]).length - 6} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  <div className="pt-2 border-t border-blue-200/40">
+                    <div className="text-[10px] text-slate-400 font-mono truncate">
+                      ID: {String(config.dataset_id)}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
           </div>
         );
+
+      case "sample_dataset": {
+        const selectedName = (config.dataset_name as string) || "iris";
+        const datasetInfo = SAMPLE_DATASETS[selectedName];
+        return (
+          <div className="space-y-4">
+            {/* Header + Selector */}
+            <div className="rounded-xl border border-violet-200 bg-linear-to-br from-violet-50/80 to-purple-50/80 p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-lg bg-violet-100 flex items-center justify-center">
+                  <FlaskConical className="w-4.5 h-4.5 text-violet-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">
+                    Sample Dataset
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Choose a built-in dataset for learning
+                  </p>
+                </div>
+              </div>
+
+              <select
+                value={selectedName}
+                onChange={(e) => updateField("dataset_name", e.target.value)}
+                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors"
+              >
+                {Object.entries(SAMPLE_DATASETS).map(([value, info]) => (
+                  <option key={value} value={value}>
+                    {info.label} ({info.task})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Dataset Info Card */}
+            {datasetInfo && (
+              <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-800">
+                    {datasetInfo.label}
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                      datasetInfo.task === "Classification"
+                        ? "bg-blue-100 text-blue-700"
+                        : datasetInfo.task === "Regression"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-purple-100 text-purple-700"
+                    }`}
+                  >
+                    {datasetInfo.task}
+                  </span>
+                </div>
+                <div className="p-4 space-y-3">
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    {datasetInfo.description}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-slate-50 rounded-lg border border-slate-200/60 px-3 py-2">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Rows
+                      </div>
+                      <div className="text-lg font-bold text-slate-900">
+                        {datasetInfo.rows}
+                      </div>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg border border-slate-200/60 px-3 py-2">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Columns
+                      </div>
+                      <div className="text-lg font-bold text-slate-900">
+                        {datasetInfo.cols}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
 
       case "table_view":
         return (

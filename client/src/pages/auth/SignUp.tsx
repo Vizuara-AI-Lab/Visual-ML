@@ -13,6 +13,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import axiosInstance from "../../lib/axios";
 import { useNavigate } from "react-router";
+import Navbar from "../../landingpage/Navbar";
 
 interface PasswordRequirement {
   label: string;
@@ -218,7 +219,8 @@ const SignUp: React.FC = () => {
   const passwordStrength = getPasswordStrength();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 pt-24 pb-12">
+      <Navbar variant="auth-signup" />
       {/* Background Pattern */}
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-40" />

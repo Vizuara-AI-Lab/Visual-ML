@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowRight, Code2 } from "lucide-react";
+import { ArrowRight, Code2, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router";
 import WorkflowCanvas from "./WorkflowCanvas";
@@ -9,12 +9,38 @@ const Hero: React.FC = () => {
 
   return (
     <section className="relative min-h-screen bg-white overflow-hidden">
+      {/* Grid pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000_70%,transparent_110%)]" />
+
+      {/* Gradient orbs */}
+      <div className="absolute top-20 left-1/4 w-96 h-96 bg-linear-to-br from-blue-400/10 to-violet-400/10 rounded-full blur-3xl animate-pulse" />
+      <div
+        className="absolute top-40 right-1/4 w-80 h-80 bg-linear-to-br from-violet-400/10 to-pink-400/10 rounded-full blur-3xl animate-pulse"
+        style={{ animationDelay: "1.5s" }}
+      />
 
       <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
         <div className="pt-32 pb-20 lg:pt-40 lg:pb-28">
           {/* Main Content */}
           <div className="max-w-4xl mx-auto text-center space-y-8">
+            {/* Badge */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.05 }}
+              className="flex justify-center"
+            >
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100/80 backdrop-blur-sm rounded-full border border-slate-200/60">
+                <Sparkles className="w-4 h-4 text-slate-600" />
+                <span className="text-sm font-medium text-slate-600">
+                  Now with GenAI Integration
+                </span>
+                <span className="px-2 py-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-100 rounded-full border border-emerald-200">
+                  New
+                </span>
+              </div>
+            </motion.div>
+
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -22,7 +48,7 @@ const Hero: React.FC = () => {
               className="space-y-6"
             >
               <h1 className="text-6xl lg:text-7xl xl:text-8xl font-bold tracking-tight">
-                <span className="block bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+                <span className="block bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
                   Machine Learning
                 </span>
                 <span className="block mt-2 bg-linear-to-r from-slate-400 via-slate-300 to-slate-400 bg-clip-text text-transparent">

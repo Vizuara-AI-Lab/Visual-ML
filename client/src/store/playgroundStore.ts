@@ -4,7 +4,12 @@
 
 import { create } from "zustand";
 import { type Node, type Edge } from "@xyflow/react";
-import type { BaseNodeData, NodeExecutionStatus } from "../types/pipeline";
+import type {
+  BaseNodeData,
+  NodeExecutionStatus,
+  ExecutionLogEntry,
+} from "../types/pipeline";
+import { getNodeByType } from "../config/nodeDefinitions";
 
 export interface DatasetMetadata {
   dataset_id: string;
@@ -74,6 +79,7 @@ interface PlaygroundStore {
   setAllNodesPending: (nodeIds: string[]) => void;
   clearExecutionStatus: () => void;
   animateEdgesForNode: (nodeId: string) => void;
+  addNodeResult: (nodeId: string, result: { success: boolean; output?: unknown; error?: string }) => void;
 
   // Project state
   currentProjectId: string | null;
@@ -90,6 +96,11 @@ interface PlaygroundStore {
     datasetMetadata: any;
     executionResult: any;
   };
+
+  // Execution logs for results drawer timeline
+  executionLogs: ExecutionLogEntry[];
+  addExecutionLog: (entry: ExecutionLogEntry) => void;
+  clearExecutionLogs: () => void;
 
   // Utility methods
   getNodeById: (nodeId: string) => Node<BaseNodeData> | undefined;
@@ -109,6 +120,7 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
   executionResults: null,
   nodeExecutionStatus: {},
   currentProjectId: null,
+  executionLogs: [],
 
   // Node actions
   setNodes: (nodesOrUpdater) =>
@@ -177,6 +189,13 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
   setExecutionResult: (result) => set({ executionResult: result }),
   setExecutionResults: (results) => set({ executionResults: results }),
 
+  // Execution logs
+  addExecutionLog: (entry) =>
+    set((state) => ({
+      executionLogs: [...state.executionLogs, entry],
+    })),
+  clearExecutionLogs: () => set({ executionLogs: [] }),
+
   // Real-time execution status
   setNodeExecutionStatus: (nodeId, status) =>
     set((state) => ({
@@ -197,6 +216,17 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
     set({
       nodeExecutionStatus: {},
     }),
+
+  addNodeResult: (nodeId, result) =>
+    set((state) => ({
+      executionResult: {
+        ...(state.executionResult || { success: true, timestamp: new Date().toISOString() }),
+        nodeResults: {
+          ...(state.executionResult?.nodeResults || {}),
+          [nodeId]: result,
+        },
+      },
+    })),
 
   animateEdgesForNode: (nodeId) =>
     set((state) => {
@@ -249,13 +279,37 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
   // Project state
   setCurrentProjectId: (id) => set({ currentProjectId: id }),
 
-  loadProjectState: (state) =>
+  loadProjectState: (state) => {
+    // Enrich loaded nodes with icon/color/type from nodeDefinitions.
+    // The backend doesn't persist React components (icon) or color,
+    // so we reconstruct them from the node's top-level `type` field.
+    const enrichedNodes = (Array.isArray(state.nodes) ? state.nodes : []).map(
+      (node: Node<BaseNodeData>) => {
+        const nodeType = node.data?.type || node.type;
+        const nodeDef = nodeType ? getNodeByType(nodeType) : null;
+        if (nodeDef) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              type: node.data?.type || nodeDef.type,
+              color: node.data?.color || nodeDef.color,
+              icon: node.data?.icon || nodeDef.icon,
+              label: node.data?.label || nodeDef.label,
+            },
+          };
+        }
+        return node;
+      }
+    );
+
     set({
-      nodes: Array.isArray(state.nodes) ? state.nodes : [],
+      nodes: enrichedNodes,
       edges: Array.isArray(state.edges) ? state.edges : [],
       datasetMetadata: state.datasetMetadata || null,
       executionResult: state.executionResult || null,
-    }),
+    });
+  },
 
   getProjectState: () => {
     const state = get();
@@ -310,6 +364,7 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
       executionResult: null,
       executionResults: null,
       nodeExecutionStatus: {},
+      executionLogs: [],
     }),
 
   // Clear
@@ -320,5 +375,6 @@ export const usePlaygroundStore = create<PlaygroundStore>((set, get) => ({
       selectedNodeId: null,
       executionResults: null,
       nodeExecutionStatus: {},
+      executionLogs: [],
     }),
 }));

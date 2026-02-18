@@ -3,6 +3,7 @@ ML Pipeline Engine - Orchestrates node execution and manages pipelines.
 DAG-based execution with dynamic node registration.
 """
 
+import asyncio
 from typing import Dict, Any, List, Optional, Set, Tuple, Type, Callable
 from datetime import datetime
 from collections import defaultdict, deque
@@ -54,6 +55,7 @@ class MLPipelineEngine:
         """
         from app.ml.nodes.upload import UploadFileNode
         from app.ml.nodes.select import SelectDatasetNode
+        from app.ml.nodes.sample_dataset import SampleDatasetNode
         from app.ml.nodes.clean import PreprocessNode
         from app.ml.nodes.missing_value_handler import MissingValueHandlerNode
         from app.ml.nodes.encoding import EncodingNode
@@ -84,6 +86,7 @@ class MLPipelineEngine:
         nodes_to_register = {
             "upload_file": UploadFileNode,
             "select_dataset": SelectDatasetNode,
+            "sample_dataset": SampleDatasetNode,
             "preprocess": PreprocessNode,
             "missing_value_handler": MissingValueHandlerNode,
             "encoding": EncodingNode,
@@ -467,6 +470,9 @@ class MLPipelineEngine:
                         "label": node_label,
                     }
                 )
+                # Yield to event loop so SSE generator can send the event before
+                # CPU-bound node execution blocks the loop
+                await asyncio.sleep(0)
 
             # Execute node
             try:
@@ -486,7 +492,7 @@ class MLPipelineEngine:
 
                 logger.info(f"Node {node_id} ({node_type}) executed successfully")
 
-                # Notify node completed
+                # Notify node completed (include result so client can display incrementally)
                 if progress_callback:
                     await progress_callback(
                         {
@@ -495,8 +501,11 @@ class MLPipelineEngine:
                             "node_type": node_type,
                             "label": node_label,
                             "success": True,
+                            "result": result,
                         }
                     )
+                    # Yield to event loop so SSE generator can send the event
+                    await asyncio.sleep(0)
 
             except Exception as e:
                 logger.error(f"Node {node_id} ({node_type}) execution failed: {str(e)}")
@@ -520,6 +529,8 @@ class MLPipelineEngine:
                             "error": str(e),
                         }
                     )
+                    # Yield to event loop so SSE generator can send the event
+                    await asyncio.sleep(0)
 
                 # Stop execution on error
                 raise

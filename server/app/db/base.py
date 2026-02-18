@@ -17,5 +17,6 @@ from app.models.genai import (
     APISecret,
     ConversationMemory,
 )
+from app.models.custom_app import CustomApp
 
-__all__ = ["Base", "Student", "Admin", "RefreshToken", "Dataset"]
+__all__ = ["Base", "Student", "Admin", "RefreshToken", "Dataset", "CustomApp"]

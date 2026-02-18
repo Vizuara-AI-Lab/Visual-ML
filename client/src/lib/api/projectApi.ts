@@ -16,6 +16,8 @@ export interface ProjectListItem {
   description?: string;
   createdAt: string;
   updatedAt: string;
+  is_public?: boolean;
+  share_token?: string;
 }
 
 export interface ProjectState {
