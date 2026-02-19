@@ -164,7 +164,8 @@ const Profile: React.FC = () => {
       if (existingUser) {
         const userData = JSON.parse(existingUser);
         userData.profilePic = response.data.profilePic || formData.profilePic;
-        userData.collegeOrSchool = response.data.collegeOrSchool || formData.collegeOrSchool;
+        userData.collegeOrSchool =
+          response.data.collegeOrSchool || formData.collegeOrSchool;
         userData.fullName = response.data.fullName || userData.fullName;
         localStorage.setItem("user", JSON.stringify(userData));
       }
@@ -216,7 +217,7 @@ const Profile: React.FC = () => {
 
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl lg:text-4xl font-bold bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+              <h1 className="text-3xl lg:text-4xl font-bold bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
                 My Profile
               </h1>
               <p className="text-slate-600 mt-2">

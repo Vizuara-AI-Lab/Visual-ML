@@ -101,7 +101,7 @@ const Features: React.FC = () => {
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-4xl lg:text-5xl font-bold bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
+          <h2 className="text-4xl lg:text-5xl font-bold bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
             Everything you need to ship ML products
           </h2>
           <p className="text-xl text-slate-600 max-w-2xl mx-auto font-light">
@@ -155,7 +155,7 @@ const Features: React.FC = () => {
                       transition={{ duration: 0.3, delay: index * 0.1 }}
                       className="flex items-center gap-3"
                     >
-                      <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center flex-shrink-0">
+                      <div className="w-6 h-6 rounded-lg bg-linear-to-br from-slate-900 to-slate-700 flex items-center justify-center flex-shrink-0">
                         <svg
                           className="w-4 h-4 text-white"
                           fill="none"
@@ -203,7 +203,7 @@ const Features: React.FC = () => {
                     <div
                       className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-500 ${
                         activeSection === index
-                          ? "bg-gradient-to-br from-slate-900 to-slate-700 shadow-lg shadow-slate-900/25"
+                          ? "bg-linear-to-br from-slate-900 to-slate-700 shadow-lg shadow-slate-900/25"
                           : "bg-slate-100"
                       }`}
                     >

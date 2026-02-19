@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { Download, Copy, ChevronDown, ChevronRight, Search } from "lucide-react";
+import {
+  Download,
+  Copy,
+  ChevronDown,
+  ChevronRight,
+  Search,
+} from "lucide-react";
 
 // Feature Engineering Results Component
 export function FeatureEngineeringResults({
@@ -86,7 +92,7 @@ export function FeatureEngineeringResults({
       {/* Compact Summary Cards */}
       <div className="grid grid-cols-2 gap-4">
         {/* Stats Card */}
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4">
+        <div className="bg-linear-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4">
           <h3 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
             📊 Column Statistics
           </h3>
@@ -119,7 +125,7 @@ export function FeatureEngineeringResults({
         </div>
 
         {/* Output Dataset Card */}
-        <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-4">
+        <div className="bg-linear-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-4">
           <h3 className="text-sm font-semibold text-green-900 mb-3 flex items-center gap-2">
             ✅ Output Dataset
           </h3>
@@ -282,7 +288,7 @@ export function FeatureEngineeringResults({
         result.selected_feature_names.length > 0 && (
           <div className="space-y-4">
             {/* Method Summary Card */}
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-4">
+            <div className="bg-linear-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-purple-900 mb-3 flex items-center gap-2">
                 🎯 Selection Method
               </h3>

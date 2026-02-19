@@ -123,18 +123,40 @@ const ERROR_METRIC_KEYS = new Set(["mse", "rmse", "mae"]);
 
 function getMetricInterpretation(
   key: string,
-  value: number
+  value: number,
 ): { label: string; color: string; bgColor: string } {
   const isError = ERROR_METRIC_KEYS.has(key.toLowerCase());
   if (isError) {
-    if (value <= 0.01) return { label: "Excellent", color: "text-green-700", bgColor: "bg-green-100" };
-    if (value <= 0.1) return { label: "Good", color: "text-blue-700", bgColor: "bg-blue-100" };
-    if (value <= 0.5) return { label: "Moderate", color: "text-yellow-700", bgColor: "bg-yellow-100" };
+    if (value <= 0.01)
+      return {
+        label: "Excellent",
+        color: "text-green-700",
+        bgColor: "bg-green-100",
+      };
+    if (value <= 0.1)
+      return { label: "Good", color: "text-blue-700", bgColor: "bg-blue-100" };
+    if (value <= 0.5)
+      return {
+        label: "Moderate",
+        color: "text-yellow-700",
+        bgColor: "bg-yellow-100",
+      };
     return { label: "Poor", color: "text-red-700", bgColor: "bg-red-100" };
   }
-  if (value >= 0.9) return { label: "Excellent", color: "text-green-700", bgColor: "bg-green-100" };
-  if (value >= 0.7) return { label: "Good", color: "text-blue-700", bgColor: "bg-blue-100" };
-  if (value >= 0.5) return { label: "Moderate", color: "text-yellow-700", bgColor: "bg-yellow-100" };
+  if (value >= 0.9)
+    return {
+      label: "Excellent",
+      color: "text-green-700",
+      bgColor: "bg-green-100",
+    };
+  if (value >= 0.7)
+    return { label: "Good", color: "text-blue-700", bgColor: "bg-blue-100" };
+  if (value >= 0.5)
+    return {
+      label: "Moderate",
+      color: "text-yellow-700",
+      bgColor: "bg-yellow-100",
+    };
   return { label: "Poor", color: "text-red-700", bgColor: "bg-red-100" };
 }
 
@@ -159,11 +181,30 @@ function getProgressBarWidth(key: string, value: number): number {
   return Math.max(0, Math.min(100, value * 100));
 }
 
-const METRIC_INFO: Record<string, { label: string; description: string; icon: any }> = {
-  r2: { label: "R² Score", description: "How well predictions match reality (0–1, higher is better)", icon: TrendingUp },
-  mae: { label: "MAE", description: "Average prediction error in original units", icon: Target },
-  mse: { label: "MSE", description: "Average squared error (penalizes large errors)", icon: Activity },
-  rmse: { label: "RMSE", description: "Square root of MSE (same units as target)", icon: BarChart3 },
+const METRIC_INFO: Record<
+  string,
+  { label: string; description: string; icon: any }
+> = {
+  r2: {
+    label: "R² Score",
+    description: "How well predictions match reality (0–1, higher is better)",
+    icon: TrendingUp,
+  },
+  mae: {
+    label: "MAE",
+    description: "Average prediction error in original units",
+    icon: Target,
+  },
+  mse: {
+    label: "MSE",
+    description: "Average squared error (penalizes large errors)",
+    icon: Activity,
+  },
+  rmse: {
+    label: "RMSE",
+    description: "Square root of MSE (same units as target)",
+    icon: BarChart3,
+  },
 };
 
 // --- Results Tab ---
@@ -181,8 +222,11 @@ function ResultsTab({ result }: { result: any }) {
 
   // Build coefficient list from result.coefficients (list) + metadata.feature_names
   const featureNames: string[] = result.metadata?.feature_names || [];
-  const coefficients: number[] = Array.isArray(result.coefficients) ? result.coefficients : [];
-  const maxAbsCoef = coefficients.length > 0 ? Math.max(...coefficients.map(Math.abs)) : 1;
+  const coefficients: number[] = Array.isArray(result.coefficients)
+    ? result.coefficients
+    : [];
+  const maxAbsCoef =
+    coefficients.length > 0 ? Math.max(...coefficients.map(Math.abs)) : 1;
 
   return (
     <div className="space-y-4">
@@ -197,7 +241,8 @@ function ResultsTab({ result }: { result: any }) {
               Linear Regression Training Complete
             </h3>
             <p className="text-xs text-emerald-700">
-              Model trained on {result.training_samples?.toLocaleString()} samples with {result.n_features} features
+              Model trained on {result.training_samples?.toLocaleString()}{" "}
+              samples with {result.n_features} features
             </p>
           </div>
         </div>
@@ -205,7 +250,7 @@ function ResultsTab({ result }: { result: any }) {
 
       {/* Hero R² Card */}
       {r2 !== null && (
-        <div className="bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200 rounded-lg p-6">
+        <div className="bg-linear-to-br from-emerald-50 to-green-50 border border-emerald-200 rounded-lg p-6">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs text-emerald-600 uppercase tracking-wide font-medium mb-1">
@@ -215,27 +260,43 @@ function ResultsTab({ result }: { result: any }) {
                 {r2.toFixed(4)}
               </div>
               <p className="text-sm text-emerald-600 mt-1">
-                Your model explains <strong>{r2Pct}%</strong> of the variance in the target
+                Your model explains <strong>{r2Pct}%</strong> of the variance in
+                the target
               </p>
             </div>
             <div className="flex flex-col items-center gap-2">
               {/* Progress ring */}
               <div className="relative w-20 h-20">
                 <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
-                  <circle cx="40" cy="40" r="34" fill="none" stroke="#d1fae5" strokeWidth="8" />
                   <circle
-                    cx="40" cy="40" r="34" fill="none"
-                    stroke="#059669" strokeWidth="8"
+                    cx="40"
+                    cy="40"
+                    r="34"
+                    fill="none"
+                    stroke="#d1fae5"
+                    strokeWidth="8"
+                  />
+                  <circle
+                    cx="40"
+                    cy="40"
+                    r="34"
+                    fill="none"
+                    stroke="#059669"
+                    strokeWidth="8"
                     strokeLinecap="round"
                     strokeDasharray={`${(r2 ?? 0) * 213.6} 213.6`}
                   />
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-sm font-bold text-emerald-700">{r2Pct}%</span>
+                  <span className="text-sm font-bold text-emerald-700">
+                    {r2Pct}%
+                  </span>
                 </div>
               </div>
               {r2Interp && (
-                <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${r2Interp.color} ${r2Interp.bgColor}`}>
+                <span
+                  className={`px-2 py-0.5 text-xs font-medium rounded-full ${r2Interp.color} ${r2Interp.bgColor}`}
+                >
                   {r2Interp.label}
                 </span>
               )}
@@ -249,18 +310,28 @@ function ResultsTab({ result }: { result: any }) {
         {[
           { key: "mae", value: mae, label: "MAE", desc: "Mean Absolute Error" },
           { key: "mse", value: mse, label: "MSE", desc: "Mean Squared Error" },
-          { key: "rmse", value: rmse, label: "RMSE", desc: "Root Mean Squared Error" },
+          {
+            key: "rmse",
+            value: rmse,
+            label: "RMSE",
+            desc: "Root Mean Squared Error",
+          },
         ]
           .filter((m) => m.value !== null)
           .map((m) => {
             const interp = getMetricInterpretation(m.key, m.value!);
             return (
-              <div key={m.key} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
+              <div
+                key={m.key}
+                className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
+              >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                     {m.label}
                   </span>
-                  <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${interp.color} ${interp.bgColor}`}>
+                  <span
+                    className={`px-2 py-0.5 text-xs font-medium rounded-full ${interp.color} ${interp.bgColor}`}
+                  >
                     {interp.label}
                   </span>
                 </div>
@@ -271,7 +342,9 @@ function ResultsTab({ result }: { result: any }) {
                 <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${getProgressBarColor(m.key, m.value!)}`}
-                    style={{ width: `${getProgressBarWidth(m.key, m.value!)}%` }}
+                    style={{
+                      width: `${getProgressBarWidth(m.key, m.value!)}%`,
+                    }}
                   />
                 </div>
               </div>
@@ -283,18 +356,24 @@ function ResultsTab({ result }: { result: any }) {
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
           <Database className="w-4 h-4 text-gray-400 mx-auto mb-1" />
-          <div className="text-lg font-semibold text-gray-900">{result.training_samples?.toLocaleString()}</div>
+          <div className="text-lg font-semibold text-gray-900">
+            {result.training_samples?.toLocaleString()}
+          </div>
           <div className="text-xs text-gray-500">Training Samples</div>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
           <Hash className="w-4 h-4 text-gray-400 mx-auto mb-1" />
-          <div className="text-lg font-semibold text-gray-900">{result.n_features}</div>
+          <div className="text-lg font-semibold text-gray-900">
+            {result.n_features}
+          </div>
           <div className="text-xs text-gray-500">Features</div>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
           <Timer className="w-4 h-4 text-gray-400 mx-auto mb-1" />
           <div className="text-lg font-semibold text-gray-900">
-            {result.training_time_seconds !== undefined ? `${result.training_time_seconds.toFixed(2)}s` : "N/A"}
+            {result.training_time_seconds !== undefined
+              ? `${result.training_time_seconds.toFixed(2)}s`
+              : "N/A"}
           </div>
           <div className="text-xs text-gray-500">Training Time</div>
         </div>
@@ -306,8 +385,12 @@ function ResultsTab({ result }: { result: any }) {
           onClick={() => setShowGuide(!showGuide)}
           className="w-full flex items-center justify-between p-3 hover:bg-gray-50 transition-colors"
         >
-          <span className="text-sm font-medium text-gray-700">Understanding Your Metrics</span>
-          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showGuide ? "rotate-180" : ""}`} />
+          <span className="text-sm font-medium text-gray-700">
+            Understanding Your Metrics
+          </span>
+          <ChevronDown
+            className={`w-4 h-4 text-gray-400 transition-transform ${showGuide ? "rotate-180" : ""}`}
+          />
         </button>
         {showGuide && (
           <div className="border-t border-gray-200 p-4 space-y-3">
@@ -321,8 +404,12 @@ function ResultsTab({ result }: { result: any }) {
                     <Icon className="w-4 h-4 text-emerald-600" />
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-gray-800">{info.label}</div>
-                    <div className="text-xs text-gray-500">{info.description}</div>
+                    <div className="text-sm font-medium text-gray-800">
+                      {info.label}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {info.description}
+                    </div>
                   </div>
                 </div>
               );
@@ -334,19 +421,29 @@ function ResultsTab({ result }: { result: any }) {
       {/* Coefficients Summary */}
       {coefficients.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">Top Feature Coefficients</h4>
+          <h4 className="text-sm font-semibold text-gray-900 mb-3">
+            Top Feature Coefficients
+          </h4>
           <div className="space-y-2">
             <div className="flex justify-between items-center p-2 bg-emerald-50 rounded">
-              <span className="text-sm font-medium text-gray-700">Intercept</span>
+              <span className="text-sm font-medium text-gray-700">
+                Intercept
+              </span>
               <span className="text-sm font-mono text-emerald-700">
-                {typeof result.intercept === "number" ? result.intercept.toFixed(4) : result.intercept}
+                {typeof result.intercept === "number"
+                  ? result.intercept.toFixed(4)
+                  : result.intercept}
               </span>
             </div>
             {coefficients.slice(0, 8).map((coef: number, idx: number) => {
               const name = featureNames[idx] || `Feature ${idx}`;
-              const barWidth = maxAbsCoef > 0 ? (Math.abs(coef) / maxAbsCoef) * 100 : 0;
+              const barWidth =
+                maxAbsCoef > 0 ? (Math.abs(coef) / maxAbsCoef) * 100 : 0;
               return (
-                <div key={idx} className="p-2 border-b border-gray-100 last:border-0">
+                <div
+                  key={idx}
+                  className="p-2 border-b border-gray-100 last:border-0"
+                >
                   <div className="flex justify-between items-center mb-1">
                     <div className="flex items-center gap-1.5">
                       {coef >= 0 ? (
@@ -357,7 +454,8 @@ function ResultsTab({ result }: { result: any }) {
                       <span className="text-sm text-gray-700">{name}</span>
                     </div>
                     <span className="text-xs font-mono text-gray-600">
-                      {coef >= 0 ? "+" : ""}{coef.toFixed(4)}
+                      {coef >= 0 ? "+" : ""}
+                      {coef.toFixed(4)}
                     </span>
                   </div>
                   <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -371,7 +469,8 @@ function ResultsTab({ result }: { result: any }) {
             })}
             {coefficients.length > 8 && (
               <p className="text-xs text-gray-500 mt-1 pl-2">
-                + {coefficients.length - 8} more features (see Coefficient Explorer tab)
+                + {coefficients.length - 8} more features (see Coefficient
+                Explorer tab)
               </p>
             )}
           </div>
@@ -381,8 +480,12 @@ function ResultsTab({ result }: { result: any }) {
       {/* Model ID */}
       {result.model_id && (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Model ID</div>
-          <code className="text-xs font-mono text-gray-700 break-all">{result.model_id}</code>
+          <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
+            Model ID
+          </div>
+          <code className="text-xs font-mono text-gray-700 break-all">
+            {result.model_id}
+          </code>
         </div>
       )}
     </div>
@@ -397,7 +500,8 @@ function CoefficientTab({ data }: { data: any }) {
 
   const sorted = useMemo(() => {
     const copy = [...features];
-    if (sortBy === "name") copy.sort((a: any, b: any) => a.name.localeCompare(b.name));
+    if (sortBy === "name")
+      copy.sort((a: any, b: any) => a.name.localeCompare(b.name));
     return copy;
   }, [features, sortBy]);
 
@@ -569,13 +673,15 @@ function PredictionPlaygroundTab({ data }: { data: any }) {
   const features = data.features || [];
   const intercept = data.intercept || 0;
 
-  const [sliderValues, setSliderValues] = useState<Record<string, number>>(() => {
-    const initial: Record<string, number> = {};
-    features.forEach((f: any) => {
-      initial[f.name] = f.mean;
-    });
-    return initial;
-  });
+  const [sliderValues, setSliderValues] = useState<Record<string, number>>(
+    () => {
+      const initial: Record<string, number> = {};
+      features.forEach((f: any) => {
+        initial[f.name] = f.mean;
+      });
+      return initial;
+    },
+  );
 
   const prediction = useMemo(() => {
     let pred = intercept;
@@ -610,7 +716,9 @@ function PredictionPlaygroundTab({ data }: { data: any }) {
         <div className="text-xs uppercase tracking-wide opacity-80 mb-1">
           Predicted Value
         </div>
-        <div className="text-4xl font-bold font-mono">{prediction.toFixed(4)}</div>
+        <div className="text-4xl font-bold font-mono">
+          {prediction.toFixed(4)}
+        </div>
         <div className="text-xs mt-2 opacity-70">
           Intercept ({intercept}) + weighted feature sums
         </div>
@@ -687,7 +795,7 @@ function QuizTab({ questions }: { questions: any[] }) {
   const [answered, setAnswered] = useState(false);
   const [score, setScore] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>(
-    new Array(questions.length).fill(null)
+    new Array(questions.length).fill(null),
   );
   const [showResults, setShowResults] = useState(false);
 
@@ -778,9 +886,7 @@ function QuizTab({ questions }: { questions: any[] }) {
                 }`}
               >
                 Your answer: {q.options[answers[qi] ?? 0]}{" "}
-                {answers[qi] === q.correct_answer
-                  ? "(Correct)"
-                  : "(Incorrect)"}
+                {answers[qi] === q.correct_answer ? "(Correct)" : "(Incorrect)"}
               </p>
               <p className="text-xs text-blue-700 mt-1">{q.explanation}</p>
             </div>

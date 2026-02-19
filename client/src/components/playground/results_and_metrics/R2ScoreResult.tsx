@@ -15,7 +15,7 @@ export function R2ScoreResult({ result }: R2ScoreProps) {
   return (
     <div className="space-y-6">
       {/* R² Score Display */}
-      <div className="bg-gradient-to-br from-green-50 to-blue-50 border-2 border-green-300 rounded-xl p-8 text-center">
+      <div className="bg-linear-to-br from-green-50 to-blue-50 border-2 border-green-300 rounded-xl p-8 text-center">
         <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
           R² Score (Coefficient of Determination)
         </h3>

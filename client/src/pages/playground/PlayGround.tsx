@@ -27,6 +27,159 @@ import {
   useMentorStore,
   type MentorAction,
 } from "../../features/mentor/store/mentorStore";
+import {
+  Settings,
+  ArrowLeft,
+  BrainCircuit,
+  GitBranch,
+  BarChart3,
+  Database,
+  Layers,
+} from "lucide-react";
+
+// ─── Skeleton Loading Component ─────────────────────────────────
+
+function PlaygroundSkeleton({ projectName }: { projectName?: string }) {
+  return (
+    <div className="h-screen flex flex-col bg-gray-950 overflow-hidden">
+      {/* Toolbar skeleton */}
+      <div className="h-16 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 flex items-center justify-between px-6 shadow-lg shadow-slate-900/5">
+        <div className="flex items-center gap-3">
+          <div className="p-2 text-slate-300">
+            <ArrowLeft className="w-5 h-5" />
+          </div>
+          <div className="flex items-center gap-3 mr-6">
+            <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg shadow-slate-900/25">
+              <Settings className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-slate-800">
+                {projectName || "Loading project…"}
+              </h1>
+              <p className="text-xs text-slate-500">Visual Pipeline Builder</p>
+            </div>
+          </div>
+          <div className="h-10 w-px bg-slate-200/60" />
+          <div className="ml-3 w-36 h-10 bg-slate-200 rounded-lg animate-pulse" />
+        </div>
+        <div className="flex items-center gap-2">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="w-20 h-9 bg-slate-100 rounded-lg animate-pulse" />
+          ))}
+        </div>
+      </div>
+
+      {/* Main content skeleton */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sidebar skeleton */}
+        <div className="w-64 bg-gray-950 border-r border-slate-800 p-4 flex flex-col gap-4">
+          <div className="h-10 bg-slate-800/60 rounded-lg animate-pulse" />
+          <div className="space-y-2">
+            <div className="h-3 w-20 bg-slate-700/40 rounded animate-pulse" />
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-10 bg-slate-800/40 rounded-lg animate-pulse"
+                style={{ animationDelay: `${i * 150}ms` }}
+              />
+            ))}
+          </div>
+          <div className="space-y-2 mt-2">
+            <div className="h-3 w-24 bg-slate-700/40 rounded animate-pulse" />
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="h-10 bg-slate-800/40 rounded-lg animate-pulse"
+                style={{ animationDelay: `${(i + 3) * 150}ms` }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Canvas skeleton — animated pipeline illustration */}
+        <div className="flex-1 bg-gray-950 relative flex items-center justify-center">
+          {/* Grid dots background */}
+          <div
+            className="absolute inset-0 opacity-20"
+            style={{
+              backgroundImage: "radial-gradient(circle, #475569 1px, transparent 1px)",
+              backgroundSize: "24px 24px",
+            }}
+          />
+
+          {/* Animated loading content */}
+          <div className="relative z-10 flex flex-col items-center">
+            {/* Pipeline illustration */}
+            <div className="flex items-center gap-3 mb-8">
+              {[
+                { icon: Database, color: "#3b82f6", label: "Data" },
+                { icon: Layers, color: "#f59e0b", label: "Process" },
+                { icon: GitBranch, color: "#06b6d4", label: "Split" },
+                { icon: BrainCircuit, color: "#8b5cf6", label: "Model" },
+                { icon: BarChart3, color: "#10b981", label: "Evaluate" },
+              ].map((step, idx) => {
+                const Icon = step.icon;
+                return (
+                  <div key={step.label} className="flex items-center gap-3">
+                    <div className="flex flex-col items-center">
+                      <div
+                        className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg animate-pulse"
+                        style={{
+                          backgroundColor: `${step.color}20`,
+                          border: `2px solid ${step.color}40`,
+                          animationDelay: `${idx * 200}ms`,
+                        }}
+                      >
+                        <Icon className="w-6 h-6" style={{ color: step.color }} />
+                      </div>
+                      <span className="text-[10px] text-slate-500 mt-1.5 font-medium">{step.label}</span>
+                    </div>
+                    {idx < 4 && (
+                      <div className="flex gap-1 -mt-4">
+                        {[0, 1, 2].map((dot) => (
+                          <div
+                            key={dot}
+                            className="w-1.5 h-1.5 rounded-full bg-slate-600 animate-pulse"
+                            style={{ animationDelay: `${idx * 200 + dot * 100}ms` }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Loading text */}
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm font-medium text-slate-400">Loading your pipeline…</p>
+              </div>
+              <p className="text-xs text-slate-600">Setting up workspace and restoring your progress</p>
+            </div>
+
+            {/* Progress shimmer bar */}
+            <div className="mt-6 w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full w-2/5 bg-gradient-to-r from-indigo-600 via-purple-500 to-indigo-600 rounded-full skeleton-shimmer" />
+            </div>
+          </div>
+
+          <style>{`
+            @keyframes skeletonShimmer {
+              0% { transform: translateX(-100%); }
+              50% { transform: translateX(200%); }
+              100% { transform: translateX(-100%); }
+            }
+            .skeleton-shimmer { animation: skeletonShimmer 1.8s ease-in-out infinite; }
+          `}</style>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ─────────────────────────────────────────────
 
 export default function PlayGround() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -117,13 +270,15 @@ export default function PlayGround() {
   };
 
   // Load project state if projectId exists
-  const { data: projectStateData } = useProjectState(projectId);
-  const { data: projectData } = useQuery({
+  const { data: projectStateData, isLoading: isStateLoading } = useProjectState(projectId);
+  const { data: projectData, isLoading: isProjectLoading } = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => getProjectById(projectId!),
     enabled: !!projectId,
   });
   const saveProject = useSaveProject();
+
+  const isPageLoading = isStateLoading || isProjectLoading;
 
   // Set current project ID and load state
   useEffect(() => {
@@ -621,6 +776,11 @@ export default function PlayGround() {
   const handleExecutePipeline = () => {
     handleExecute();
   };
+
+  // Show skeleton while initial data is loading
+  if (isPageLoading) {
+    return <PlaygroundSkeleton projectName={projectData?.name} />;
+  }
 
   return (
     <div className="h-screen flex flex-col bg-gray-950">

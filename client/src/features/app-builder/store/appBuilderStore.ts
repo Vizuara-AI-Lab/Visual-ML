@@ -4,7 +4,7 @@
  */
 
 import { create } from "zustand";
-import type { AppBlock, AppTheme, BlockType } from "../types/appBuilder";
+import type { AppBlock, AppTheme, BlockType, BlockStyleConfig } from "../types/appBuilder";
 import { getDefaultConfig } from "../config/blockDefinitions";
 
 interface AppBuilderState {
@@ -19,6 +19,7 @@ interface AppBuilderState {
   setBlocks: (blocks: AppBlock[]) => void;
   addBlock: (type: BlockType) => void;
   updateBlock: (id: string, config: Partial<AppBlock["config"]>) => void;
+  updateBlockStyle: (id: string, style: Partial<BlockStyleConfig>) => void;
   removeBlock: (id: string) => void;
   moveBlock: (id: string, direction: "up" | "down") => void;
   selectBlock: (id: string | null) => void;
@@ -76,6 +77,18 @@ export const useAppBuilderStore = create<AppBuilderState>()((set, get) => ({
     set({
       blocks: blocks.map((b) =>
         b.id === id ? { ...b, config: { ...b.config, ...config } } : b
+      ),
+      isDirty: true,
+    });
+  },
+
+  updateBlockStyle: (id, style) => {
+    const { blocks } = get();
+    set({
+      blocks: blocks.map((b) =>
+        b.id === id
+          ? { ...b, style: { ...(b.style || {}), ...style } }
+          : b
       ),
       isDirty: true,
     });

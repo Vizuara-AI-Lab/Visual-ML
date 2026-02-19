@@ -3,6 +3,7 @@
  * Renders different form fields based on block type.
  */
 
+import { useState } from "react";
 import { useAppBuilderStore } from "../store/appBuilderStore";
 import { getBlockDefinition } from "../config/blockDefinitions";
 import type {
@@ -16,10 +17,24 @@ import type {
   MetricsCardConfig,
   DividerConfig,
   ImageConfig,
+  SpacerConfig,
+  AlertConfig,
+  CodeConfig,
+  VideoEmbedConfig,
+  BlockStyleConfig,
   InputField,
   MetricItem,
 } from "../types/appBuilder";
-import { Plus, Trash2, Link } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Link,
+  MousePointerClick,
+  Settings2,
+  ChevronDown,
+  Upload,
+  X,
+} from "lucide-react";
 
 interface BlockEditorProps {
   block: AppBlock | null;
@@ -30,9 +45,15 @@ export default function BlockEditor({ block }: BlockEditorProps) {
 
   if (!block) {
     return (
-      <div className="p-6 flex items-center justify-center h-full">
-        <p className="text-sm text-gray-400 text-center">
-          Select a block to edit its properties
+      <div className="flex flex-col items-center justify-center h-full p-6">
+        <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-indigo-50 to-violet-50 border border-indigo-100 flex items-center justify-center mb-4">
+          <MousePointerClick className="h-7 w-7 text-indigo-300" />
+        </div>
+        <p className="text-sm font-semibold text-gray-600 mb-1">
+          No block selected
+        </p>
+        <p className="text-xs text-gray-400 text-center leading-relaxed max-w-[180px]">
+          Click a block on the canvas to edit its properties here.
         </p>
       </div>
     );
@@ -46,11 +67,16 @@ export default function BlockEditor({ block }: BlockEditorProps) {
 
   return (
     <div className="p-4 space-y-4">
-      <div className="pb-3 border-b">
-        <h2 className="text-sm font-semibold text-gray-700">
-          {def?.label ?? block.type}
-        </h2>
-        <p className="text-xs text-gray-400">{def?.description}</p>
+      <div className="bg-gradient-to-r from-indigo-50/80 to-violet-50/50 rounded-lg px-3 py-3 border border-indigo-100/60">
+        <div className="flex items-center gap-2 mb-0.5">
+          <div className="w-6 h-6 rounded-md bg-white/80 flex items-center justify-center shadow-sm">
+            <Settings2 className="h-3.5 w-3.5 text-indigo-500" />
+          </div>
+          <h2 className="text-sm font-semibold text-gray-800">
+            {def?.label ?? block.type}
+          </h2>
+        </div>
+        <p className="text-[11px] text-gray-500 ml-8">{def?.description}</p>
       </div>
 
       {block.nodeLabel && (
@@ -65,15 +91,65 @@ export default function BlockEditor({ block }: BlockEditorProps) {
         </div>
       )}
 
-      {block.type === "hero" && <HeroEditor config={block.config as HeroConfig} update={update} />}
-      {block.type === "text" && <TextEditor config={block.config as TextConfig} update={update} />}
-      {block.type === "file_upload" && <FileUploadEditor config={block.config as FileUploadConfig} update={update} />}
-      {block.type === "input_fields" && <InputFieldsEditor config={block.config as InputFieldsConfig} update={update} />}
-      {block.type === "submit_button" && <SubmitButtonEditor config={block.config as SubmitButtonConfig} update={update} />}
-      {block.type === "results_display" && <ResultsDisplayEditor config={block.config as ResultsDisplayConfig} update={update} />}
-      {block.type === "metrics_card" && <MetricsCardEditor config={block.config as MetricsCardConfig} update={update} />}
-      {block.type === "divider" && <DividerEditor config={block.config as DividerConfig} update={update} />}
-      {block.type === "image" && <ImageEditor config={block.config as ImageConfig} update={update} />}
+      {block.type === "hero" && (
+        <HeroEditor config={block.config as HeroConfig} update={update} />
+      )}
+      {block.type === "text" && (
+        <TextEditor config={block.config as TextConfig} update={update} />
+      )}
+      {block.type === "file_upload" && (
+        <FileUploadEditor
+          config={block.config as FileUploadConfig}
+          update={update}
+        />
+      )}
+      {block.type === "input_fields" && (
+        <InputFieldsEditor
+          config={block.config as InputFieldsConfig}
+          update={update}
+        />
+      )}
+      {block.type === "submit_button" && (
+        <SubmitButtonEditor
+          config={block.config as SubmitButtonConfig}
+          update={update}
+        />
+      )}
+      {block.type === "results_display" && (
+        <ResultsDisplayEditor
+          config={block.config as ResultsDisplayConfig}
+          update={update}
+        />
+      )}
+      {block.type === "metrics_card" && (
+        <MetricsCardEditor
+          config={block.config as MetricsCardConfig}
+          update={update}
+        />
+      )}
+      {block.type === "divider" && (
+        <DividerEditor config={block.config as DividerConfig} update={update} />
+      )}
+      {block.type === "image" && (
+        <ImageEditor config={block.config as ImageConfig} update={update} />
+      )}
+      {block.type === "spacer" && (
+        <SpacerEditor config={block.config as SpacerConfig} update={update} />
+      )}
+      {block.type === "alert" && (
+        <AlertEditor config={block.config as AlertConfig} update={update} />
+      )}
+      {block.type === "code" && (
+        <CodeEditor config={block.config as CodeConfig} update={update} />
+      )}
+      {block.type === "video_embed" && (
+        <VideoEmbedEditor
+          config={block.config as VideoEmbedConfig}
+          update={update}
+        />
+      )}
+
+      <BlockStyleEditor block={block} />
     </div>
   );
 }
@@ -81,7 +157,11 @@ export default function BlockEditor({ block }: BlockEditorProps) {
 // ─── Field Helpers ────────────────────────────────────────────────
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <label className="block text-xs font-medium text-gray-500 mb-1">{children}</label>;
+  return (
+    <label className="block text-xs font-medium text-gray-500 mb-1">
+      {children}
+    </label>
+  );
 }
 
 function TextInput({
@@ -158,16 +238,28 @@ function Toggle({
 
 // ─── Per-block Editors ────────────────────────────────────────────
 
-function HeroEditor({ config, update }: { config: HeroConfig; update: (p: Record<string, unknown>) => void }) {
+function HeroEditor({
+  config,
+  update,
+}: {
+  config: HeroConfig;
+  update: (p: Record<string, unknown>) => void;
+}) {
   return (
     <div className="space-y-3">
       <div>
         <Label>Title</Label>
-        <TextInput value={config.title} onChange={(v) => update({ title: v })} />
+        <TextInput
+          value={config.title}
+          onChange={(v) => update({ title: v })}
+        />
       </div>
       <div>
         <Label>Subtitle</Label>
-        <TextInput value={config.subtitle} onChange={(v) => update({ subtitle: v })} />
+        <TextInput
+          value={config.subtitle}
+          onChange={(v) => update({ subtitle: v })}
+        />
       </div>
       <div>
         <Label>Alignment</Label>
@@ -181,12 +273,22 @@ function HeroEditor({ config, update }: { config: HeroConfig; update: (p: Record
           ]}
         />
       </div>
-      <Toggle checked={config.showGradient} onChange={(v) => update({ showGradient: v })} label="Show gradient" />
+      <Toggle
+        checked={config.showGradient}
+        onChange={(v) => update({ showGradient: v })}
+        label="Show gradient"
+      />
     </div>
   );
 }
 
-function TextEditor({ config, update }: { config: TextConfig; update: (p: Record<string, unknown>) => void }) {
+function TextEditor({
+  config,
+  update,
+}: {
+  config: TextConfig;
+  update: (p: Record<string, unknown>) => void;
+}) {
   return (
     <div className="space-y-3">
       <div>
@@ -226,26 +328,48 @@ function TextEditor({ config, update }: { config: TextConfig; update: (p: Record
   );
 }
 
-function FileUploadEditor({ config, update }: { config: FileUploadConfig; update: (p: Record<string, unknown>) => void }) {
+function FileUploadEditor({
+  config,
+  update,
+}: {
+  config: FileUploadConfig;
+  update: (p: Record<string, unknown>) => void;
+}) {
   return (
     <div className="space-y-3">
       <div>
         <Label>Label</Label>
-        <TextInput value={config.label} onChange={(v) => update({ label: v })} />
+        <TextInput
+          value={config.label}
+          onChange={(v) => update({ label: v })}
+        />
       </div>
       <div>
         <Label>Accept Types</Label>
-        <TextInput value={config.acceptTypes} onChange={(v) => update({ acceptTypes: v })} placeholder=".csv" />
+        <TextInput
+          value={config.acceptTypes}
+          onChange={(v) => update({ acceptTypes: v })}
+          placeholder=".csv"
+        />
       </div>
       <div>
         <Label>Help Text</Label>
-        <TextInput value={config.helpText} onChange={(v) => update({ helpText: v })} />
+        <TextInput
+          value={config.helpText}
+          onChange={(v) => update({ helpText: v })}
+        />
       </div>
     </div>
   );
 }
 
-function InputFieldsEditor({ config, update }: { config: InputFieldsConfig; update: (p: Record<string, unknown>) => void }) {
+function InputFieldsEditor({
+  config,
+  update,
+}: {
+  config: InputFieldsConfig;
+  update: (p: Record<string, unknown>) => void;
+}) {
   const addField = () => {
     const fields = [
       ...config.fields,
@@ -261,7 +385,9 @@ function InputFieldsEditor({ config, update }: { config: InputFieldsConfig; upda
   };
 
   const updateField = (index: number, partial: Partial<InputField>) => {
-    const fields = config.fields.map((f, i) => (i === index ? { ...f, ...partial } : f));
+    const fields = config.fields.map((f, i) =>
+      i === index ? { ...f, ...partial } : f,
+    );
     update({ fields });
   };
 
@@ -274,13 +400,26 @@ function InputFieldsEditor({ config, update }: { config: InputFieldsConfig; upda
       {config.fields.map((field, i) => (
         <div key={i} className="bg-gray-50 rounded-lg p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-500">Field {i + 1}</span>
-            <button onClick={() => removeField(i)} className="p-1 hover:bg-gray-200 rounded">
+            <span className="text-xs font-medium text-gray-500">
+              Field {i + 1}
+            </span>
+            <button
+              onClick={() => removeField(i)}
+              className="p-1 hover:bg-gray-200 rounded"
+            >
               <Trash2 className="h-3 w-3 text-red-500" />
             </button>
           </div>
-          <TextInput value={field.name} onChange={(v) => updateField(i, { name: v })} placeholder="Field name" />
-          <TextInput value={field.label} onChange={(v) => updateField(i, { label: v })} placeholder="Label" />
+          <TextInput
+            value={field.name}
+            onChange={(v) => updateField(i, { name: v })}
+            placeholder="Field name"
+          />
+          <TextInput
+            value={field.label}
+            onChange={(v) => updateField(i, { label: v })}
+            placeholder="Label"
+          />
           <SelectInput
             value={field.type}
             onChange={(v) => updateField(i, { type: v as InputField["type"] })}
@@ -291,7 +430,11 @@ function InputFieldsEditor({ config, update }: { config: InputFieldsConfig; upda
               { value: "textarea", label: "Textarea" },
             ]}
           />
-          <TextInput value={field.placeholder} onChange={(v) => updateField(i, { placeholder: v })} placeholder="Placeholder" />
+          <TextInput
+            value={field.placeholder}
+            onChange={(v) => updateField(i, { placeholder: v })}
+            placeholder="Placeholder"
+          />
         </div>
       ))}
       <button
@@ -305,16 +448,28 @@ function InputFieldsEditor({ config, update }: { config: InputFieldsConfig; upda
   );
 }
 
-function SubmitButtonEditor({ config, update }: { config: SubmitButtonConfig; update: (p: Record<string, unknown>) => void }) {
+function SubmitButtonEditor({
+  config,
+  update,
+}: {
+  config: SubmitButtonConfig;
+  update: (p: Record<string, unknown>) => void;
+}) {
   return (
     <div className="space-y-3">
       <div>
         <Label>Button Label</Label>
-        <TextInput value={config.label} onChange={(v) => update({ label: v })} />
+        <TextInput
+          value={config.label}
+          onChange={(v) => update({ label: v })}
+        />
       </div>
       <div>
         <Label>Loading Text</Label>
-        <TextInput value={config.loadingText} onChange={(v) => update({ loadingText: v })} />
+        <TextInput
+          value={config.loadingText}
+          onChange={(v) => update({ loadingText: v })}
+        />
       </div>
       <div>
         <Label>Variant</Label>
@@ -332,12 +487,21 @@ function SubmitButtonEditor({ config, update }: { config: SubmitButtonConfig; up
   );
 }
 
-function ResultsDisplayEditor({ config, update }: { config: ResultsDisplayConfig; update: (p: Record<string, unknown>) => void }) {
+function ResultsDisplayEditor({
+  config,
+  update,
+}: {
+  config: ResultsDisplayConfig;
+  update: (p: Record<string, unknown>) => void;
+}) {
   return (
     <div className="space-y-3">
       <div>
         <Label>Title</Label>
-        <TextInput value={config.title} onChange={(v) => update({ title: v })} />
+        <TextInput
+          value={config.title}
+          onChange={(v) => update({ title: v })}
+        />
       </div>
       <div>
         <Label>Display Mode</Label>
@@ -355,17 +519,29 @@ function ResultsDisplayEditor({ config, update }: { config: ResultsDisplayConfig
   );
 }
 
-function MetricsCardEditor({ config, update }: { config: MetricsCardConfig; update: (p: Record<string, unknown>) => void }) {
+function MetricsCardEditor({
+  config,
+  update,
+}: {
+  config: MetricsCardConfig;
+  update: (p: Record<string, unknown>) => void;
+}) {
   const addMetric = () => {
     const metrics = [
       ...config.metrics,
-      { key: `metric_${config.metrics.length + 1}`, label: `Metric ${config.metrics.length + 1}`, format: "number" as const },
+      {
+        key: `metric_${config.metrics.length + 1}`,
+        label: `Metric ${config.metrics.length + 1}`,
+        format: "number" as const,
+      },
     ];
     update({ metrics });
   };
 
   const updateMetric = (index: number, partial: Partial<MetricItem>) => {
-    const metrics = config.metrics.map((m, i) => (i === index ? { ...m, ...partial } : m));
+    const metrics = config.metrics.map((m, i) =>
+      i === index ? { ...m, ...partial } : m,
+    );
     update({ metrics });
   };
 
@@ -377,21 +553,39 @@ function MetricsCardEditor({ config, update }: { config: MetricsCardConfig; upda
     <div className="space-y-3">
       <div>
         <Label>Title</Label>
-        <TextInput value={config.title} onChange={(v) => update({ title: v })} />
+        <TextInput
+          value={config.title}
+          onChange={(v) => update({ title: v })}
+        />
       </div>
       {config.metrics.map((metric, i) => (
         <div key={i} className="bg-gray-50 rounded-lg p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-500">Metric {i + 1}</span>
-            <button onClick={() => removeMetric(i)} className="p-1 hover:bg-gray-200 rounded">
+            <span className="text-xs font-medium text-gray-500">
+              Metric {i + 1}
+            </span>
+            <button
+              onClick={() => removeMetric(i)}
+              className="p-1 hover:bg-gray-200 rounded"
+            >
               <Trash2 className="h-3 w-3 text-red-500" />
             </button>
           </div>
-          <TextInput value={metric.key} onChange={(v) => updateMetric(i, { key: v })} placeholder="Key (from results)" />
-          <TextInput value={metric.label} onChange={(v) => updateMetric(i, { label: v })} placeholder="Display label" />
+          <TextInput
+            value={metric.key}
+            onChange={(v) => updateMetric(i, { key: v })}
+            placeholder="Key (from results)"
+          />
+          <TextInput
+            value={metric.label}
+            onChange={(v) => updateMetric(i, { label: v })}
+            placeholder="Display label"
+          />
           <SelectInput
             value={metric.format}
-            onChange={(v) => updateMetric(i, { format: v as MetricItem["format"] })}
+            onChange={(v) =>
+              updateMetric(i, { format: v as MetricItem["format"] })
+            }
             options={[
               { value: "number", label: "Number" },
               { value: "percentage", label: "Percentage" },
@@ -411,7 +605,13 @@ function MetricsCardEditor({ config, update }: { config: MetricsCardConfig; upda
   );
 }
 
-function DividerEditor({ config, update }: { config: DividerConfig; update: (p: Record<string, unknown>) => void }) {
+function DividerEditor({
+  config,
+  update,
+}: {
+  config: DividerConfig;
+  update: (p: Record<string, unknown>) => void;
+}) {
   return (
     <div>
       <Label>Style</Label>
@@ -428,13 +628,70 @@ function DividerEditor({ config, update }: { config: DividerConfig; update: (p: 
   );
 }
 
-function ImageEditor({ config, update }: { config: ImageConfig; update: (p: Record<string, unknown>) => void }) {
+function ImageEditor({
+  config,
+  update,
+}: {
+  config: ImageConfig;
+  update: (p: Record<string, unknown>) => void;
+}) {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Image must be smaller than 5MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      update({ base64Data: reader.result as string, url: "" });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const hasImage = config.base64Data || config.url;
+
   return (
     <div className="space-y-3">
       <div>
-        <Label>Image URL</Label>
-        <TextInput value={config.url} onChange={(v) => update({ url: v })} placeholder="https://..." />
+        <Label>Upload Image</Label>
+        <label className="flex items-center justify-center gap-2 w-full py-3 border-2 border-dashed rounded-lg cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-colors">
+          <Upload className="h-4 w-4 text-gray-400" />
+          <span className="text-sm text-gray-500">
+            {config.base64Data ? "Replace image" : "Choose image file"}
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+        </label>
+        {config.base64Data && (
+          <div className="flex items-center justify-between mt-2 bg-green-50 border border-green-200 rounded-md px-3 py-1.5">
+            <span className="text-xs text-green-700">Image uploaded</span>
+            <button
+              onClick={() => update({ base64Data: undefined })}
+              className="p-0.5 hover:bg-green-100 rounded"
+            >
+              <X className="h-3 w-3 text-green-600" />
+            </button>
+          </div>
+        )}
       </div>
+
+      {!config.base64Data && (
+        <div>
+          <Label>Or paste Image URL</Label>
+          <TextInput
+            value={config.url}
+            onChange={(v) => update({ url: v })}
+            placeholder="https://..."
+          />
+        </div>
+      )}
+
       <div>
         <Label>Alt Text</Label>
         <TextInput value={config.alt} onChange={(v) => update({ alt: v })} />
@@ -452,6 +709,371 @@ function ImageEditor({ config, update }: { config: ImageConfig; update: (p: Reco
           ]}
         />
       </div>
+
+      {hasImage && (
+        <div>
+          <Label>Preview</Label>
+          <img
+            src={config.base64Data || config.url}
+            alt={config.alt}
+            className="w-full rounded-md border max-h-32 object-cover"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── New Block Editors ───────────────────────────────────────────
+
+function SpacerEditor({
+  config,
+  update,
+}: {
+  config: SpacerConfig;
+  update: (p: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label>Height (px)</Label>
+        <input
+          type="range"
+          min={8}
+          max={128}
+          step={8}
+          value={config.height}
+          onChange={(e) => update({ height: Number(e.target.value) })}
+          className="w-full accent-indigo-600"
+        />
+        <p className="text-xs text-gray-400 text-right">{config.height}px</p>
+      </div>
+    </div>
+  );
+}
+
+function AlertEditor({
+  config,
+  update,
+}: {
+  config: AlertConfig;
+  update: (p: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label>Variant</Label>
+        <SelectInput
+          value={config.variant}
+          onChange={(v) => update({ variant: v })}
+          options={[
+            { value: "info", label: "Info" },
+            { value: "warning", label: "Warning" },
+            { value: "success", label: "Success" },
+            { value: "error", label: "Error" },
+          ]}
+        />
+      </div>
+      <div>
+        <Label>Title</Label>
+        <TextInput
+          value={config.title}
+          onChange={(v) => update({ title: v })}
+        />
+      </div>
+      <div>
+        <Label>Message</Label>
+        <textarea
+          value={config.message}
+          onChange={(e) => update({ message: e.target.value })}
+          rows={3}
+          className="w-full px-2.5 py-1.5 border rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+        />
+      </div>
+      <Toggle
+        checked={config.showIcon}
+        onChange={(v) => update({ showIcon: v })}
+        label="Show icon"
+      />
+    </div>
+  );
+}
+
+function CodeEditor({
+  config,
+  update,
+}: {
+  config: CodeConfig;
+  update: (p: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label>Title / Filename</Label>
+        <TextInput
+          value={config.title}
+          onChange={(v) => update({ title: v })}
+          placeholder="e.g. model.py"
+        />
+      </div>
+      <div>
+        <Label>Language</Label>
+        <SelectInput
+          value={config.language}
+          onChange={(v) => update({ language: v })}
+          options={[
+            { value: "python", label: "Python" },
+            { value: "javascript", label: "JavaScript" },
+            { value: "typescript", label: "TypeScript" },
+            { value: "json", label: "JSON" },
+            { value: "html", label: "HTML" },
+            { value: "css", label: "CSS" },
+            { value: "bash", label: "Bash" },
+            { value: "sql", label: "SQL" },
+            { value: "text", label: "Plain Text" },
+          ]}
+        />
+      </div>
+      <div>
+        <Label>Code</Label>
+        <textarea
+          value={config.code}
+          onChange={(e) => update({ code: e.target.value })}
+          rows={8}
+          className="w-full px-2.5 py-1.5 border rounded-md text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-y"
+          spellCheck={false}
+        />
+      </div>
+      <Toggle
+        checked={config.showLineNumbers}
+        onChange={(v) => update({ showLineNumbers: v })}
+        label="Show line numbers"
+      />
+    </div>
+  );
+}
+
+function VideoEmbedEditor({
+  config,
+  update,
+}: {
+  config: VideoEmbedConfig;
+  update: (p: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label>Video URL</Label>
+        <TextInput
+          value={config.url}
+          onChange={(v) => update({ url: v })}
+          placeholder="https://youtube.com/watch?v=..."
+        />
+      </div>
+      <div>
+        <Label>Aspect Ratio</Label>
+        <SelectInput
+          value={config.aspectRatio}
+          onChange={(v) => update({ aspectRatio: v })}
+          options={[
+            { value: "16:9", label: "16:9 (Widescreen)" },
+            { value: "4:3", label: "4:3 (Standard)" },
+          ]}
+        />
+      </div>
+      <div>
+        <Label>Caption</Label>
+        <TextInput
+          value={config.caption}
+          onChange={(v) => update({ caption: v })}
+          placeholder="Optional caption"
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Per-Block Style Editor ──────────────────────────────────────
+
+function BlockStyleEditor({ block }: { block: AppBlock }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const updateStyle = (partial: Partial<BlockStyleConfig>) => {
+    const { blocks } = useAppBuilderStore.getState();
+    useAppBuilderStore.setState({
+      blocks: blocks.map((b) =>
+        b.id === block.id
+          ? { ...b, style: { ...(b.style || {}), ...partial } }
+          : b,
+      ),
+      isDirty: true,
+    });
+  };
+
+  const resetStyles = () => {
+    const { blocks } = useAppBuilderStore.getState();
+    useAppBuilderStore.setState({
+      blocks: blocks.map((b) =>
+        b.id === block.id ? { ...b, style: undefined } : b,
+      ),
+      isDirty: true,
+    });
+  };
+
+  const s = block.style || {};
+
+  return (
+    <div className="border-t pt-3 mt-3">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center justify-between w-full px-2.5 py-1.5 rounded-md text-xs font-medium text-gray-500 hover:text-indigo-600 hover:bg-indigo-50/50 transition-colors"
+      >
+        <div className="flex items-center gap-1.5">
+          <div
+            className={`w-1.5 h-1.5 rounded-full ${Object.keys(s).length > 0 ? "bg-indigo-500" : "bg-gray-300"}`}
+          />
+          <span>Custom Style</span>
+        </div>
+        <ChevronDown
+          className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+        />
+      </button>
+      {isOpen && (
+        <div className="space-y-3 mt-3 bg-gray-50/50 rounded-lg p-3 border border-gray-100">
+          <div>
+            <Label>Background Color</Label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={s.backgroundColor || "#ffffff"}
+                onChange={(e) =>
+                  updateStyle({ backgroundColor: e.target.value })
+                }
+                className="w-8 h-8 rounded cursor-pointer border-0"
+              />
+              <TextInput
+                value={s.backgroundColor || ""}
+                onChange={(v) =>
+                  updateStyle({ backgroundColor: v || undefined })
+                }
+                placeholder="transparent"
+              />
+            </div>
+          </div>
+          <div>
+            <Label>Text Color</Label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={s.textColor || "#000000"}
+                onChange={(e) => updateStyle({ textColor: e.target.value })}
+                className="w-8 h-8 rounded cursor-pointer border-0"
+              />
+              <TextInput
+                value={s.textColor || ""}
+                onChange={(v) => updateStyle({ textColor: v || undefined })}
+                placeholder="inherit"
+              />
+            </div>
+          </div>
+          <div>
+            <Label>Border Radius (px)</Label>
+            <input
+              type="number"
+              min={0}
+              max={32}
+              value={s.borderRadius ?? ""}
+              onChange={(e) =>
+                updateStyle({
+                  borderRadius: e.target.value
+                    ? Number(e.target.value)
+                    : undefined,
+                })
+              }
+              className="w-full px-2.5 py-1.5 border rounded-md text-sm"
+              placeholder="0"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label>Padding X (px)</Label>
+              <input
+                type="number"
+                min={0}
+                max={64}
+                value={s.paddingX ?? ""}
+                onChange={(e) =>
+                  updateStyle({
+                    paddingX: e.target.value
+                      ? Number(e.target.value)
+                      : undefined,
+                  })
+                }
+                className="w-full px-2.5 py-1.5 border rounded-md text-sm"
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <Label>Padding Y (px)</Label>
+              <input
+                type="number"
+                min={0}
+                max={64}
+                value={s.paddingY ?? ""}
+                onChange={(e) =>
+                  updateStyle({
+                    paddingY: e.target.value
+                      ? Number(e.target.value)
+                      : undefined,
+                  })
+                }
+                className="w-full px-2.5 py-1.5 border rounded-md text-sm"
+                placeholder="0"
+              />
+            </div>
+          </div>
+          <div>
+            <Label>Border Color</Label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={s.borderColor || "#e5e7eb"}
+                onChange={(e) => updateStyle({ borderColor: e.target.value })}
+                className="w-8 h-8 rounded cursor-pointer border-0"
+              />
+              <TextInput
+                value={s.borderColor || ""}
+                onChange={(v) => updateStyle({ borderColor: v || undefined })}
+                placeholder="none"
+              />
+            </div>
+          </div>
+          <div>
+            <Label>Border Width (px)</Label>
+            <input
+              type="number"
+              min={0}
+              max={8}
+              value={s.borderWidth ?? ""}
+              onChange={(e) =>
+                updateStyle({
+                  borderWidth: e.target.value
+                    ? Number(e.target.value)
+                    : undefined,
+                })
+              }
+              className="w-full px-2.5 py-1.5 border rounded-md text-sm"
+              placeholder="0"
+            />
+          </div>
+          <button
+            onClick={resetStyles}
+            className="text-xs text-red-500 hover:text-red-700"
+          >
+            Reset styles
+          </button>
+        </div>
+      )}
     </div>
   );
 }

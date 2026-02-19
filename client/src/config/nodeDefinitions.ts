@@ -415,7 +415,7 @@ export const nodeCategories: NodeCategory[] = [
         defaultConfig: {
           dataset_id: "",
           column_configs: {},
-          default_strategy: "none",
+          default_strategy: "drop",
           preview_rows: 10,
           preview_mode: false,
         },

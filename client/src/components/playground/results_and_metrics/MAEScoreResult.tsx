@@ -15,7 +15,7 @@ export function MAEScoreResult({ result }: MAEScoreProps) {
   return (
     <div className="space-y-6">
       {/* MAE Score Display */}
-      <div className="bg-gradient-to-br from-cyan-50 to-teal-50 border-2 border-cyan-300 rounded-xl p-8 text-center">
+      <div className="bg-linear-to-br from-cyan-50 to-teal-50 border-2 border-cyan-300 rounded-xl p-8 text-center">
         <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
           MAE (Mean Absolute Error)
         </h3>

@@ -47,7 +47,7 @@ export const GuideCard: React.FC<GuideCardProps> = ({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -20, scale: 0.95 }}
       transition={{ duration: 0.3 }}
-      className="relative p-4 rounded-xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50 shadow-lg"
+      className="relative p-4 rounded-xl border-2 border-indigo-200 bg-linear-to-br from-indigo-50 to-purple-50 shadow-lg"
     >
       {/* Header */}
       <div className="mb-4">

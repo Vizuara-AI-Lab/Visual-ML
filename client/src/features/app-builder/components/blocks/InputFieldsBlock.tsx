@@ -2,6 +2,7 @@
  * Input Fields Block — Dynamic form inputs for feature values.
  */
 
+import { Link } from "lucide-react";
 import type { BlockRenderProps } from "../BlockRenderer";
 import type { InputFieldsConfig } from "../../types/appBuilder";
 
@@ -26,6 +27,17 @@ export default function InputFieldsBlock({
 
   return (
     <div className="bg-white rounded-xl border p-6 space-y-4">
+      {mode === "edit" && block.nodeId && (
+        <div className="flex items-center gap-1.5 text-[10px] text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200">
+          <Link className="h-2.5 w-2.5 shrink-0" />
+          <span>Mapped to: <strong>{block.nodeLabel || block.nodeId}</strong></span>
+          {config.fieldMappings && config.fieldMappings.length > 0 && (
+            <span className="text-indigo-400 ml-1">
+              ({config.fieldMappings.map((m) => m.nodeConfigKey).join(", ")})
+            </span>
+          )}
+        </div>
+      )}
       {config.fields.map((field) => (
         <div key={field.name}>
           <label className="block text-sm font-medium text-gray-700 mb-1">

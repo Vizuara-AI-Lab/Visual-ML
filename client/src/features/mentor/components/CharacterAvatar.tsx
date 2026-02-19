@@ -38,7 +38,7 @@ export const CharacterAvatar: React.FC<CharacterAvatarProps> = ({
     <div className="relative">
       {/* Avatar Container */}
       <motion.div
-        className={`${sizeClasses[size]} rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 
+        className={`${sizeClasses[size]} rounded-full bg-linear-to-br from-indigo-500 to-purple-600 
                    flex items-center justify-center shadow-lg relative overflow-hidden`}
         animate={{
           scale: isSpeaking ? [1, 1.05, 1] : [1, 1.02, 1],
@@ -52,7 +52,7 @@ export const CharacterAvatar: React.FC<CharacterAvatarProps> = ({
         {/* Glow effect when speaking */}
         {isSpeaking && (
           <motion.div
-            className="absolute inset-0 bg-gradient-to-br from-indigo-400 to-purple-500"
+            className="absolute inset-0 bg-linear-to-br from-indigo-400 to-purple-500"
             animate={{
               opacity: [0.3, 0.7, 0.3],
             }}

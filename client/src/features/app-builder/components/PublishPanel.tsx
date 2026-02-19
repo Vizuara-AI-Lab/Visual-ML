@@ -5,7 +5,8 @@
 import { useState, useEffect } from "react";
 import { Check, Copy, ExternalLink, Globe, Loader2 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { usePublishApp, useCheckSlug } from "../hooks/useAppBuilder";
+import { usePublishApp, useCheckSlug, useUpdateApp } from "../hooks/useAppBuilder";
+import { useAppBuilderStore } from "../store/appBuilderStore";
 import type { CustomApp } from "../types/appBuilder";
 
 interface PublishPanelProps {
@@ -16,6 +17,8 @@ export default function PublishPanel({ app }: PublishPanelProps) {
   const [slug, setSlug] = useState(app.slug);
   const [copied, setCopied] = useState(false);
   const publishApp = usePublishApp(app.id);
+  const updateApp = useUpdateApp(app.id);
+  const markClean = useAppBuilderStore((s) => s.markClean);
   const { data: slugCheck, isFetching: checkingSlug } = useCheckSlug(
     slug !== app.slug ? slug : "",
   );
@@ -29,6 +32,13 @@ export default function PublishPanel({ app }: PublishPanelProps) {
 
   const handlePublish = async (publish: boolean) => {
     try {
+      // Always save blocks & theme before publishing so the DB has the latest state.
+      // Read from store directly via getState() to guarantee fresh values.
+      if (publish) {
+        const { blocks, theme } = useAppBuilderStore.getState();
+        await updateApp.mutateAsync({ blocks, theme });
+        markClean();
+      }
       await publishApp.mutateAsync({
         is_published: publish,
         slug: slug !== app.slug ? slug : undefined,
@@ -118,14 +128,14 @@ export default function PublishPanel({ app }: PublishPanelProps) {
       {/* Publish toggle */}
       <button
         onClick={() => handlePublish(!app.is_published)}
-        disabled={publishApp.isPending || (!slugAvailable && slug !== app.slug)}
+        disabled={publishApp.isPending || updateApp.isPending || (!slugAvailable && slug !== app.slug)}
         className={`w-full py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
           app.is_published
             ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
             : "bg-indigo-600 text-white hover:bg-indigo-700"
         }`}
       >
-        {publishApp.isPending ? (
+        {publishApp.isPending || updateApp.isPending ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : app.is_published ? (
           "Unpublish"

@@ -15,7 +15,7 @@ export function MSEScoreResult({ result }: MSEScoreProps) {
   return (
     <div className="space-y-6">
       {/* MSE Score Display */}
-      <div className="bg-gradient-to-br from-orange-50 to-red-50 border-2 border-orange-300 rounded-xl p-8 text-center">
+      <div className="bg-linear-to-br from-orange-50 to-red-50 border-2 border-orange-300 rounded-xl p-8 text-center">
         <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
           MSE (Mean Squared Error)
         </h3>

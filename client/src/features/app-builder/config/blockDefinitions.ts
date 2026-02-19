@@ -14,6 +14,10 @@ import type {
   MetricsCardConfig,
   DividerConfig,
   ImageConfig,
+  SpacerConfig,
+  AlertConfig,
+  CodeConfig,
+  VideoEmbedConfig,
 } from "../types/appBuilder";
 
 export interface BlockDefinition {
@@ -129,6 +133,50 @@ export const BLOCK_DEFINITIONS: BlockDefinition[] = [
       alt: "Image",
       width: "md",
     } as ImageConfig,
+  },
+  {
+    type: "spacer",
+    label: "Spacer",
+    icon: "MoveVertical",
+    description: "Configurable vertical space",
+    defaultConfig: {
+      height: 32,
+    } as SpacerConfig,
+  },
+  {
+    type: "alert",
+    label: "Alert / Notice",
+    icon: "AlertTriangle",
+    description: "Info, warning, or error notice",
+    defaultConfig: {
+      variant: "info",
+      title: "Note",
+      message: "This is an informational notice.",
+      showIcon: true,
+    } as AlertConfig,
+  },
+  {
+    type: "code",
+    label: "Code Block",
+    icon: "Code",
+    description: "Syntax-highlighted code display",
+    defaultConfig: {
+      code: "print('Hello, world!')",
+      language: "python",
+      showLineNumbers: true,
+      title: "",
+    } as CodeConfig,
+  },
+  {
+    type: "video_embed",
+    label: "Video Embed",
+    icon: "Video",
+    description: "YouTube or Vimeo embed",
+    defaultConfig: {
+      url: "",
+      aspectRatio: "16:9",
+      caption: "",
+    } as VideoEmbedConfig,
   },
 ];
 

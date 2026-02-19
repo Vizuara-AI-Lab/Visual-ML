@@ -161,7 +161,7 @@ const ForgotPassword: React.FC = () => {
 
           {/* Header */}
           <div className="mb-8">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center mb-4 shadow-lg shadow-slate-900/25">
+            <div className="w-12 h-12 rounded-xl bg-linear-to-br from-slate-900 to-slate-700 flex items-center justify-center mb-4 shadow-lg shadow-slate-900/25">
               <Mail className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 mb-2">

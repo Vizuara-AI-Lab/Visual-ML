@@ -233,7 +233,7 @@ const SignUp: React.FC = () => {
       >
         {/* Logo and Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl lg:text-4xl font-bold bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-3">
+          <h1 className="text-3xl lg:text-4xl font-bold bg-linear-to-br from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent mb-3">
             Create your account
           </h1>
         </div>
