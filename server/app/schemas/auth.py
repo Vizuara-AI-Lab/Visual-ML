@@ -160,6 +160,8 @@ class StudentResponse(BaseModel):
     profilePic: Optional[str] = None
     isPremium: bool
     isActive: bool
+    xp: int = 0
+    level: int = 1
     createdAt: datetime
     lastLogin: Optional[datetime] = None
 

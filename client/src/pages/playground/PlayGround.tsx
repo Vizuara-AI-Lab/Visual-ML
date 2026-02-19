@@ -12,6 +12,7 @@ import { ChatbotModal } from "../../components/playground/ChatbotModal";
 import { ViewNodeModal } from "../../components/playground/ViewNodeModal";
 import { ShareModal } from "../../components/playground/ShareModal";
 import { ExportModal } from "../../components/playground/ExportModal";
+import { ActivityModal } from "../../components/playground/activities/ActivityModal";
 import { Toolbar } from "../../components/playground/Toolbar";
 import { ResultsDrawer } from "../../components/playground/results-drawer";
 import { usePlaygroundStore } from "../../store/playgroundStore";
@@ -23,6 +24,13 @@ import { validatePipeline } from "../../utils/validation";
 import { MentorAssistant, mentorApi } from "../../features/mentor";
 import { useAuthStore } from "../../store/authStore";
 import { useMentorContext } from "../../features/mentor";
+import { useAwardXP } from "../../features/gamification/hooks/useGamification";
+import BadgeUnlockedToast from "../../features/gamification/components/BadgeUnlockedToast";
+import LevelUpAnimation from "../../features/gamification/components/LevelUpAnimation";
+import XPGainToast from "../../features/gamification/components/XPGainToast";
+import { DatasetStoryPanel } from "../../components/playground/DatasetStoryPanel";
+import { getStory } from "../../config/datasetStories";
+import type { DatasetStory } from "../../config/datasetStories";
 import {
   useMentorStore,
   type MentorAction,
@@ -41,7 +49,7 @@ import {
 
 function PlaygroundSkeleton({ projectName }: { projectName?: string }) {
   return (
-    <div className="h-screen flex flex-col bg-gray-950 overflow-hidden">
+    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden">
       {/* Toolbar skeleton */}
       <div className="h-16 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 flex items-center justify-between px-6 shadow-lg shadow-slate-900/5">
         <div className="flex items-center gap-3">
@@ -72,24 +80,24 @@ function PlaygroundSkeleton({ projectName }: { projectName?: string }) {
       {/* Main content skeleton */}
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar skeleton */}
-        <div className="w-64 bg-gray-950 border-r border-slate-800 p-4 flex flex-col gap-4">
-          <div className="h-10 bg-slate-800/60 rounded-lg animate-pulse" />
+        <div className="w-64 bg-white border-r border-slate-200/60 p-4 flex flex-col gap-4">
+          <div className="h-10 bg-slate-100 rounded-lg animate-pulse" />
           <div className="space-y-2">
-            <div className="h-3 w-20 bg-slate-700/40 rounded animate-pulse" />
+            <div className="h-3 w-20 bg-slate-200/60 rounded animate-pulse" />
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="h-10 bg-slate-800/40 rounded-lg animate-pulse"
+                className="h-10 bg-slate-100 rounded-lg animate-pulse"
                 style={{ animationDelay: `${i * 150}ms` }}
               />
             ))}
           </div>
           <div className="space-y-2 mt-2">
-            <div className="h-3 w-24 bg-slate-700/40 rounded animate-pulse" />
+            <div className="h-3 w-24 bg-slate-200/60 rounded animate-pulse" />
             {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="h-10 bg-slate-800/40 rounded-lg animate-pulse"
+                className="h-10 bg-slate-100 rounded-lg animate-pulse"
                 style={{ animationDelay: `${(i + 3) * 150}ms` }}
               />
             ))}
@@ -97,12 +105,12 @@ function PlaygroundSkeleton({ projectName }: { projectName?: string }) {
         </div>
 
         {/* Canvas skeleton — animated pipeline illustration */}
-        <div className="flex-1 bg-gray-950 relative flex items-center justify-center">
+        <div className="flex-1 bg-slate-50 relative flex items-center justify-center">
           {/* Grid dots background */}
           <div
-            className="absolute inset-0 opacity-20"
+            className="absolute inset-0 opacity-30"
             style={{
-              backgroundImage: "radial-gradient(circle, #475569 1px, transparent 1px)",
+              backgroundImage: "radial-gradient(circle, #94a3b8 1px, transparent 1px)",
               backgroundSize: "24px 24px",
             }}
           />
@@ -125,8 +133,8 @@ function PlaygroundSkeleton({ projectName }: { projectName?: string }) {
                       <div
                         className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg animate-pulse"
                         style={{
-                          backgroundColor: `${step.color}20`,
-                          border: `2px solid ${step.color}40`,
+                          backgroundColor: `${step.color}15`,
+                          border: `2px solid ${step.color}30`,
                           animationDelay: `${idx * 200}ms`,
                         }}
                       >
@@ -139,7 +147,7 @@ function PlaygroundSkeleton({ projectName }: { projectName?: string }) {
                         {[0, 1, 2].map((dot) => (
                           <div
                             key={dot}
-                            className="w-1.5 h-1.5 rounded-full bg-slate-600 animate-pulse"
+                            className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-pulse"
                             style={{ animationDelay: `${idx * 200 + dot * 100}ms` }}
                           />
                         ))}
@@ -154,14 +162,14 @@ function PlaygroundSkeleton({ projectName }: { projectName?: string }) {
             <div className="flex flex-col items-center gap-3">
               <div className="flex items-center gap-2">
                 <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm font-medium text-slate-400">Loading your pipeline…</p>
+                <p className="text-sm font-medium text-slate-600">Loading your pipeline…</p>
               </div>
-              <p className="text-xs text-slate-600">Setting up workspace and restoring your progress</p>
+              <p className="text-xs text-slate-500">Setting up workspace and restoring your progress</p>
             </div>
 
             {/* Progress shimmer bar */}
-            <div className="mt-6 w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full w-2/5 bg-gradient-to-r from-indigo-600 via-purple-500 to-indigo-600 rounded-full skeleton-shimmer" />
+            <div className="mt-6 w-64 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+              <div className="h-full w-2/5 bg-gradient-to-r from-indigo-500 via-purple-400 to-indigo-500 rounded-full skeleton-shimmer" />
             </div>
           </div>
 
@@ -187,10 +195,13 @@ export default function PlayGround() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [viewNodeId, setViewNodeId] = useState<string | null>(null);
   const [chatbotNodeId, setChatbotNodeId] = useState<string | null>(null);
+  const [activityNodeId, setActivityNodeId] = useState<string | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [activeStory, setActiveStory] = useState<DatasetStory | null>(null);
   const streamCleanupRef = useRef<(() => void) | null>(null);
+  const awardXP = useAwardXP();
 
   const [executionProgress, setExecutionProgress] = useState<{
     status: string;
@@ -238,6 +249,12 @@ export default function PlayGround() {
   const handleNodeClick = (nodeId: string) => {
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) return;
+
+    // Activity nodes open the activity modal directly
+    if (node.data.type.startsWith("activity_")) {
+      setActivityNodeId(nodeId);
+      return;
+    }
 
     const viewNodeTypes = [
       "table_view",
@@ -331,6 +348,40 @@ export default function PlayGround() {
         "openConfigModal",
         handleOpenConfigModal as EventListener,
       );
+    };
+  }, []);
+
+  // Listen for custom event from Open Activity button on activity nodes
+  useEffect(() => {
+    const handleOpenActivityModal = (event: CustomEvent) => {
+      const { nodeId } = event.detail;
+      setActivityNodeId(nodeId);
+    };
+
+    window.addEventListener(
+      "openActivityModal",
+      handleOpenActivityModal as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "openActivityModal",
+        handleOpenActivityModal as EventListener,
+      );
+    };
+  }, []);
+
+  // Listen for dataset story open event
+  useEffect(() => {
+    const handleOpenStory = (event: CustomEvent) => {
+      const { datasetId } = event.detail;
+      const story = getStory(datasetId);
+      if (story) setActiveStory(story);
+    };
+
+    window.addEventListener("openDatasetStory", handleOpenStory as EventListener);
+    return () => {
+      window.removeEventListener("openDatasetStory", handleOpenStory as EventListener);
     };
   }, []);
 
@@ -572,6 +623,9 @@ export default function PlayGround() {
 
             setIsExecuting(false);
             streamCleanupRef.current = null;
+
+            // Award XP for successful pipeline execution
+            awardXP.mutate({ action: "pipeline_execution", context: { nodes_executed: event.nodes_executed } });
           },
           onPipelineFailed: (event) => {
             console.log("❌ Pipeline failed:", event);
@@ -783,7 +837,7 @@ export default function PlayGround() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-950">
+    <div className="h-screen flex flex-col bg-slate-50">
       <Toaster
         position="top-right"
         gutter={10}
@@ -871,6 +925,11 @@ export default function PlayGround() {
         onClose={() => setChatbotNodeId(null)}
       />
 
+      <ActivityModal
+        nodeId={activityNodeId}
+        onClose={() => setActivityNodeId(null)}
+      />
+
       <ShareModal
         isOpen={shareModalOpen}
         onClose={() => setShareModalOpen(false)}
@@ -882,6 +941,15 @@ export default function PlayGround() {
         isOpen={exportModalOpen}
         onClose={() => setExportModalOpen(false)}
       />
+
+      <DatasetStoryPanel
+        story={activeStory}
+        onClose={() => setActiveStory(null)}
+      />
+
+      <BadgeUnlockedToast />
+      <LevelUpAnimation />
+      <XPGainToast />
 
       <MentorAssistant
         userName={user?.fullName || user?.emailId || "there"}

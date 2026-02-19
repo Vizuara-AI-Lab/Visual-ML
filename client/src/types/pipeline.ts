@@ -34,7 +34,13 @@ export type NodeType =
   | "llm_node"
   | "system_prompt"
   | "chatbot_node"
-  | "example_node";
+  | "example_node"
+  // Activity nodes (standalone interactive learning)
+  | "activity_gradient_descent"
+  | "activity_bias_variance"
+  | "activity_knn_playground"
+  | "activity_decision_boundary"
+  | "activity_neural_network";
 
 export type AlgorithmType = "linear_regression" | "logistic_regression";
 

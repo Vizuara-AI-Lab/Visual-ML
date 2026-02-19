@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npx tsc:*)",
       "Bash(npx vite build:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(python -m alembic:*)",
+      "Bash(python -c:*)"
     ]
   }
 }

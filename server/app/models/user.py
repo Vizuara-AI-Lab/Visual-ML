@@ -64,6 +64,10 @@ class Student(Base):
     resetToken = Column(String(255), nullable=True)
     resetTokenExpiry = Column(DateTime, nullable=True)
 
+    # Gamification
+    xp = Column(Integer, default=0, nullable=False)
+    level = Column(Integer, default=1, nullable=False)
+
     # Timestamps
     createdAt = Column(DateTime, default=datetime.utcnow, nullable=False)
     updatedAt = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -72,6 +76,9 @@ class Student(Base):
     # Relationships
     refresh_tokens = relationship(
         "RefreshToken", back_populates="student", cascade="all, delete-orphan"
+    )
+    badges = relationship(
+        "StudentBadge", back_populates="student", cascade="all, delete-orphan"
     )
 
     def __repr__(self):

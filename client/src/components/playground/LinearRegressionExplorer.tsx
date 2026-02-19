@@ -3,13 +3,14 @@
  * Tabbed component: Results | Coefficient Explorer | Equation Builder | Prediction Playground | Quiz
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import {
   ClipboardList,
   BarChart3,
   Calculator,
   SlidersHorizontal,
   HelpCircle,
+  Cog,
   CheckCircle,
   XCircle,
   Trophy,
@@ -25,6 +26,8 @@ import {
   Database,
 } from "lucide-react";
 
+const LinearRegressionAnimation = lazy(() => import("./animations/LinearRegressionAnimation"));
+
 interface LinearRegressionExplorerProps {
   result: any;
 }
@@ -34,7 +37,8 @@ type ExplorerTab =
   | "coefficients"
   | "equation"
   | "playground"
-  | "quiz";
+  | "quiz"
+  | "how_it_works";
 
 export const LinearRegressionExplorer = ({
   result,
@@ -71,6 +75,12 @@ export const LinearRegressionExplorer = ({
       label: "Quiz",
       icon: HelpCircle,
       available: !!result.quiz_questions && result.quiz_questions.length > 0,
+    },
+    {
+      id: "how_it_works",
+      label: "How It Works",
+      icon: Cog,
+      available: true,
     },
   ];
 
@@ -112,6 +122,17 @@ export const LinearRegressionExplorer = ({
       )}
       {activeTab === "quiz" && result.quiz_questions && (
         <QuizTab questions={result.quiz_questions} />
+      )}
+      {activeTab === "how_it_works" && (
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          }
+        >
+          <LinearRegressionAnimation />
+        </Suspense>
       )}
     </div>
   );

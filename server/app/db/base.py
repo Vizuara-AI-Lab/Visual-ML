@@ -18,5 +18,6 @@ from app.models.genai import (
     ConversationMemory,
 )
 from app.models.custom_app import CustomApp
+from app.models.gamification import StudentBadge
 
-__all__ = ["Base", "Student", "Admin", "RefreshToken", "Dataset", "CustomApp"]
+__all__ = ["Base", "Student", "Admin", "RefreshToken", "Dataset", "CustomApp", "StudentBadge"]

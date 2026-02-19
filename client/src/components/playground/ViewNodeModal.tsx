@@ -17,6 +17,7 @@ import { LogisticRegressionExplorer } from "./LogisticRegressionExplorer";
 import { TransformationResults } from "./TransformationResults";
 import { ScalingResults } from "./ScalingResults";
 import { FeatureEngineeringResults } from "./FeatureEngineeringResults";
+import { lazy, Suspense } from "react";
 import {
   X,
   Table2,
@@ -24,6 +25,9 @@ import {
   BarChart3,
   Columns3,
 } from "lucide-react";
+
+const DecisionTreeAnimation = lazy(() => import("./animations/DecisionTreeAnimation"));
+const RandomForestAnimation = lazy(() => import("./animations/RandomForestAnimation"));
 import {
   R2ScoreResult,
   MSEScoreResult,
@@ -141,6 +145,8 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
     "split",
     "linear_regression",
     "logistic_regression",
+    "decision_tree",
+    "random_forest",
   ].includes(nodeType);
 
   if (!isViewNode) return null;
@@ -241,6 +247,16 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
                 {nodeType === "split" && renderSplit(nodeResult)}
                 {nodeType === "linear_regression" && renderLinearRegression(nodeResult)}
                 {nodeType === "logistic_regression" && renderLogisticRegression(nodeResult)}
+                {nodeType === "decision_tree" && (
+                  <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                    <DecisionTreeAnimation />
+                  </Suspense>
+                )}
+                {nodeType === "random_forest" && (
+                  <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                    <RandomForestAnimation />
+                  </Suspense>
+                )}
               </div>
             )}
           </div>

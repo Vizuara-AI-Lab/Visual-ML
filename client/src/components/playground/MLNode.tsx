@@ -16,8 +16,11 @@ import {
   AlertCircle,
   CircleDot,
   Loader2,
+  Play,
+  BookOpen,
 } from "lucide-react";
 import { usePlaygroundStore } from "../../store/playgroundStore";
+import { hasStory } from "../../config/datasetStories";
 
 const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
   const nodeData = data as BaseNodeData;
@@ -44,9 +47,12 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
     "split",
     "linear_regression",
     "logistic_regression",
+    "decision_tree",
+    "random_forest",
   ];
 
   const isViewNode = viewNodeTypes.includes(nodeData.type);
+  const isActivityNode = nodeData.type.startsWith("activity_");
 
   // Get execution status from store
   const executionStatus = nodeExecutionStatus[nodeId];
@@ -67,10 +73,34 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
     hasExecutionResults &&
     (nodeData.isConfigured || executionSuccess);
 
+  // Check if this is a sample_dataset node with an available story
+  const datasetName = nodeData.config?.dataset_name as string | undefined;
+  const showStoryButton =
+    nodeData.type === "sample_dataset" &&
+    nodeData.isConfigured &&
+    !!datasetName &&
+    hasStory(datasetName);
+
+  const handleOpenStory = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (datasetName) {
+      window.dispatchEvent(
+        new CustomEvent("openDatasetStory", { detail: { datasetId: datasetName } }),
+      );
+    }
+  };
+
   const handleViewData = (e: React.MouseEvent) => {
     e.stopPropagation();
     window.dispatchEvent(
       new CustomEvent("openViewNodeModal", { detail: { nodeId } }),
+    );
+  };
+
+  const handleOpenActivity = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.dispatchEvent(
+      new CustomEvent("openActivityModal", { detail: { nodeId } }),
     );
   };
 
@@ -184,6 +214,13 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
                       Done
                     </span>
                   </>
+                ) : isActivityNode ? (
+                  <>
+                    <Play className="w-3 h-3 text-violet-500" />
+                    <span className="text-[11px] text-violet-600 font-medium">
+                      Interactive
+                    </span>
+                  </>
                 ) : nodeData.isConfigured ? (
                   <>
                     <CircleDot className="w-3 h-3 text-blue-500" />
@@ -215,7 +252,20 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
             )}
 
           {/* Action buttons */}
-          {showViewButton && (
+          {isActivityNode ? (
+            <div className="mt-2.5">
+              <button
+                onClick={handleOpenActivity}
+                className="w-full px-2.5 py-1.5 rounded-lg text-white text-[11px] font-semibold
+                           flex items-center justify-center gap-1.5 transition-all duration-150
+                           hover:brightness-110 active:scale-[0.98]"
+                style={{ backgroundColor: accentColor }}
+              >
+                <Play className="w-3 h-3" />
+                Open Activity
+              </button>
+            </div>
+          ) : showViewButton ? (
             <div className="mt-2.5 flex gap-1.5">
               <button
                 onClick={handleViewData}
@@ -237,6 +287,21 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
                 <Settings className="w-3 h-3" />
               </button>
             </div>
+          ) : null}
+
+          {/* Story button for sample_dataset nodes with available stories */}
+          {showStoryButton && (
+            <div className="mt-2">
+              <button
+                onClick={handleOpenStory}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-600
+                           text-[11px] font-semibold flex items-center justify-center gap-1.5
+                           transition-all duration-150 active:scale-[0.98] border border-violet-200"
+              >
+                <BookOpen className="w-3 h-3" />
+                Story Guide
+              </button>
+            </div>
           )}
         </div>
       </motion.div>
@@ -253,8 +318,49 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
         <X className="w-2.5 h-2.5" strokeWidth={2.5} />
       </button>
 
-      {/* Input Handle */}
-      {nodeData.type !== "sample_dataset" && (
+      {/* Data preview tooltip on hover after execution */}
+      {hasExecutionResults && executionSuccess && !isActivityNode && (() => {
+        const out = nodeResult?.output as Record<string, unknown> | undefined;
+        return (
+          <div
+            className="absolute -top-14 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100
+                       transition-all duration-200 pointer-events-none z-20"
+          >
+            <div className="bg-gray-900/90 backdrop-blur-sm text-white text-[10px] font-medium
+                          px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-2">
+              {out && typeof out === "object" ? (
+                <>
+                  {out.rows != null && <span>{String(out.rows)} rows</span>}
+                  {out.columns != null && (
+                    <>
+                      <span className="w-px h-3 bg-gray-600" />
+                      <span>{Array.isArray(out.columns) ? out.columns.length : String(out.columns)} cols</span>
+                    </>
+                  )}
+                  {out.accuracy != null && (
+                    <span>Acc: {(Number(out.accuracy) * 100).toFixed(1)}%</span>
+                  )}
+                  {out.r2_score != null && (
+                    <span>R²: {Number(out.r2_score).toFixed(3)}</span>
+                  )}
+                  {out.mse != null && out.r2_score == null && (
+                    <span>MSE: {Number(out.mse).toFixed(3)}</span>
+                  )}
+                  {out.rows == null && out.accuracy == null && out.r2_score == null && out.mse == null && (
+                    <span>Completed</span>
+                  )}
+                </>
+              ) : (
+                <span>Completed</span>
+              )}
+            </div>
+            <div className="w-2 h-2 bg-gray-900/90 rotate-45 mx-auto -mt-1" />
+          </div>
+        );
+      })()}
+
+      {/* Input Handle — hidden for activity nodes and sample_dataset */}
+      {!isActivityNode && nodeData.type !== "sample_dataset" && (
         <Handle
           type="target"
           position={Position.Top}
@@ -266,8 +372,8 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
         />
       )}
 
-      {/* Output Handle */}
-      {nodeData.type !== "evaluate" && (
+      {/* Output Handle — hidden for activity nodes and evaluate */}
+      {!isActivityNode && nodeData.type !== "evaluate" && (
         <Handle
           type="source"
           position={Position.Bottom}

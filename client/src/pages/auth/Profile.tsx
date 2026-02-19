@@ -13,10 +13,16 @@ import {
   AlertCircle,
   Crown,
   X,
+  Award,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import axiosInstance from "../../lib/axios";
 import Navbar from "../../landingpage/Navbar";
+import { useGamificationProfile } from "../../features/gamification/hooks/useGamification";
+import XPBar from "../../features/gamification/components/XPBar";
+import LevelBadge from "../../features/gamification/components/LevelBadge";
+import BadgeGrid from "../../features/gamification/components/BadgeGrid";
+import { useGamificationStore } from "../../features/gamification/store/gamificationStore";
 
 interface UserProfile {
   id: number;
@@ -33,6 +39,8 @@ interface UserProfile {
 const Profile: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  useGamificationProfile();
+  const badges = useGamificationStore((s) => s.badges);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [formData, setFormData] = useState({
     collegeOrSchool: "",
@@ -396,6 +404,17 @@ const Profile: React.FC = () => {
                 Change Password
               </button>
             </div>
+
+            {/* Gamification - Level & XP */}
+            <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Progress
+                </h2>
+                <LevelBadge size="md" />
+              </div>
+              <XPBar />
+            </div>
           </div>
 
           {/* Right Column - Edit Form */}
@@ -502,6 +521,17 @@ const Profile: React.FC = () => {
                   </button>
                 </div>
               </form>
+            </div>
+
+            {/* Badges Section */}
+            <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 p-6 lg:p-8 mt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Award className="w-5 h-5 text-amber-500" />
+                <h2 className="text-xl font-semibold text-slate-900">
+                  Badges
+                </h2>
+              </div>
+              <BadgeGrid badges={badges} />
             </div>
           </div>
         </div>
