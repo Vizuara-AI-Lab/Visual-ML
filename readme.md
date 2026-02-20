@@ -277,9 +277,3 @@ Visual-ML/
 | **ML/AI**    | scikit-learn, pandas, numpy, OpenAI, Anthropic, Gemini     |
 | **DevOps**   | Alembic, Uvicorn, Docker-ready                             |
 | **Storage**  | AWS S3, Local filesystem                                   |
-
-
-
-
-voice
-custom ui

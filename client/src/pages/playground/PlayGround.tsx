@@ -21,7 +21,7 @@ import type { NodeType, BaseNodeData } from "../../types/pipeline";
 import { useProjectState } from "../../hooks/queries/useProjectState";
 import { useSaveProject } from "../../hooks/mutations/useSaveProject";
 import { validatePipeline } from "../../utils/validation";
-import { MentorAssistant, mentorApi } from "../../features/mentor";
+import { MentorAssistant } from "../../features/mentor";
 import { useAuthStore } from "../../store/authStore";
 import { useMentorContext } from "../../features/mentor";
 import { useAwardXP } from "../../features/gamification/hooks/useGamification";
@@ -953,139 +953,24 @@ export default function PlayGround() {
 
       <MentorAssistant
         userName={user?.fullName || user?.emailId || "there"}
-        onAction={async (action: MentorAction) => {
+        onAction={(action: MentorAction) => {
           console.log("[Mentor] Action clicked:", action);
 
-          // Handle mentor suggestion actions
-          if (action.type === "show_guide") {
-            const modelType = action.payload?.model_type as string;
-
-            // Check if this is the initial guide request or dataset guidance
-            if (action.payload?.action) {
-              // This is a dataset guidance action
-              try {
-                const guidanceResponse = await mentorApi.getDatasetGuidance(
-                  action.payload.action as string,
-                  modelType,
-                  action.payload.next_message as string,
-                );
-
-                if (
-                  guidanceResponse.success &&
-                  guidanceResponse.suggestions.length > 0
-                ) {
-                  useMentorStore
-                    .getState()
-                    .showSuggestion(guidanceResponse.suggestions[0]);
-                }
-              } catch (error) {
-                console.error(
-                  "[Mentor] Error fetching dataset guidance:",
-                  error,
-                );
-                toast.error("Failed to load guidance");
-              }
-            } else {
-              // Initial guide request - show model introduction
-              if (modelType) {
-                try {
-                  const introResponse =
-                    await mentorApi.getModelIntroduction(modelType);
-
-                  if (
-                    introResponse.success &&
-                    introResponse.suggestions.length > 0
-                  ) {
-                    useMentorStore
-                      .getState()
-                      .showSuggestion(introResponse.suggestions[0]);
-                    toast.success(
-                      `Learning about ${modelType.replace(/_/g, " ")}`,
-                    );
-                  }
-                } catch (error) {
-                  console.error("[Mentor] Error fetching introduction:", error);
-                  toast.error("Failed to load introduction");
-                }
-              }
-            }
-          } else if (action.type === "learn_more") {
-            // Handle learn_more actions (dataset options that show more info)
-            if (action.payload?.action && action.payload?.model_type) {
-              try {
-                const guidanceResponse = await mentorApi.getDatasetGuidance(
-                  action.payload.action as string,
-                  action.payload.model_type as string,
-                  (action.payload.next_message as string) || "",
-                );
-
-                if (
-                  guidanceResponse.success &&
-                  guidanceResponse.suggestions.length > 0
-                ) {
-                  useMentorStore
-                    .getState()
-                    .showSuggestion(guidanceResponse.suggestions[0]);
-                }
-              } catch (error) {
-                console.error("[Mentor] Error fetching guidance:", error);
-                toast.error("Failed to load guidance");
-              }
-            } else if (action.payload?.url) {
-              console.log("[Mentor] Opening learn more:", action.payload.url);
-              window.open(action.payload.url as string, "_blank");
-            } else {
-              // "Get Suggestions" button — trigger pipeline analysis
-              try {
-                const pipelineData = {
-                  nodes: nodes.map((n) => ({
-                    id: n.id,
-                    type: n.data.type,
-                    config: n.data,
-                    position: n.position,
-                  })),
-                  edges: edges.map((e) => ({
-                    id: e.id,
-                    source: e.source,
-                    target: e.target,
-                  })),
-                };
-
-                const analysis = await mentorApi.analyzePipeline(pipelineData);
-
-                if (analysis.suggestions.length > 0) {
-                  analysis.suggestions.slice(0, 2).forEach((suggestion) => {
-                    useMentorStore.getState().showSuggestion(suggestion);
-                  });
-                } else {
-                  toast("No suggestions right now — keep building!", {
-                    icon: "💡",
-                    duration: 2000,
-                  });
-                }
-              } catch (error) {
-                console.error("[Mentor] Error fetching suggestions:", error);
-                toast.error("Failed to get suggestions");
-              }
+          if (action.type === "select_algorithm") {
+            const algorithm = action.payload?.algorithm as string;
+            if (algorithm) {
+              const store = useMentorStore.getState();
+              store.setSelectedAlgorithm(algorithm);
+              store.setStage("algorithm_selected");
             }
           } else if (action.type === "add_node") {
-            // Check for both node_type and model_type in payload
             const nodeType = (action.payload?.node_type ||
               action.payload?.model_type) as string;
             if (nodeType) {
-              console.log("[Mentor] Adding node:", nodeType);
               handleAddNodeFromMentor(nodeType);
-            } else {
-              console.warn(
-                "[Mentor] No node_type or model_type in payload:",
-                action.payload,
-              );
             }
           } else if (action.type === "execute") {
-            console.log("[Mentor] Executing pipeline");
             handleExecutePipeline();
-          } else {
-            console.log("[Mentor] Unknown action type:", action.type);
           }
         }}
       />

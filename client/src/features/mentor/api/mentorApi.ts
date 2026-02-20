@@ -120,12 +120,13 @@ class MentorAPI {
   async generateSpeech(
     text: string,
     personality: string = "encouraging",
+    voiceId?: string,
     cacheKey?: string,
   ): Promise<TTSResponse> {
     console.log("[mentorApi] generateSpeech called:", {
       text: text.substring(0, 50) + "...",
       personality,
-      cacheKey,
+      voiceId,
     });
     try {
       const response = await axios.post<TTSResponse>(
@@ -133,6 +134,7 @@ class MentorAPI {
         {
           text,
           personality,
+          voice_id: voiceId || undefined,
           cache_key: cacheKey,
         },
       );
@@ -142,6 +144,45 @@ class MentorAPI {
       console.error("[mentorApi] generateSpeech error:", error);
       throw error;
     }
+  }
+
+  /**
+   * Preview a voice with a short sample
+   */
+  async previewVoice(
+    voiceId: string,
+    text?: string,
+  ): Promise<TTSResponse> {
+    const response = await axios.post<TTSResponse>(
+      `${API_BASE}/preview-voice`,
+      {
+        text: text || "",
+        voice_id: voiceId,
+      },
+    );
+    return response.data;
+  }
+
+  /**
+   * Clone a voice from an audio file
+   */
+  async cloneVoice(
+    displayName: string,
+    audioFile: File,
+  ): Promise<{ success: boolean; voice_id: string; display_name: string }> {
+    const formData = new FormData();
+    formData.append("file", audioFile);
+    formData.append("display_name", displayName);
+
+    const response = await axios.post<{
+      success: boolean;
+      voice_id: string;
+      display_name: string;
+    }>(`${API_BASE}/clone-voice`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 120000,
+    });
+    return response.data;
   }
 
   /**

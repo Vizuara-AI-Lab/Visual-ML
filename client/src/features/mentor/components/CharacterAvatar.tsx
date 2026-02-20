@@ -38,8 +38,8 @@ export const CharacterAvatar: React.FC<CharacterAvatarProps> = ({
     <div className="relative">
       {/* Avatar Container */}
       <motion.div
-        className={`${sizeClasses[size]} rounded-full bg-linear-to-br from-indigo-500 to-purple-600 
-                   flex items-center justify-center shadow-lg relative overflow-hidden`}
+        className={`${sizeClasses[size]} rounded-full bg-amber-500
+                   flex items-center justify-center shadow-md relative overflow-hidden`}
         animate={{
           scale: isSpeaking ? [1, 1.05, 1] : [1, 1.02, 1],
         }}
@@ -52,7 +52,7 @@ export const CharacterAvatar: React.FC<CharacterAvatarProps> = ({
         {/* Glow effect when speaking */}
         {isSpeaking && (
           <motion.div
-            className="absolute inset-0 bg-linear-to-br from-indigo-400 to-purple-500"
+            className="absolute inset-0 bg-amber-400"
             animate={{
               opacity: [0.3, 0.7, 0.3],
             }}
@@ -74,7 +74,7 @@ export const CharacterAvatar: React.FC<CharacterAvatarProps> = ({
         {/* Pulse ring when speaking */}
         {isSpeaking && (
           <motion.div
-            className="absolute inset-0 rounded-full border-4 border-indigo-400"
+            className="absolute inset-0 rounded-full border-4 border-amber-400"
             animate={{
               scale: [1, 1.3],
               opacity: [0.7, 0],
@@ -91,14 +91,14 @@ export const CharacterAvatar: React.FC<CharacterAvatarProps> = ({
       {/* Voice Indicator */}
       {showVoiceIndicator && (
         <motion.div
-          className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-white shadow-md 
+          className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-white shadow-md
                      flex items-center justify-center"
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
         >
           {isSpeaking ? (
-            <Volume2 className="w-4 h-4 text-indigo-600" />
+            <Volume2 className="w-4 h-4 text-amber-600" />
           ) : (
             <VolumeX className="w-4 h-4 text-slate-400" />
           )}

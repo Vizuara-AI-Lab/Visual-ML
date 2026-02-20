@@ -47,18 +47,18 @@ export const GuideCard: React.FC<GuideCardProps> = ({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -20, scale: 0.95 }}
       transition={{ duration: 0.3 }}
-      className="relative p-4 rounded-xl border-2 border-indigo-200 bg-linear-to-br from-indigo-50 to-purple-50 shadow-lg"
+      className="relative p-4 rounded-xl border border-amber-200 bg-amber-50"
     >
       {/* Header */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-bold text-indigo-900 text-base flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-indigo-600" />
+          <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-amber-500" />
             {title}
           </h3>
           {estimatedTime && (
-            <span className="text-xs text-indigo-600 bg-indigo-100 px-2 py-1 rounded-full">
-              ⏱ {estimatedTime}
+            <span className="text-xs text-amber-700 bg-amber-100 px-2 py-1 rounded-full border border-amber-200">
+              {estimatedTime}
             </span>
           )}
         </div>
@@ -84,18 +84,18 @@ export const GuideCard: React.FC<GuideCardProps> = ({
                   isCompleted
                     ? "bg-green-50 border border-green-200 hover:bg-green-100"
                     : isCurrent
-                      ? "bg-indigo-100 border-2 border-indigo-400 hover:bg-indigo-200 shadow-md"
+                      ? "bg-white border-2 border-amber-400 hover:bg-amber-50 shadow-sm"
                       : "bg-white border border-slate-200 hover:bg-slate-50"
                 }
               `}
             >
               {/* Step indicator */}
               <div
-                className={`flex-shrink-0 mt-0.5 ${
+                className={`shrink-0 mt-0.5 ${
                   isCompleted
                     ? "text-green-600"
                     : isCurrent
-                      ? "text-indigo-600"
+                      ? "text-amber-600"
                       : "text-slate-400"
                 }`}
               >
@@ -106,7 +106,7 @@ export const GuideCard: React.FC<GuideCardProps> = ({
                 ) : (
                   <div
                     className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                      isCurrent ? "bg-indigo-500" : "bg-slate-200"
+                      isCurrent ? "bg-amber-500" : "bg-slate-200"
                     }`}
                   >
                     <span
@@ -129,7 +129,7 @@ export const GuideCard: React.FC<GuideCardProps> = ({
                         isCompleted
                           ? "text-green-900"
                           : isCurrent
-                            ? "text-indigo-900"
+                            ? "text-slate-900"
                             : "text-slate-700"
                       }`}
                     >
@@ -140,7 +140,7 @@ export const GuideCard: React.FC<GuideCardProps> = ({
                         isCompleted
                           ? "text-green-600"
                           : isCurrent
-                            ? "text-indigo-600"
+                            ? "text-amber-600"
                             : "text-slate-500"
                       }`}
                     >
@@ -148,7 +148,7 @@ export const GuideCard: React.FC<GuideCardProps> = ({
                     </p>
                   </div>
                   {isCurrent && (
-                    <ArrowRight className="w-4 h-4 text-indigo-600 flex-shrink-0 animate-pulse" />
+                    <ArrowRight className="w-4 h-4 text-amber-500 shrink-0 animate-pulse" />
                   )}
                 </div>
               </div>
@@ -159,7 +159,7 @@ export const GuideCard: React.FC<GuideCardProps> = ({
 
       {/* Footer hint */}
       <div className="mt-4 text-xs text-slate-600 bg-white/60 rounded-lg p-2 text-center">
-        💡 Click on any step to add that node to your canvas
+        Click on any step to add that node to your canvas
       </div>
     </motion.div>
   );

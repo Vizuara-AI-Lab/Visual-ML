@@ -8,7 +8,6 @@
 export { MentorAssistant } from "./components/MentorAssistant";
 export { CharacterAvatar } from "./components/CharacterAvatar";
 export { SuggestionCard } from "./components/SuggestionCard";
-export { GuideCard } from "./components/GuideCard";
 
 // Store
 export { useMentorStore } from "./store/mentorStore";
@@ -17,6 +16,7 @@ export type {
   MentorPreferences,
   MentorAction,
   DatasetInsight,
+  LearningStage,
 } from "./store/mentorStore";
 
 // API
@@ -31,3 +31,7 @@ export type {
 // Hooks
 export { useAudioPlayer } from "./hooks/useAudioPlayer";
 export { useMentorContext } from "./hooks/useMentorContext";
+export { useLearningFlow } from "./hooks/useLearningFlow";
+
+// Content
+export { ALGORITHM_CONFIG, getAlgorithmConfig } from "./content/algorithmConfig";

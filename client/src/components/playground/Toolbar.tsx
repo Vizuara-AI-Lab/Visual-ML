@@ -48,12 +48,12 @@ export const Toolbar = ({
   onToggleMentor,
 }: ToolbarProps) => {
   return (
-    <div className="h-16 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 flex items-center justify-between px-6 shadow-lg shadow-slate-900/5">
+    <div className="h-16 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 flex items-center justify-between px-6">
       <div className="flex items-center gap-3">
         {onBack && (
           <button
             onClick={onBack}
-            className="p-2 hover:bg-slate-100/50 text-slate-500 hover:text-slate-800 rounded-lg transition-all"
+            className="p-2 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-lg transition-colors"
             title="Back to Projects"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -61,7 +61,7 @@ export const Toolbar = ({
         )}
 
         <div className="flex items-center gap-3 mr-6">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg shadow-slate-900/25">
+          <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center">
             <Settings className="w-5 h-5 text-white" />
           </div>
           <div>
@@ -75,7 +75,7 @@ export const Toolbar = ({
         {isExecuting && onAbort ? (
           <button
             onClick={onAbort}
-            className="ml-3 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-red-900/25 hover:shadow-xl hover:shadow-red-900/30 font-semibold"
+            className="ml-3 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center gap-2 transition-colors font-semibold"
           >
             <StopCircle className="w-4 h-4" />
             Stop Execution
@@ -84,7 +84,7 @@ export const Toolbar = ({
           <button
             onClick={onExecute}
             disabled={isExecuting}
-            className="ml-3 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-slate-900/25 hover:shadow-xl hover:shadow-slate-900/30 disabled:shadow-none font-semibold"
+            className="ml-3 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors font-semibold"
           >
             <Play className="w-4 h-4" />
             {isExecuting ? "Executing..." : "Run Pipeline"}
@@ -93,7 +93,7 @@ export const Toolbar = ({
 
         {/* Progress Indicator */}
         {executionProgress && (
-          <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg shadow-md">
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg">
             <div className="flex-1 min-w-55">
               <div className="text-xs font-medium text-slate-600 mb-1.5">
                 {executionProgress.status}
@@ -107,7 +107,7 @@ export const Toolbar = ({
               </div>
               <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                 <div
-                  className="bg-slate-900 h-2 rounded-full transition-all duration-300"
+                  className="bg-amber-500 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${executionProgress.percent}%` }}
                 />
               </div>
@@ -119,10 +119,10 @@ export const Toolbar = ({
         )}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <button
           onClick={onSave}
-          className="px-4 py-2 hover:bg-slate-100/50 text-slate-500 hover:text-slate-800 rounded-lg flex items-center gap-2 transition-all"
+          className="px-4 py-2 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-lg flex items-center gap-2 transition-colors"
           title="Save Pipeline"
         >
           <Save className="w-4 h-4" />
@@ -132,11 +132,11 @@ export const Toolbar = ({
         {onExport && (
           <button
             onClick={onExport}
-            className="px-4 py-2 hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700 rounded-lg flex items-center gap-2 transition-all border border-transparent hover:border-emerald-200"
+            className="px-4 py-2 hover:bg-slate-100 text-slate-500 hover:text-slate-800 rounded-lg flex items-center gap-2 transition-colors"
             title="Export Pipeline to Code"
           >
             <Code className="w-4 h-4" />
-            <span className="font-medium">Export Code</span>
+            <span className="font-medium">Export</span>
           </button>
         )}
 
@@ -144,7 +144,7 @@ export const Toolbar = ({
           <button
             onClick={onShare}
             disabled={isShareLoading}
-            className="px-4 py-2 hover:bg-blue-50 text-blue-600 hover:text-blue-700 disabled:text-blue-400 disabled:cursor-not-allowed rounded-lg flex items-center gap-2 transition-all border border-transparent hover:border-blue-200 disabled:hover:bg-transparent disabled:hover:border-transparent"
+            className="px-4 py-2 hover:bg-slate-100 text-slate-500 hover:text-slate-800 disabled:text-slate-300 disabled:cursor-not-allowed rounded-lg flex items-center gap-2 transition-colors"
             title="Share Project"
           >
             {isShareLoading ? (
@@ -158,13 +158,15 @@ export const Toolbar = ({
           </button>
         )}
 
+        <div className="w-px h-8 bg-slate-200/60 mx-1" />
+
         {onToggleMentor && (
           <button
             onClick={onToggleMentor}
-            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all border ${
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors border ${
               isMentorEnabled
-                ? "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 hover:text-amber-700"
-                : "text-slate-400 border-transparent hover:bg-slate-100/50 hover:text-slate-600"
+                ? "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100"
+                : "text-slate-400 border-transparent hover:bg-slate-100 hover:text-slate-600"
             }`}
             title={isMentorEnabled ? "Disable AI Mentor" : "Enable AI Mentor"}
           >
@@ -184,7 +186,7 @@ export const Toolbar = ({
 
         <button
           onClick={onClear}
-          className="px-4 py-2 hover:bg-red-50 text-red-600 hover:text-red-700 rounded-lg flex items-center gap-2 transition-all border border-transparent hover:border-red-200"
+          className="px-4 py-2 hover:bg-red-50 text-slate-500 hover:text-red-600 rounded-lg flex items-center gap-2 transition-colors"
           title="Clear Canvas"
         >
           <Trash2 className="w-4 h-4" />
