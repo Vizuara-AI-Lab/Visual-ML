@@ -13,7 +13,6 @@ const LossFunctionsActivity = lazy(() => import("./LossFunctionsActivity"));
 const LinearRegressionActivity = lazy(() => import("./LinearRegressionActivity"));
 const GradientDescentActivity = lazy(() => import("./GradientDescentActivity"));
 const LogisticRegressionActivity = lazy(() => import("./LogisticRegressionActivity"));
-const KNNPlaygroundActivity = lazy(() => import("./KNNPlaygroundActivity"));
 const KMeansClusteringActivity = lazy(() => import("./KMeansClusteringActivity"));
 
 // Intermediate: Model Understanding
@@ -25,7 +24,6 @@ const ActivationFunctionsActivity = lazy(() => import("./ActivationFunctionsActi
 const NeuralNetworkActivity = lazy(() => import("./NeuralNetworkActivity"));
 const BackpropagationActivity = lazy(() => import("./BackpropagationActivity"));
 const CNNFiltersActivity = lazy(() => import("./CNNFiltersActivity"));
-const OverfittingActivity = lazy(() => import("./OverfittingActivity"));
 
 interface ActivityModalProps {
   nodeId: string | null;
@@ -50,7 +48,6 @@ const ACTIVITY_MAP: Record<string, React.LazyExoticComponent<() => JSX.Element>>
   activity_linear_regression: LinearRegressionActivity,
   activity_gradient_descent: GradientDescentActivity,
   activity_logistic_regression: LogisticRegressionActivity,
-  activity_knn_playground: KNNPlaygroundActivity,
   activity_kmeans_clustering: KMeansClusteringActivity,
   activity_decision_tree: DecisionTreeActivity,
   activity_confusion_matrix: ConfusionMatrixActivity,
@@ -58,7 +55,6 @@ const ACTIVITY_MAP: Record<string, React.LazyExoticComponent<() => JSX.Element>>
   activity_neural_network: NeuralNetworkActivity,
   activity_backpropagation: BackpropagationActivity,
   activity_cnn_filters: CNNFiltersActivity,
-  activity_overfitting: OverfittingActivity,
 };
 
 export const ActivityModal = ({ nodeId, onClose }: ActivityModalProps) => {

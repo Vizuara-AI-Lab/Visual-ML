@@ -9,7 +9,6 @@ import {
   TrendingUp,
   TrendingDown,
   Binary,
-  ScatterChart,
   Circle,
   GitBranch,
   Table,
@@ -17,7 +16,6 @@ import {
   Network,
   Undo2,
   Layers,
-  AlertTriangle,
   Gamepad2,
 } from "lucide-react";
 
@@ -68,17 +66,6 @@ export const activityCategory: NodeCategory = {
       category: "activities",
       icon: Binary,
       color: "#F97316",
-      defaultConfig: {},
-      configFields: [],
-    },
-    {
-      type: "activity_knn_playground",
-      label: "KNN Playground",
-      description:
-        "Place points, choose K, and watch nearest-neighbor classification live",
-      category: "activities",
-      icon: ScatterChart,
-      color: "#10B981",
       defaultConfig: {},
       configFields: [],
     },
@@ -160,17 +147,6 @@ export const activityCategory: NodeCategory = {
       category: "activities",
       icon: Layers,
       color: "#8B5CF6",
-      defaultConfig: {},
-      configFields: [],
-    },
-    {
-      type: "activity_overfitting",
-      label: "Overfitting Detector",
-      description:
-        "Train a model live and watch training vs validation loss diverge in real-time",
-      category: "activities",
-      icon: AlertTriangle,
-      color: "#DC2626",
       defaultConfig: {},
       configFields: [],
     },

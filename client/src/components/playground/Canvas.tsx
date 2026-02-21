@@ -66,7 +66,6 @@ const nodeTypes: Record<string, React.ComponentType<any>> = {
   activity_linear_regression: MLNode,
   activity_gradient_descent: MLNode,
   activity_logistic_regression: MLNode,
-  activity_knn_playground: MLNode,
   activity_kmeans_clustering: MLNode,
   activity_decision_tree: MLNode,
   activity_confusion_matrix: MLNode,
@@ -74,7 +73,6 @@ const nodeTypes: Record<string, React.ComponentType<any>> = {
   activity_neural_network: MLNode,
   activity_backpropagation: MLNode,
   activity_cnn_filters: MLNode,
-  activity_overfitting: MLNode,
 };
 
 // Custom styled edge with particle animation during execution

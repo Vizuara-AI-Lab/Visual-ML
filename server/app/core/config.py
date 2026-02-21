@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # Google OAuth
     GOOGLE_CLIENT_ID: Optional[str] = None
     GOOGLE_CLIENT_SECRET: Optional[str] = None
-    GOOGLE_REDIRECT_URI: Optional[str] = "http://localhost:8000/api/v1/auth/student/google/callback"
+    GOOGLE_REDIRECT_URI: Optional[str] = "http://localhost:3003/api/v1/auth/student/google/callback"
 
     # Rate Limiting (for 50k traffic)
     RATE_LIMIT_PER_MINUTE: int = 100
