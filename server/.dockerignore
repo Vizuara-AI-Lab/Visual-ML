@@ -34,7 +34,7 @@ docker-compose*.yml
 
 # Runtime data (will be created as volumes)
 uploads/
-models/
+/models/
 
 # Misc
 *.log
