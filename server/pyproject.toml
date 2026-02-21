@@ -35,13 +35,14 @@ dependencies = [
     "openai>=2.15.0",
     "anthropic>=0.76.0",
     "google-generativeai>=0.8.6",
+    "google-genai>=1.0.0",
     "dynaroute-client>=0.1.0",
     # Utilities (Required)
     "loguru>=0.7.0",
     "python-dotenv>=1.0.0",
     "httpx>=0.28.1",
     "aiofiles>=25.1.0",
-    "brevo-python>=1.2.0",
+    "brevo-python>=1.2.0,<2.0.0",
 ]
 
 

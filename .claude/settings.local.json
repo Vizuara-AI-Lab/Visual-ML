@@ -6,7 +6,10 @@
       "Bash(find:*)",
       "Bash(python -m alembic:*)",
       "Bash(python -c:*)",
-      "Bash(docker build:*)"
+      "Bash(docker build:*)",
+      "Bash(docker compose up:*)",
+      "Bash(docker compose down:*)",
+      "Bash(docker run:*)"
     ]
   }
 }
