@@ -5,7 +5,8 @@
       "Bash(npx vite build:*)",
       "Bash(find:*)",
       "Bash(python -m alembic:*)",
-      "Bash(python -c:*)"
+      "Bash(python -c:*)",
+      "Bash(docker build:*)"
     ]
   }
 }
