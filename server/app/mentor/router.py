@@ -11,7 +11,7 @@ Provides endpoints for:
 - User preference management
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from typing import Optional
 import json
@@ -264,6 +264,7 @@ async def generate_speech(request: TTSRequest, student: Student = Depends(get_cu
         response = await tts_service.generate_speech(
             text=request.text,
             personality=request.personality,
+            voice_id=request.voice_id,
             cache_key=request.cache_key,
             return_base64=True,
         )
@@ -305,6 +306,84 @@ async def test_tts():
     except Exception as e:
         logger.error(f"Test TTS failed: {str(e)}", exc_info=True)
         return {"success": False, "error": str(e)}
+
+
+@router.post("/clone-voice")
+async def clone_voice(
+    file: UploadFile = File(...),
+    display_name: str = Form(...),
+    student: Student = Depends(get_current_student),
+):
+    """
+    Clone a voice by uploading an audio sample.
+    Accepts WAV or MP3, max 10MB.
+    Returns the new Inworld voice ID.
+    """
+    try:
+        # Validate file type
+        if file.content_type and not file.content_type.startswith("audio/"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File must be an audio file (WAV or MP3)",
+            )
+
+        # Read and validate size
+        audio_data = await file.read()
+        if len(audio_data) > 10 * 1024 * 1024:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Audio file must be less than 10MB",
+            )
+
+        logger.info(f"Voice clone request from {student.emailId}: {display_name}")
+
+        result = await tts_service.clone_voice(
+            display_name=display_name,
+            audio_data=audio_data,
+        )
+
+        return {
+            "success": True,
+            "voice_id": result["voiceId"],
+            "display_name": result["displayName"],
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Voice clone failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Voice cloning failed: {str(e)}",
+        )
+
+
+@router.post("/preview-voice", response_model=TTSResponse)
+async def preview_voice(
+    request: TTSRequest,
+    student: Student = Depends(get_current_student),
+):
+    """
+    Generate a short voice preview with the specified voice_id.
+    Uses a fixed sample text if none provided.
+    """
+    try:
+        preview_text = request.text or "Hello, I am your AI mentor. I will guide you step by step to build machine learning models."
+
+        response = await tts_service.generate_speech(
+            text=preview_text,
+            personality=request.personality,
+            voice_id=request.voice_id,
+            return_base64=True,
+        )
+        return response
+
+    except Exception as e:
+        logger.error(f"Voice preview failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Voice preview failed: {str(e)}",
+        )
 
 
 @router.get("/preferences", response_model=MentorPreferences)

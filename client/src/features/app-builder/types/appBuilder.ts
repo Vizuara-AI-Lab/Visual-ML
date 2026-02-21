@@ -13,7 +13,11 @@ export type BlockType =
   | "results_display"
   | "metrics_card"
   | "divider"
-  | "image";
+  | "image"
+  | "spacer"
+  | "alert"
+  | "code"
+  | "video_embed";
 
 export interface HeroConfig {
   title: string;
@@ -87,8 +91,33 @@ export interface DividerConfig {
 
 export interface ImageConfig {
   url: string;
+  base64Data?: string;
   alt: string;
   width: "sm" | "md" | "lg" | "full";
+}
+
+export interface SpacerConfig {
+  height: number;
+}
+
+export interface AlertConfig {
+  variant: "info" | "warning" | "success" | "error";
+  title: string;
+  message: string;
+  showIcon: boolean;
+}
+
+export interface CodeConfig {
+  code: string;
+  language: string;
+  showLineNumbers: boolean;
+  title: string;
+}
+
+export interface VideoEmbedConfig {
+  url: string;
+  aspectRatio: "16:9" | "4:3";
+  caption: string;
 }
 
 export type BlockConfig =
@@ -100,12 +129,27 @@ export type BlockConfig =
   | ResultsDisplayConfig
   | MetricsCardConfig
   | DividerConfig
-  | ImageConfig;
+  | ImageConfig
+  | SpacerConfig
+  | AlertConfig
+  | CodeConfig
+  | VideoEmbedConfig;
+
+export interface BlockStyleConfig {
+  backgroundColor?: string;
+  textColor?: string;
+  borderRadius?: number;
+  paddingX?: number;
+  paddingY?: number;
+  borderColor?: string;
+  borderWidth?: number;
+}
 
 export interface AppBlock {
   id: string;
   type: BlockType;
   config: BlockConfig;
+  style?: BlockStyleConfig;
   order: number;
   nodeId?: string;    // mapped pipeline node ID
   nodeType?: string;  // mapped pipeline node type

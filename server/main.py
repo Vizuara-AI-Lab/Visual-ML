@@ -22,6 +22,7 @@ from app.api.v1 import (
     tasks,
     sharing,
     custom_apps,
+    gamification,
 )
 from app.mentor import router as mentor_router
 from app.utils.cleanup import start_cleanup_loop
@@ -177,6 +178,7 @@ app.include_router(
 app.include_router(
     custom_apps.router, prefix=settings.API_V1_PREFIX + "/custom-apps", tags=["Custom Apps"]
 )
+app.include_router(gamification.router, prefix=settings.API_V1_PREFIX)
 
 
 if __name__ == "__main__":
@@ -185,7 +187,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=3003,
         reload=settings.DEBUG,
         log_level=settings.LOG_LEVEL.lower(),
     )

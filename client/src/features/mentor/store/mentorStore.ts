@@ -1,11 +1,88 @@
 /**
  * Mentor Store - Zustand state management for AI Mentor
  *
- * Manages mentor visibility, suggestions, audio playback, and user preferences
+ * Manages mentor visibility, suggestions, audio playback, user preferences,
+ * and the structured learning flow state machine.
  */
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+
+// ── Learning Flow Types ──────────────────────────────────────────
+
+export type LearningStage =
+  | "welcome"
+  | "algorithm_selected"
+  | "prompt_drag_dataset"
+  | "dataset_node_added"
+  | "dataset_configured"
+  | "prompt_column_info"
+  | "column_info_added"
+  | "prompt_run_column_info"
+  | "column_info_executed"
+  | "prompt_missing_values"
+  | "missing_values_added"
+  | "missing_values_configured"
+  | "prompt_encoding"
+  | "encoding_added"
+  | "prompt_split"
+  | "split_added"
+  | "split_configured"
+  | "prompt_model"
+  | "model_added"
+  | "prompt_metrics"
+  | "metrics_added"
+  | "prompt_final_run"
+  | "pipeline_executed"
+  | "completed"
+  | "error_occurred";
+
+export interface LearningFlowState {
+  stage: LearningStage;
+  selectedAlgorithm: string | null;
+  previousStage: LearningStage | null;
+  datasetInfo: {
+    filename: string;
+    nRows: number;
+    nCols: number;
+  } | null;
+  columnInfoResults: {
+    missingColumns: Array<{ column: string; count: number }>;
+    categoricalColumns: string[];
+    numericColumns: string[];
+    totalMissing: number;
+  } | null;
+  trackedNodeIds: {
+    dataset: string | null;
+    columnInfo: string | null;
+    missingHandler: string | null;
+    encoding: string | null;
+    split: string | null;
+    model: string | null;
+    metrics: string[];
+  };
+  executionResults: Record<string, number> | null;
+}
+
+const defaultLearningFlow: LearningFlowState = {
+  stage: "welcome",
+  selectedAlgorithm: null,
+  previousStage: null,
+  datasetInfo: null,
+  columnInfoResults: null,
+  trackedNodeIds: {
+    dataset: null,
+    columnInfo: null,
+    missingHandler: null,
+    encoding: null,
+    split: null,
+    model: null,
+    metrics: [],
+  },
+  executionResults: null,
+};
+
+// ── Existing Types ───────────────────────────────────────────────
 
 export interface MentorAction {
   label: string;
@@ -15,7 +92,8 @@ export interface MentorAction {
     | "learn_more"
     | "execute"
     | "show_guide"
-    | "dataset_guidance";
+    | "dataset_guidance"
+    | "select_algorithm";
   payload?: Record<string, unknown>;
 }
 
@@ -43,6 +121,7 @@ export interface MentorPreferences {
   avatar: string;
   personality: "encouraging" | "professional" | "concise" | "educational";
   voice_mode: "voice_first" | "text_first" | "ask_each_time";
+  voice_id: string;
   expertise_level: "beginner" | "intermediate" | "advanced";
   show_tips: boolean;
   auto_analyze: boolean;
@@ -69,25 +148,16 @@ export interface DatasetInsight {
 interface AudioQueueItem {
   id: string;
   text: string;
-  audioData?: string; // base64
+  audioData?: string;
 }
+
+// ── Store Interface ──────────────────────────────────────────────
 
 interface MentorState {
   // UI State
   isOpen: boolean;
   isMinimized: boolean;
-  // Current guide state
-  currentGuide: {
-    modelType: string;
-    steps: Array<{
-      step: number;
-      node_type: string;
-      description: string;
-    }>;
-    explanation: string;
-    estimatedTime?: string;
-    currentStep: number;
-  } | null;
+
   // Suggestions
   currentSuggestion: MentorSuggestion | null;
   suggestions: MentorSuggestion[];
@@ -104,27 +174,16 @@ interface MentorState {
   // Preferences
   preferences: MentorPreferences;
 
-  // Actions
+  // Learning Flow
+  learningFlow: LearningFlowState;
+
+  // UI actions
   setOpen: (open: boolean) => void;
   setMinimized: (minimized: boolean) => void;
   toggleOpen: () => void;
   toggleMinimized: () => void;
 
-  // Guide actions
-  showGuide: (guide: {
-    modelType: string;
-    steps: Array<{
-      step: number;
-      node_type: string;
-      description: string;
-    }>;
-    explanation: string;
-    estimatedTime?: string;
-  }) => void;
-  clearGuide: () => void;
-  advanceGuideStep: () => void;
-  setGuideStep: (step: number) => void;
-
+  // Suggestion actions
   showSuggestion: (suggestion: MentorSuggestion) => void;
   dismissSuggestion: (suggestionId: string) => void;
   clearSuggestions: () => void;
@@ -140,25 +199,43 @@ interface MentorState {
   // Preferences
   updatePreferences: (prefs: Partial<MentorPreferences>) => void;
   resetPreferences: () => void;
+
+  // Learning Flow actions
+  setStage: (stage: LearningStage) => void;
+  setSelectedAlgorithm: (algorithm: string) => void;
+  setDatasetInfo: (info: LearningFlowState["datasetInfo"]) => void;
+  setColumnInfoResults: (
+    data: LearningFlowState["columnInfoResults"],
+  ) => void;
+  setExecutionResults: (results: Record<string, number> | null) => void;
+  trackNodeId: (
+    role: keyof LearningFlowState["trackedNodeIds"],
+    id: string,
+  ) => void;
+  resetFlow: () => void;
 }
+
+// ── Defaults ─────────────────────────────────────────────────────
 
 const defaultPreferences: MentorPreferences = {
   enabled: true,
   avatar: "scientist",
   personality: "encouraging",
   voice_mode: "text_first",
+  voice_id: "default-tdxiowf-g_jzcmgci-i_iw__rajat_sir_voice_clone",
   expertise_level: "beginner",
   show_tips: true,
   auto_analyze: true,
 };
 
+// ── Store ────────────────────────────────────────────────────────
+
 export const useMentorStore = create<MentorState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       // Initial state
       isOpen: true,
       isMinimized: false,
-      currentGuide: null,
       currentSuggestion: null,
       suggestions: [],
       history: [],
@@ -167,36 +244,11 @@ export const useMentorStore = create<MentorState>()(
       audioQueue: [],
       currentAudioId: null,
       preferences: defaultPreferences,
+      learningFlow: defaultLearningFlow,
 
       // UI actions
       setOpen: (open) => set({ isOpen: open }),
       setMinimized: (minimized) => set({ isMinimized: minimized }),
-
-      // Guide actions
-      showGuide: (guide) =>
-        set({
-          currentGuide: { ...guide, currentStep: 0 },
-          currentSuggestion: null, // Clear current suggestion when showing guide
-        }),
-      clearGuide: () => set({ currentGuide: null }),
-      advanceGuideStep: () =>
-        set((state) => ({
-          currentGuide: state.currentGuide
-            ? {
-                ...state.currentGuide,
-                currentStep: Math.min(
-                  state.currentGuide.currentStep + 1,
-                  state.currentGuide.steps.length - 1,
-                ),
-              }
-            : null,
-        })),
-      setGuideStep: (step) =>
-        set((state) => ({
-          currentGuide: state.currentGuide
-            ? { ...state.currentGuide, currentStep: step }
-            : null,
-        })),
       toggleOpen: () => set((state) => ({ isOpen: !state.isOpen })),
       toggleMinimized: () =>
         set((state) => ({ isMinimized: !state.isMinimized })),
@@ -209,14 +261,16 @@ export const useMentorStore = create<MentorState>()(
             suggestion,
             ...state.suggestions.filter((s) => s.id !== suggestion.id),
           ],
-          history: [suggestion, ...state.history].slice(0, 20), // Keep last 20
+          history: [suggestion, ...state.history].slice(0, 20),
           isOpen: true,
           isMinimized: false,
         })),
 
       dismissSuggestion: (suggestionId) =>
         set((state) => ({
-          suggestions: state.suggestions.filter((s) => s.id !== suggestionId),
+          suggestions: state.suggestions.filter(
+            (s) => s.id !== suggestionId,
+          ),
           currentSuggestion:
             state.currentSuggestion?.id === suggestionId
               ? state.suggestions[0] || null
@@ -260,12 +314,78 @@ export const useMentorStore = create<MentorState>()(
         })),
 
       resetPreferences: () => set({ preferences: defaultPreferences }),
+
+      // Learning Flow actions
+      setStage: (stage) =>
+        set((state) => ({
+          learningFlow: {
+            ...state.learningFlow,
+            previousStage: state.learningFlow.stage,
+            stage,
+          },
+        })),
+
+      setSelectedAlgorithm: (algorithm) =>
+        set((state) => ({
+          learningFlow: {
+            ...state.learningFlow,
+            selectedAlgorithm: algorithm,
+          },
+        })),
+
+      setDatasetInfo: (info) =>
+        set((state) => ({
+          learningFlow: {
+            ...state.learningFlow,
+            datasetInfo: info,
+          },
+        })),
+
+      setColumnInfoResults: (data) =>
+        set((state) => ({
+          learningFlow: {
+            ...state.learningFlow,
+            columnInfoResults: data,
+          },
+        })),
+
+      setExecutionResults: (results) =>
+        set((state) => ({
+          learningFlow: {
+            ...state.learningFlow,
+            executionResults: results,
+          },
+        })),
+
+      trackNodeId: (role, id) =>
+        set((state) => {
+          const tracked = { ...state.learningFlow.trackedNodeIds };
+          if (role === "metrics") {
+            tracked.metrics = [...tracked.metrics, id];
+          } else {
+            (tracked as Record<string, string | string[] | null>)[role] = id;
+          }
+          return {
+            learningFlow: {
+              ...state.learningFlow,
+              trackedNodeIds: tracked,
+            },
+          };
+        }),
+
+      resetFlow: () =>
+        set({
+          learningFlow: defaultLearningFlow,
+          currentSuggestion: null,
+          suggestions: [],
+        }),
     }),
     {
       name: "mentor-storage",
       partialize: (state) => ({
         preferences: state.preferences,
-        history: state.history.slice(0, 10), // Persist only last 10 history items
+        history: state.history.slice(0, 10),
+        learningFlow: state.learningFlow,
       }),
     },
   ),

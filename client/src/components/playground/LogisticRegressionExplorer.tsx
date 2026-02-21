@@ -3,7 +3,7 @@
  * Tabbed component: Results | Class Distribution | Metric Explainer | Sigmoid Explorer | Quiz
  */
 
-import { useState, type ReactNode } from "react";
+import { useState, lazy, Suspense, type ReactNode } from "react";
 import {
   ClipboardList,
   BarChart3,
@@ -15,7 +15,10 @@ import {
   Trophy,
   ChevronRight,
   Info,
+  Cog,
 } from "lucide-react";
+
+const LogisticRegressionAnimation = lazy(() => import("./animations/LogisticRegressionAnimation"));
 
 interface LogisticRegressionExplorerProps {
   result: any;
@@ -27,7 +30,8 @@ type ExplorerTab =
   | "distribution"
   | "metrics"
   | "sigmoid"
-  | "quiz";
+  | "quiz"
+  | "how_it_works";
 
 export const LogisticRegressionExplorer = ({
   result,
@@ -65,6 +69,12 @@ export const LogisticRegressionExplorer = ({
       label: "Quiz",
       icon: HelpCircle,
       available: !!result.quiz_questions && result.quiz_questions.length > 0,
+    },
+    {
+      id: "how_it_works",
+      label: "How It Works",
+      icon: Cog,
+      available: true,
     },
   ];
 
@@ -106,6 +116,17 @@ export const LogisticRegressionExplorer = ({
       )}
       {activeTab === "quiz" && result.quiz_questions && (
         <QuizTab questions={result.quiz_questions} />
+      )}
+      {activeTab === "how_it_works" && (
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          }
+        >
+          <LogisticRegressionAnimation />
+        </Suspense>
       )}
     </div>
   );

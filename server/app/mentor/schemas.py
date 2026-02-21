@@ -97,9 +97,10 @@ class MentorAction(BaseModel):
     """Actionable suggestion that mentor provides."""
 
     label: str = Field(..., description="Action button label")
-    type: Literal["add_node", "fix_issue", "learn_more", "execute", "show_guide"] = Field(
-        ..., description="Action type"
-    )
+    type: Literal[
+        "add_node", "fix_issue", "learn_more", "execute", "show_guide", "select_algorithm",
+        "dataset_guidance"
+    ] = Field(..., description="Action type")
     payload: Optional[Dict[str, Any]] = Field(None, description="Action metadata")
 
 
@@ -154,6 +155,7 @@ class TTSRequest(BaseModel):
     personality: PersonalityStyle = Field(
         PersonalityStyle.ENCOURAGING, description="Voice personality"
     )
+    voice_id: Optional[str] = Field(None, description="Inworld voice ID (preset or cloned)")
     cache_key: Optional[str] = Field(None, description="Cache key for reuse")
 
 

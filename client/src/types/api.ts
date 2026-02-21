@@ -12,8 +12,38 @@ export interface Student {
   profilePic?: string;
   isPremium: boolean;
   isActive: boolean;
+  xp: number;
+  level: number;
   createdAt: string;
   lastLogin?: string;
+}
+
+export interface Badge {
+  badge_id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  awarded_at?: string;
+  is_earned: boolean;
+}
+
+export interface GamificationProfile {
+  xp: number;
+  level: number;
+  xp_to_next_level: number;
+  progress_percent: number;
+  total_badges_earned: number;
+  badges: Badge[];
+}
+
+export interface AwardXPResponse {
+  xp_gained: number;
+  total_xp: number;
+  level: number;
+  leveled_up: boolean;
+  new_level?: number;
+  new_badges: Badge[];
 }
 
 export interface StudentListItem {

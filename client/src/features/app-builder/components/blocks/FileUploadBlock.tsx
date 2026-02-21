@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useState } from "react";
-import { Upload, File, X } from "lucide-react";
+import { Upload, File, X, Link } from "lucide-react";
 import type { BlockRenderProps } from "../BlockRenderer";
 import type { FileUploadConfig } from "../../types/appBuilder";
 
@@ -55,9 +55,17 @@ export default function FileUploadBlock({
 
   return (
     <div className="bg-white rounded-xl border p-6">
-      <label className="block text-sm font-medium text-gray-700 mb-3">
-        {config.label}
-      </label>
+      <div className="flex items-center justify-between mb-3">
+        <label className="block text-sm font-medium text-gray-700">
+          {config.label}
+        </label>
+        {mode === "edit" && block.nodeId && (
+          <div className="flex items-center gap-1 text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+            <Link className="h-2.5 w-2.5" />
+            <span>Node: <strong>{block.nodeLabel || block.nodeId}</strong></span>
+          </div>
+        )}
+      </div>
 
       <div
         onDrop={isInteractive ? handleDrop : undefined}

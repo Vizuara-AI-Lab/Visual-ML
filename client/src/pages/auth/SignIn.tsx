@@ -111,15 +111,15 @@ const SignIn: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-50 px-4 pt-24 pb-12 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-50 via-white to-slate-50 px-4 pt-24 pb-12 relative overflow-hidden">
       <Navbar variant="auth-signin" />
       {/* Premium Background Pattern */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30" />
 
       {/* Animated Gradient Orbs */}
-      <div className="fixed top-0 left-0 w-96 h-96 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-full blur-3xl animate-pulse" />
+      <div className="fixed top-0 left-0 w-96 h-96 bg-linear-to-br from-blue-400/20 to-purple-400/20 rounded-full blur-3xl animate-pulse" />
       <div
-        className="fixed bottom-0 right-0 w-96 h-96 bg-gradient-to-br from-violet-400/20 to-pink-400/20 rounded-full blur-3xl animate-pulse"
+        className="fixed bottom-0 right-0 w-96 h-96 bg-linear-to-br from-violet-400/20 to-pink-400/20 rounded-full blur-3xl animate-pulse"
         style={{ animationDelay: "1s" }}
       />
 

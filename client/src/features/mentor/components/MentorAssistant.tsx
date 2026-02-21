@@ -1,7 +1,8 @@
 /**
  * Mentor Assistant Component
  *
- * Main floating AI mentor panel that appears in the playground
+ * Main floating AI mentor panel that appears in the playground.
+ * Shows one message at a time, driven by the learning flow state machine.
  */
 
 import React, { useEffect, useRef } from "react";
@@ -12,18 +13,15 @@ import {
   Maximize2,
   Play,
   Pause,
-  MessageCircle,
-  HelpCircle,
-  Loader2,
+  RotateCcw,
   Sparkles,
 } from "lucide-react";
 import { useMentorStore } from "../store/mentorStore";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { SuggestionCard } from "./SuggestionCard";
-import { GuideCard } from "./GuideCard";
 import { useAudioPlayer } from "../hooks/useAudioPlayer";
-import { mentorApi } from "../api/mentorApi";
-import { toast } from "react-hot-toast";
+import { welcomeMessage } from "../content/learningMessages";
+import { ALGORITHM_CONFIG } from "../content/algorithmConfig";
 
 interface MentorAssistantProps {
   userName: string;
@@ -38,43 +36,60 @@ export const MentorAssistant: React.FC<MentorAssistantProps> = ({
     isOpen,
     isMinimized,
     preferences,
-    currentGuide,
     currentSuggestion,
-    suggestions,
+    learningFlow,
     setOpen,
     setMinimized,
     showSuggestion,
-    dismissSuggestion,
-    advanceGuideStep,
+    resetFlow,
   } = useMentorStore();
 
-  const { playText, pause, resume, stop, isSpeaking } = useAudioPlayer();
-  const [isLoading, setIsLoading] = React.useState(false);
-  const pendingGreetingRef = useRef<string | null>(null);
+  const { playText, pause, stop, isSpeaking } = useAudioPlayer();
 
-  // Play queued greeting audio on first user interaction
+  // ── Show local welcome message when mentor is enabled ──────────
+
+  const hasGreetedRef = useRef(false);
+
   useEffect(() => {
-    const playPendingGreeting = () => {
-      if (pendingGreetingRef.current) {
-        const text = pendingGreetingRef.current;
-        pendingGreetingRef.current = null;
-        console.log("[Mentor] User interacted, playing queued greeting audio");
-        playText(text, true);
-      }
-      document.removeEventListener("click", playPendingGreeting);
-      document.removeEventListener("keydown", playPendingGreeting);
-    };
+    if (!preferences.enabled) {
+      hasGreetedRef.current = false;
+      return;
+    }
 
-    document.addEventListener("click", playPendingGreeting, { once: true });
-    document.addEventListener("keydown", playPendingGreeting, { once: true });
+    if (
+      preferences.enabled &&
+      learningFlow.stage === "welcome" &&
+      !hasGreetedRef.current
+    ) {
+      hasGreetedRef.current = true;
 
-    return () => {
-      document.removeEventListener("click", playPendingGreeting);
-      document.removeEventListener("keydown", playPendingGreeting);
-    };
-  }, [playText]);
+      const welcome = welcomeMessage(userName);
+      const algorithmActions = Object.entries(ALGORITHM_CONFIG).map(
+        ([key, config]) => ({
+          label: config.displayName,
+          type: "select_algorithm" as const,
+          payload: { algorithm: key },
+        }),
+      );
 
-  // Auto-play TTS when a new non-greeting suggestion appears (e.g. model introduction)
+      showSuggestion({
+        id: `welcome-${Date.now()}`,
+        type: "greeting",
+        priority: "info",
+        title: welcome.title,
+        message: welcome.displayText,
+        voice_text: welcome.voiceText,
+        actions: algorithmActions,
+        dismissible: false,
+      });
+
+      // Play greeting audio
+      playText(welcome.voiceText, true);
+    }
+  }, [preferences.enabled, learningFlow.stage, userName, showSuggestion, playText]);
+
+  // ── Auto-play TTS when a new non-greeting suggestion appears ───
+
   const prevSuggestionIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (
@@ -84,64 +99,41 @@ export const MentorAssistant: React.FC<MentorAssistantProps> = ({
     ) {
       prevSuggestionIdRef.current = currentSuggestion.id;
       const text = currentSuggestion.voice_text || currentSuggestion.message;
-      console.log("[Mentor] Auto-playing TTS for new suggestion:", currentSuggestion.type);
       playText(text, true);
     } else if (currentSuggestion) {
       prevSuggestionIdRef.current = currentSuggestion.id;
     }
   }, [currentSuggestion, playText]);
 
-  // Initial greeting on mount
+  // ── Stop audio immediately when mentor is disabled ─────────────
+
   useEffect(() => {
-    if (preferences.enabled && isOpen) {
-      handleGreeting();
+    if (!preferences.enabled) {
+      stop();
     }
-  }, []);
+  }, [preferences.enabled, stop]);
 
-  const handleGreeting = async () => {
-    try {
-      setIsLoading(true);
-      const timeOfDay = getTimeOfDay();
-      const response = await mentorApi.greetUser(userName, timeOfDay);
-
-      if (response.success && response.suggestions.length > 0) {
-        const greetingSuggestion = response.suggestions[0];
-        console.log(
-          "[Mentor] Showing greeting suggestion:",
-          greetingSuggestion,
-        );
-        showSuggestion(greetingSuggestion);
-
-        // Queue greeting audio — plays on first user interaction to avoid browser autoplay block
-        console.log("[Mentor] Queuing greeting audio for playback");
-        pendingGreetingRef.current = greetingSuggestion.message;
-      }
-    } catch (error) {
-      console.error("Error getting greeting:", error);
-      toast.error("Failed to load mentor greeting");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // ── Handlers ───────────────────────────────────────────────────
 
   const handleSuggestionAction = (action: any) => {
-    console.log("[MentorAssistant] handleSuggestionAction called:", action);
     onAction?.(action);
   };
 
   const handlePlayAudio = async (text: string) => {
-    console.log(
-      "[MentorAssistant] handlePlayAudio called, isSpeaking:",
-      isSpeaking,
-    );
     if (isSpeaking) {
-      console.log("[MentorAssistant] Pausing audio");
       pause();
     } else {
-      console.log("[MentorAssistant] Playing audio");
       await playText(text);
     }
   };
+
+  const handleStartOver = () => {
+    stop();
+    resetFlow();
+    hasGreetedRef.current = false;
+  };
+
+  // ── Render ─────────────────────────────────────────────────────
 
   if (!preferences.enabled || !isOpen) {
     return null;
@@ -163,33 +155,37 @@ export const MentorAssistant: React.FC<MentorAssistantProps> = ({
       style={{ maxHeight: isMinimized ? "80px" : "calc(100vh - 150px)" }}
     >
       <div
-        className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border-2 border-indigo-200/60 
+        className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl border border-amber-200/60
                       overflow-hidden flex flex-col"
         style={{ height: isMinimized ? "80px" : "auto" }}
       >
         {/* Header */}
         <div
-          className="bg-linear-to-r from-indigo-600 via-purple-600 to-pink-600 px-4 py-3 
-                        flex items-center justify-between"
+          className="bg-slate-900 px-4 py-3 flex items-center justify-between"
         >
           <div className="flex items-center gap-3">
             <CharacterAvatar size="small" showVoiceIndicator={false} />
             {!isMinimized && (
               <div>
                 <h3 className="text-white font-bold text-sm">AI Mentor</h3>
-                <p className="text-white/80 text-xs capitalize">
+                <p className="text-amber-300/80 text-xs capitalize">
                   {preferences.personality} Mode
                 </p>
               </div>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {/* Audio Control */}
             {!isMinimized && currentSuggestion && (
               <button
-                onClick={() => handlePlayAudio(currentSuggestion.message)}
-                className="text-white/80 hover:text-white transition-colors p-1.5 rounded hover:bg-white/10"
+                onClick={() =>
+                  handlePlayAudio(
+                    currentSuggestion.voice_text ||
+                      currentSuggestion.message,
+                  )
+                }
+                className="text-white/70 hover:text-white transition-colors p-1.5 rounded hover:bg-white/10"
                 title={isSpeaking ? "Pause" : "Play audio"}
               >
                 {isSpeaking ? (
@@ -203,7 +199,7 @@ export const MentorAssistant: React.FC<MentorAssistantProps> = ({
             {/* Minimize/Maximize */}
             <button
               onClick={() => setMinimized(!isMinimized)}
-              className="text-white/80 hover:text-white transition-colors p-1.5 rounded hover:bg-white/10"
+              className="text-white/70 hover:text-white transition-colors p-1.5 rounded hover:bg-white/10"
               title={isMinimized ? "Maximize" : "Minimize"}
             >
               {isMinimized ? (
@@ -216,7 +212,7 @@ export const MentorAssistant: React.FC<MentorAssistantProps> = ({
             {/* Close */}
             <button
               onClick={() => setOpen(false)}
-              className="text-white/80 hover:text-white transition-colors p-1.5 rounded hover:bg-white/10"
+              className="text-white/70 hover:text-white transition-colors p-1.5 rounded hover:bg-white/10"
               title="Close"
             >
               <X className="w-4 h-4" />
@@ -230,108 +226,51 @@ export const MentorAssistant: React.FC<MentorAssistantProps> = ({
             className="flex-1 overflow-y-auto p-4 space-y-3"
             style={{ maxHeight: "500px" }}
           >
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+            {/* Current Suggestion */}
+            <AnimatePresence mode="wait">
+              {currentSuggestion && (
+                <SuggestionCard
+                  key={currentSuggestion.id}
+                  suggestion={currentSuggestion}
+                  onAction={handleSuggestionAction}
+                  onPlayAudio={() =>
+                    handlePlayAudio(
+                      currentSuggestion.voice_text ||
+                        currentSuggestion.message,
+                    )
+                  }
+                />
+              )}
+            </AnimatePresence>
+
+            {/* Empty State */}
+            {!currentSuggestion && (
+              <div className="text-center py-8">
+                <Sparkles className="w-12 h-12 text-amber-300 mx-auto mb-3" />
+                <p className="text-slate-500 text-sm">
+                  I'm here to help! Add nodes to your pipeline and I'll
+                  provide guidance.
+                </p>
               </div>
-            ) : (
-              <>
-                {/* Current Guide */}
-                <AnimatePresence mode="wait">
-                  {currentGuide && (
-                    <GuideCard
-                      key={currentGuide.modelType}
-                      modelType={currentGuide.modelType}
-                      steps={currentGuide.steps}
-                      explanation={currentGuide.explanation}
-                      estimatedTime={currentGuide.estimatedTime}
-                      currentStep={currentGuide.currentStep}
-                      onStepClick={(nodeType) => {
-                        console.log("[Guide] Step clicked:", nodeType);
-                        onAction?.({
-                          type: "add_node",
-                          label: nodeType,
-                          payload: { node_type: nodeType },
-                        });
-                        advanceGuideStep();
-                      }}
-                    />
-                  )}
-                </AnimatePresence>
-
-                {/* Current Suggestion */}
-                <AnimatePresence mode="wait">
-                  {currentSuggestion && !currentGuide && (
-                    <SuggestionCard
-                      key={currentSuggestion.id}
-                      suggestion={currentSuggestion}
-                      onAction={handleSuggestionAction}
-                      onPlayAudio={() =>
-                        handlePlayAudio(currentSuggestion.message)
-                      }
-                    />
-                  )}
-                </AnimatePresence>
-
-                {/* Additional Suggestions */}
-                {suggestions.slice(1, 3).map((suggestion) => (
-                  <SuggestionCard
-                    key={suggestion.id}
-                    suggestion={suggestion}
-                    onAction={handleSuggestionAction}
-                    onPlayAudio={() => handlePlayAudio(suggestion.message)}
-                  />
-                ))}
-
-                {/* Empty State */}
-                {suggestions.length === 0 && !isLoading && (
-                  <div className="text-center py-8">
-                    <Sparkles className="w-12 h-12 text-indigo-300 mx-auto mb-3" />
-                    <p className="text-slate-500 text-sm">
-                      I'm here to help! Add nodes to your pipeline and I'll
-                      provide guidance.
-                    </p>
-                  </div>
-                )}
-              </>
             )}
           </div>
         )}
 
-        {/* Footer - Quick Actions */}
-        {!isMinimized && (
-          <div className="border-t border-slate-200 p-3 bg-slate-50/50">
-            <div className="flex gap-2">
-              <button
-                onClick={handleGreeting}
-                className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg 
-                           text-xs font-medium text-slate-700 hover:bg-slate-50 
-                           transition-colors flex items-center justify-center gap-2"
-              >
-                <MessageCircle className="w-3.5 h-3.5" />
-                Re-greet
-              </button>
-              <button
-                className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg 
-                           text-xs font-medium text-slate-700 hover:bg-slate-50 
-                           transition-colors flex items-center justify-center gap-2"
-                title="Get help"
-              >
-                <HelpCircle className="w-3.5 h-3.5" />
-                Help
-              </button>
-            </div>
+        {/* Footer - Start Over */}
+        {!isMinimized && learningFlow.stage !== "welcome" && (
+          <div className="border-t border-slate-100 p-3 bg-slate-50/50">
+            <button
+              onClick={handleStartOver}
+              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg
+                         text-xs font-medium text-slate-700 hover:bg-slate-50
+                         transition-colors flex items-center justify-center gap-2"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Start Over
+            </button>
           </div>
         )}
       </div>
     </motion.div>
   );
 };
-
-// Helper function
-function getTimeOfDay(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return "morning";
-  if (hour < 18) return "afternoon";
-  return "evening";
-}

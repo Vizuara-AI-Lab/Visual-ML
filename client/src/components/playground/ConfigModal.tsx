@@ -26,6 +26,7 @@ import { FeatureEngineeringConfigPanel } from "./FeatureEngineeringConfigPanel";
 import { SplitConfigPanel } from "./SplitConfigPanel";
 import { MLAlgorithmConfigPanel } from "./MLAlgorithmConfigPanel";
 import { ResultMetricsConfigPanel } from "./ResultMetricsConfigPanel";
+import { GenAIConfigPanel } from "./GenAIConfigPanel";
 import {
   listProjectDatasets,
   type DatasetMetadata,
@@ -1508,6 +1509,18 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
               "prediction_table",
             ].includes(node.type) ? (
               <ResultMetricsConfigPanel
+                nodeType={node.type}
+                config={config}
+                onFieldChange={handleFieldChange}
+                connectedSourceNode={connectedSourceNode}
+              />
+            ) : [
+              "llm_node",
+              "system_prompt",
+              "chatbot_node",
+              "example_node",
+            ].includes(node.type) ? (
+              <GenAIConfigPanel
                 nodeType={node.type}
                 config={config}
                 onFieldChange={handleFieldChange}

@@ -15,7 +15,7 @@ export function RMSEScoreResult({ result }: RMSEScoreProps) {
   return (
     <div className="space-y-6">
       {/* RMSE Score Display */}
-      <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-8 text-center">
+      <div className="bg-linear-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-xl p-8 text-center">
         <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-2">
           RMSE (Root Mean Squared Error)
         </h3>

@@ -72,7 +72,7 @@ const AdminDashboard: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center">
         <div className="text-center">
           <div className="relative">
             <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200 border-t-slate-900 mx-auto"></div>
@@ -88,10 +88,10 @@ const AdminDashboard: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center">
         <div className="bg-white/80 backdrop-blur-xl p-8 rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-200/60 max-w-md w-full ring-1 ring-slate-900/5">
           <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-lg shadow-red-500/25">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-linear-to-br from-red-500 to-red-600 flex items-center justify-center shadow-lg shadow-red-500/25">
               <span className="text-white text-3xl">⚠️</span>
             </div>
             <h2 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-2">
@@ -113,7 +113,7 @@ const AdminDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-slate-50">
       {/* Premium Background Pattern */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30 pointer-events-none" />
 
@@ -123,9 +123,9 @@ const AdminDashboard: React.FC = () => {
           <div className="flex justify-between items-center">
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <div className="relative w-10 h-10 rounded-lg bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-md shadow-slate-900/25">
+                <div className="relative w-10 h-10 rounded-lg bg-linear-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-md shadow-slate-900/25">
                   <Sparkles className="w-5 h-5 text-white" />
-                  <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-white/20 to-transparent" />
+                  <div className="absolute inset-0 rounded-lg bg-linear-to-br from-white/20 to-transparent" />
                 </div>
                 <h1 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
                   Admin Dashboard
@@ -175,7 +175,7 @@ const AdminDashboard: React.FC = () => {
                 <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">
                   Total Students
                 </p>
-                <p className="text-4xl font-bold bg-gradient-to-br from-slate-900 to-slate-700 bg-clip-text text-transparent mt-2">
+                <p className="text-4xl font-bold bg-linear-to-br from-slate-900 to-slate-700 bg-clip-text text-transparent mt-2">
                   {totalStudents}
                 </p>
                 <div className="flex items-center gap-1.5 mt-2">
@@ -185,9 +185,9 @@ const AdminDashboard: React.FC = () => {
                   </span>
                 </div>
               </div>
-              <div className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-lg shadow-slate-900/25 group-hover:scale-110 transition-transform">
+              <div className="relative w-14 h-14 rounded-xl bg-linear-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-lg shadow-slate-900/25 group-hover:scale-110 transition-transform">
                 <Users className="h-7 w-7 text-white" />
-                <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent" />
+                <div className="absolute inset-0 rounded-xl bg-linear-to-br from-white/20 to-transparent" />
               </div>
             </div>
           </motion.div>
@@ -203,7 +203,7 @@ const AdminDashboard: React.FC = () => {
                 <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">
                   Premium Users
                 </p>
-                <p className="text-4xl font-bold bg-gradient-to-br from-slate-900 to-slate-700 bg-clip-text text-transparent mt-2">
+                <p className="text-4xl font-bold bg-linear-to-br from-slate-900 to-slate-700 bg-clip-text text-transparent mt-2">
                   {premiumStudents}
                 </p>
                 <div className="flex items-center gap-1.5 mt-2">
@@ -215,9 +215,9 @@ const AdminDashboard: React.FC = () => {
                   </span>
                 </div>
               </div>
-              <div className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/25 group-hover:scale-110 transition-transform">
+              <div className="relative w-14 h-14 rounded-xl bg-linear-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/25 group-hover:scale-110 transition-transform">
                 <Crown className="h-7 w-7 text-white" />
-                <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent" />
+                <div className="absolute inset-0 rounded-xl bg-linear-to-br from-white/20 to-transparent" />
               </div>
             </div>
           </motion.div>
@@ -233,7 +233,7 @@ const AdminDashboard: React.FC = () => {
                 <p className="text-sm font-medium text-slate-500 uppercase tracking-wide">
                   Active Users
                 </p>
-                <p className="text-4xl font-bold bg-gradient-to-br from-slate-900 to-slate-700 bg-clip-text text-transparent mt-2">
+                <p className="text-4xl font-bold bg-linear-to-br from-slate-900 to-slate-700 bg-clip-text text-transparent mt-2">
                   {activeStudents}
                 </p>
                 <div className="flex items-center gap-1.5 mt-2">
@@ -245,9 +245,9 @@ const AdminDashboard: React.FC = () => {
                   </span>
                 </div>
               </div>
-              <div className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/25 group-hover:scale-110 transition-transform">
+              <div className="relative w-14 h-14 rounded-xl bg-linear-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/25 group-hover:scale-110 transition-transform">
                 <Activity className="h-7 w-7 text-white" />
-                <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent" />
+                <div className="absolute inset-0 rounded-xl bg-linear-to-br from-white/20 to-transparent" />
               </div>
             </div>
           </motion.div>
@@ -374,7 +374,7 @@ const AdminDashboard: React.FC = () => {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center text-white text-xs font-semibold shadow-md">
+                        <div className="w-8 h-8 rounded-lg bg-linear-to-br from-slate-900 to-slate-700 flex items-center justify-center text-white text-xs font-semibold shadow-md">
                           {student.fullName?.[0]?.toUpperCase() || "U"}
                         </div>
                         <span className="font-semibold text-slate-900">
@@ -466,8 +466,8 @@ const AdminDashboard: React.FC = () => {
           {students.length === 0 && (
             <div className="p-16 text-center">
               <div className="relative inline-block mb-6">
-                <div className="absolute inset-0 bg-gradient-to-br from-slate-200 to-slate-100 rounded-full blur-2xl opacity-50"></div>
-                <div className="relative w-20 h-20 mx-auto bg-gradient-to-br from-slate-100 to-slate-50 rounded-2xl flex items-center justify-center shadow-lg">
+                <div className="absolute inset-0 bg-linear-to-br from-slate-200 to-slate-100 rounded-full blur-2xl opacity-50"></div>
+                <div className="relative w-20 h-20 mx-auto bg-linear-to-br from-slate-100 to-slate-50 rounded-2xl flex items-center justify-center shadow-lg">
                   <Users className="h-10 w-10 text-slate-400" />
                 </div>
               </div>

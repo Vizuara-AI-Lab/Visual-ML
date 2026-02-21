@@ -61,9 +61,21 @@ const nodeTypes: Record<string, React.ComponentType<any>> = {
   system_prompt: MLNode,
   chatbot_node: MLNode,
   example_node: MLNode,
+  // Activity Nodes
+  activity_loss_functions: MLNode,
+  activity_linear_regression: MLNode,
+  activity_gradient_descent: MLNode,
+  activity_logistic_regression: MLNode,
+  activity_kmeans_clustering: MLNode,
+  activity_decision_tree: MLNode,
+  activity_confusion_matrix: MLNode,
+  activity_activation_functions: MLNode,
+  activity_neural_network: MLNode,
+  activity_backpropagation: MLNode,
+  activity_cnn_filters: MLNode,
 };
 
-// Custom styled edge
+// Custom styled edge with particle animation during execution
 const PipelineEdge = ({
   id,
   sourceX,
@@ -85,17 +97,45 @@ const PipelineEdge = ({
     borderRadius: 12,
   });
 
+  const isActive = style?.stroke === "#10B981";
+
   return (
-    <BaseEdge
-      id={id}
-      path={edgePath}
-      markerEnd={markerEnd}
-      style={{
-        stroke: "#94a3b8",
-        strokeWidth: 2,
-        ...style,
-      }}
-    />
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={{
+          stroke: "#94a3b8",
+          strokeWidth: 2,
+          ...style,
+        }}
+      />
+      {isActive && (
+        <>
+          {/* Glow effect */}
+          <path
+            d={edgePath}
+            fill="none"
+            stroke="#10B981"
+            strokeWidth={6}
+            strokeOpacity={0.15}
+            style={{ pointerEvents: "none" }}
+          />
+          {/* Flowing particles */}
+          {[0, 0.33, 0.66].map((offset) => (
+            <circle key={offset} r={3} fill="#10B981" opacity={0.9}>
+              <animateMotion
+                dur="1.5s"
+                repeatCount="indefinite"
+                begin={`${offset * 1.5}s`}
+                path={edgePath}
+              />
+            </circle>
+          ))}
+        </>
+      )}
+    </>
   );
 };
 

@@ -12,6 +12,7 @@ import { ChatbotModal } from "../../components/playground/ChatbotModal";
 import { ViewNodeModal } from "../../components/playground/ViewNodeModal";
 import { ShareModal } from "../../components/playground/ShareModal";
 import { ExportModal } from "../../components/playground/ExportModal";
+import { ActivityModal } from "../../components/playground/activities/ActivityModal";
 import { Toolbar } from "../../components/playground/Toolbar";
 import { ResultsDrawer } from "../../components/playground/results-drawer";
 import { usePlaygroundStore } from "../../store/playgroundStore";
@@ -20,13 +21,173 @@ import type { NodeType, BaseNodeData } from "../../types/pipeline";
 import { useProjectState } from "../../hooks/queries/useProjectState";
 import { useSaveProject } from "../../hooks/mutations/useSaveProject";
 import { validatePipeline } from "../../utils/validation";
-import { MentorAssistant, mentorApi } from "../../features/mentor";
+import { MentorAssistant } from "../../features/mentor";
 import { useAuthStore } from "../../store/authStore";
 import { useMentorContext } from "../../features/mentor";
+import { useAwardXP } from "../../features/gamification/hooks/useGamification";
+import BadgeUnlockedToast from "../../features/gamification/components/BadgeUnlockedToast";
+import LevelUpAnimation from "../../features/gamification/components/LevelUpAnimation";
+import XPGainToast from "../../features/gamification/components/XPGainToast";
+import { DatasetStoryPanel } from "../../components/playground/DatasetStoryPanel";
+import { getStory } from "../../config/datasetStories";
+import type { DatasetStory } from "../../config/datasetStories";
 import {
   useMentorStore,
   type MentorAction,
 } from "../../features/mentor/store/mentorStore";
+import {
+  Settings,
+  ArrowLeft,
+  BrainCircuit,
+  GitBranch,
+  BarChart3,
+  Database,
+  Layers,
+} from "lucide-react";
+
+// ─── Skeleton Loading Component ─────────────────────────────────
+
+function PlaygroundSkeleton({ projectName }: { projectName?: string }) {
+  return (
+    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden">
+      {/* Toolbar skeleton */}
+      <div className="h-16 bg-white/90 backdrop-blur-xl border-b border-slate-200/60 flex items-center justify-between px-6 shadow-lg shadow-slate-900/5">
+        <div className="flex items-center gap-3">
+          <div className="p-2 text-slate-300">
+            <ArrowLeft className="w-5 h-5" />
+          </div>
+          <div className="flex items-center gap-3 mr-6">
+            <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-lg shadow-slate-900/25">
+              <Settings className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-slate-800">
+                {projectName || "Loading project…"}
+              </h1>
+              <p className="text-xs text-slate-500">Visual Pipeline Builder</p>
+            </div>
+          </div>
+          <div className="h-10 w-px bg-slate-200/60" />
+          <div className="ml-3 w-36 h-10 bg-slate-200 rounded-lg animate-pulse" />
+        </div>
+        <div className="flex items-center gap-2">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="w-20 h-9 bg-slate-100 rounded-lg animate-pulse" />
+          ))}
+        </div>
+      </div>
+
+      {/* Main content skeleton */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sidebar skeleton */}
+        <div className="w-64 bg-white border-r border-slate-200/60 p-4 flex flex-col gap-4">
+          <div className="h-10 bg-slate-100 rounded-lg animate-pulse" />
+          <div className="space-y-2">
+            <div className="h-3 w-20 bg-slate-200/60 rounded animate-pulse" />
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-10 bg-slate-100 rounded-lg animate-pulse"
+                style={{ animationDelay: `${i * 150}ms` }}
+              />
+            ))}
+          </div>
+          <div className="space-y-2 mt-2">
+            <div className="h-3 w-24 bg-slate-200/60 rounded animate-pulse" />
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="h-10 bg-slate-100 rounded-lg animate-pulse"
+                style={{ animationDelay: `${(i + 3) * 150}ms` }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Canvas skeleton — animated pipeline illustration */}
+        <div className="flex-1 bg-slate-50 relative flex items-center justify-center">
+          {/* Grid dots background */}
+          <div
+            className="absolute inset-0 opacity-30"
+            style={{
+              backgroundImage: "radial-gradient(circle, #94a3b8 1px, transparent 1px)",
+              backgroundSize: "24px 24px",
+            }}
+          />
+
+          {/* Animated loading content */}
+          <div className="relative z-10 flex flex-col items-center">
+            {/* Pipeline illustration */}
+            <div className="flex items-center gap-3 mb-8">
+              {[
+                { icon: Database, color: "#3b82f6", label: "Data" },
+                { icon: Layers, color: "#f59e0b", label: "Process" },
+                { icon: GitBranch, color: "#06b6d4", label: "Split" },
+                { icon: BrainCircuit, color: "#8b5cf6", label: "Model" },
+                { icon: BarChart3, color: "#10b981", label: "Evaluate" },
+              ].map((step, idx) => {
+                const Icon = step.icon;
+                return (
+                  <div key={step.label} className="flex items-center gap-3">
+                    <div className="flex flex-col items-center">
+                      <div
+                        className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg animate-pulse"
+                        style={{
+                          backgroundColor: `${step.color}15`,
+                          border: `2px solid ${step.color}30`,
+                          animationDelay: `${idx * 200}ms`,
+                        }}
+                      >
+                        <Icon className="w-6 h-6" style={{ color: step.color }} />
+                      </div>
+                      <span className="text-[10px] text-slate-500 mt-1.5 font-medium">{step.label}</span>
+                    </div>
+                    {idx < 4 && (
+                      <div className="flex gap-1 -mt-4">
+                        {[0, 1, 2].map((dot) => (
+                          <div
+                            key={dot}
+                            className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-pulse"
+                            style={{ animationDelay: `${idx * 200 + dot * 100}ms` }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Loading text */}
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm font-medium text-slate-600">Loading your pipeline…</p>
+              </div>
+              <p className="text-xs text-slate-500">Setting up workspace and restoring your progress</p>
+            </div>
+
+            {/* Progress shimmer bar */}
+            <div className="mt-6 w-64 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+              <div className="h-full w-2/5 bg-gradient-to-r from-indigo-500 via-purple-400 to-indigo-500 rounded-full skeleton-shimmer" />
+            </div>
+          </div>
+
+          <style>{`
+            @keyframes skeletonShimmer {
+              0% { transform: translateX(-100%); }
+              50% { transform: translateX(200%); }
+              100% { transform: translateX(-100%); }
+            }
+            .skeleton-shimmer { animation: skeletonShimmer 1.8s ease-in-out infinite; }
+          `}</style>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ─────────────────────────────────────────────
 
 export default function PlayGround() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -34,10 +195,13 @@ export default function PlayGround() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [viewNodeId, setViewNodeId] = useState<string | null>(null);
   const [chatbotNodeId, setChatbotNodeId] = useState<string | null>(null);
+  const [activityNodeId, setActivityNodeId] = useState<string | null>(null);
   const [resultsOpen, setResultsOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [activeStory, setActiveStory] = useState<DatasetStory | null>(null);
   const streamCleanupRef = useRef<(() => void) | null>(null);
+  const awardXP = useAwardXP();
 
   const [executionProgress, setExecutionProgress] = useState<{
     status: string;
@@ -86,6 +250,12 @@ export default function PlayGround() {
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) return;
 
+    // Activity nodes open the activity modal directly
+    if (node.data.type.startsWith("activity_")) {
+      setActivityNodeId(nodeId);
+      return;
+    }
+
     const viewNodeTypes = [
       "table_view",
       "data_preview",
@@ -117,13 +287,15 @@ export default function PlayGround() {
   };
 
   // Load project state if projectId exists
-  const { data: projectStateData } = useProjectState(projectId);
-  const { data: projectData } = useQuery({
+  const { data: projectStateData, isLoading: isStateLoading } = useProjectState(projectId);
+  const { data: projectData, isLoading: isProjectLoading } = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => getProjectById(projectId!),
     enabled: !!projectId,
   });
   const saveProject = useSaveProject();
+
+  const isPageLoading = isStateLoading || isProjectLoading;
 
   // Set current project ID and load state
   useEffect(() => {
@@ -176,6 +348,40 @@ export default function PlayGround() {
         "openConfigModal",
         handleOpenConfigModal as EventListener,
       );
+    };
+  }, []);
+
+  // Listen for custom event from Open Activity button on activity nodes
+  useEffect(() => {
+    const handleOpenActivityModal = (event: CustomEvent) => {
+      const { nodeId } = event.detail;
+      setActivityNodeId(nodeId);
+    };
+
+    window.addEventListener(
+      "openActivityModal",
+      handleOpenActivityModal as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "openActivityModal",
+        handleOpenActivityModal as EventListener,
+      );
+    };
+  }, []);
+
+  // Listen for dataset story open event
+  useEffect(() => {
+    const handleOpenStory = (event: CustomEvent) => {
+      const { datasetId } = event.detail;
+      const story = getStory(datasetId);
+      if (story) setActiveStory(story);
+    };
+
+    window.addEventListener("openDatasetStory", handleOpenStory as EventListener);
+    return () => {
+      window.removeEventListener("openDatasetStory", handleOpenStory as EventListener);
     };
   }, []);
 
@@ -417,6 +623,9 @@ export default function PlayGround() {
 
             setIsExecuting(false);
             streamCleanupRef.current = null;
+
+            // Award XP for successful pipeline execution
+            awardXP.mutate({ action: "pipeline_execution", context: { nodes_executed: event.nodes_executed } });
           },
           onPipelineFailed: (event) => {
             console.log("❌ Pipeline failed:", event);
@@ -622,8 +831,13 @@ export default function PlayGround() {
     handleExecute();
   };
 
+  // Show skeleton while initial data is loading
+  if (isPageLoading) {
+    return <PlaygroundSkeleton projectName={projectData?.name} />;
+  }
+
   return (
-    <div className="h-screen flex flex-col bg-gray-950">
+    <div className="h-screen flex flex-col bg-slate-50">
       <Toaster
         position="top-right"
         gutter={10}
@@ -711,6 +925,11 @@ export default function PlayGround() {
         onClose={() => setChatbotNodeId(null)}
       />
 
+      <ActivityModal
+        nodeId={activityNodeId}
+        onClose={() => setActivityNodeId(null)}
+      />
+
       <ShareModal
         isOpen={shareModalOpen}
         onClose={() => setShareModalOpen(false)}
@@ -723,141 +942,35 @@ export default function PlayGround() {
         onClose={() => setExportModalOpen(false)}
       />
 
+      <DatasetStoryPanel
+        story={activeStory}
+        onClose={() => setActiveStory(null)}
+      />
+
+      <BadgeUnlockedToast />
+      <LevelUpAnimation />
+      <XPGainToast />
+
       <MentorAssistant
         userName={user?.fullName || user?.emailId || "there"}
-        onAction={async (action: MentorAction) => {
+        onAction={(action: MentorAction) => {
           console.log("[Mentor] Action clicked:", action);
 
-          // Handle mentor suggestion actions
-          if (action.type === "show_guide") {
-            const modelType = action.payload?.model_type as string;
-
-            // Check if this is the initial guide request or dataset guidance
-            if (action.payload?.action) {
-              // This is a dataset guidance action
-              try {
-                const guidanceResponse = await mentorApi.getDatasetGuidance(
-                  action.payload.action as string,
-                  modelType,
-                  action.payload.next_message as string,
-                );
-
-                if (
-                  guidanceResponse.success &&
-                  guidanceResponse.suggestions.length > 0
-                ) {
-                  useMentorStore
-                    .getState()
-                    .showSuggestion(guidanceResponse.suggestions[0]);
-                }
-              } catch (error) {
-                console.error(
-                  "[Mentor] Error fetching dataset guidance:",
-                  error,
-                );
-                toast.error("Failed to load guidance");
-              }
-            } else {
-              // Initial guide request - show model introduction
-              if (modelType) {
-                try {
-                  const introResponse =
-                    await mentorApi.getModelIntroduction(modelType);
-
-                  if (
-                    introResponse.success &&
-                    introResponse.suggestions.length > 0
-                  ) {
-                    useMentorStore
-                      .getState()
-                      .showSuggestion(introResponse.suggestions[0]);
-                    toast.success(
-                      `Learning about ${modelType.replace(/_/g, " ")}`,
-                    );
-                  }
-                } catch (error) {
-                  console.error("[Mentor] Error fetching introduction:", error);
-                  toast.error("Failed to load introduction");
-                }
-              }
-            }
-          } else if (action.type === "learn_more") {
-            // Handle learn_more actions (dataset options that show more info)
-            if (action.payload?.action && action.payload?.model_type) {
-              try {
-                const guidanceResponse = await mentorApi.getDatasetGuidance(
-                  action.payload.action as string,
-                  action.payload.model_type as string,
-                  (action.payload.next_message as string) || "",
-                );
-
-                if (
-                  guidanceResponse.success &&
-                  guidanceResponse.suggestions.length > 0
-                ) {
-                  useMentorStore
-                    .getState()
-                    .showSuggestion(guidanceResponse.suggestions[0]);
-                }
-              } catch (error) {
-                console.error("[Mentor] Error fetching guidance:", error);
-                toast.error("Failed to load guidance");
-              }
-            } else if (action.payload?.url) {
-              console.log("[Mentor] Opening learn more:", action.payload.url);
-              window.open(action.payload.url as string, "_blank");
-            } else {
-              // "Get Suggestions" button — trigger pipeline analysis
-              try {
-                const pipelineData = {
-                  nodes: nodes.map((n) => ({
-                    id: n.id,
-                    type: n.data.type,
-                    config: n.data,
-                    position: n.position,
-                  })),
-                  edges: edges.map((e) => ({
-                    id: e.id,
-                    source: e.source,
-                    target: e.target,
-                  })),
-                };
-
-                const analysis = await mentorApi.analyzePipeline(pipelineData);
-
-                if (analysis.suggestions.length > 0) {
-                  analysis.suggestions.slice(0, 2).forEach((suggestion) => {
-                    useMentorStore.getState().showSuggestion(suggestion);
-                  });
-                } else {
-                  toast("No suggestions right now — keep building!", {
-                    icon: "💡",
-                    duration: 2000,
-                  });
-                }
-              } catch (error) {
-                console.error("[Mentor] Error fetching suggestions:", error);
-                toast.error("Failed to get suggestions");
-              }
+          if (action.type === "select_algorithm") {
+            const algorithm = action.payload?.algorithm as string;
+            if (algorithm) {
+              const store = useMentorStore.getState();
+              store.setSelectedAlgorithm(algorithm);
+              store.setStage("algorithm_selected");
             }
           } else if (action.type === "add_node") {
-            // Check for both node_type and model_type in payload
             const nodeType = (action.payload?.node_type ||
               action.payload?.model_type) as string;
             if (nodeType) {
-              console.log("[Mentor] Adding node:", nodeType);
               handleAddNodeFromMentor(nodeType);
-            } else {
-              console.warn(
-                "[Mentor] No node_type or model_type in payload:",
-                action.payload,
-              );
             }
           } else if (action.type === "execute") {
-            console.log("[Mentor] Executing pipeline");
             handleExecutePipeline();
-          } else {
-            console.log("[Mentor] Unknown action type:", action.type);
           }
         }}
       />

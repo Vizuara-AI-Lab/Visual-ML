@@ -98,21 +98,19 @@ function getParentVariable(
   const incomingEdges = edges.filter((e) => e.target === nodeId);
   if (incomingEdges.length === 0) return null;
 
-  // Find the most relevant parent — prefer dataset-producing nodes
-  // Walk backwards through sorted order to find the closest upstream dataset node
   const parentIds = incomingEdges.map((e) => e.source);
 
-  // For most nodes, the last data-producing parent is what matters
   for (const parentId of parentIds) {
     const parentNode = sortedNodes.find((n) => n.id === parentId);
     if (!parentNode) continue;
 
-    const parentType = parentNode.data.type as string;
+    const parentType = parentNode.data.type as NodeType;
 
-    // If the parent is a split node, we use the split variable convention
-    if (parentType === "split") {
-      // After split, ML algorithms use X_train/y_train — handled by the template
-      return varMap[parentId];
+    // Skip through noop/view nodes that produce no code — trace to their parent instead
+    if (SKIP_NODE_TYPES.has(parentType)) {
+      const grandparent = getParentVariable(parentId, edges, varMap, sortedNodes);
+      if (grandparent) return grandparent;
+      continue;
     }
 
     return varMap[parentId];
@@ -136,9 +134,16 @@ function resolveDataframeForSplit(
   const incomingEdges = edges.filter((e) => e.target === nodeId);
   for (const edge of incomingEdges) {
     const parentNode = sortedNodes.find((n) => n.id === edge.source);
-    if (parentNode) {
-      return varMap[parentNode.id];
+    if (!parentNode) continue;
+
+    const parentType = parentNode.data.type as NodeType;
+
+    // Skip through noop/view nodes — trace to their code-producing ancestor
+    if (SKIP_NODE_TYPES.has(parentType)) {
+      return resolveDataframeForSplit(parentNode.id, edges, varMap, sortedNodes);
     }
+
+    return varMap[parentNode.id];
   }
   return "df";
 }

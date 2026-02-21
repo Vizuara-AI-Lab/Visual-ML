@@ -29,7 +29,7 @@ export const Sidebar = ({ onNodeDragStart, onTemplateClick }: SidebarProps) => {
     setExpandedCategories((prev) => {
       const next = new Set(prev);
       if (next.has(categoryId)) {
-        next.delete(categoryId); 
+        next.delete(categoryId);
       } else {
         next.add(categoryId);
       }
@@ -231,7 +231,7 @@ const TemplateCard = ({ template, onClick }: TemplateCardProps) => {
   return (
     <button
       onClick={onClick}
-      className="group relative w-full px-3 py-3 rounded-lg border border-slate-200/60 bg-gradient-to-br from-white/90 to-white/60 hover:from-white hover:to-white/80 hover:border-slate-300 transition-all cursor-pointer shadow-sm hover:shadow-md text-left"
+      className="group relative w-full px-3 py-3 rounded-lg border border-slate-200/60 bg-linear-to-br from-white/90 to-white/60 hover:from-white hover:to-white/80 hover:border-slate-300 transition-all cursor-pointer shadow-sm hover:shadow-md text-left"
       style={{
         borderLeftWidth: "3px",
         borderLeftColor: template.color,

@@ -43,7 +43,7 @@ const StudentDetail: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center">
         <div className="text-center">
           <div className="relative">
             <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200 border-t-slate-900 mx-auto"></div>
@@ -59,10 +59,10 @@ const StudentDetail: React.FC = () => {
 
   if (error || !student) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-slate-50 flex items-center justify-center">
         <div className="bg-white/80 backdrop-blur-xl p-8 rounded-2xl shadow-xl shadow-slate-900/10 border border-slate-200/60 max-w-md w-full ring-1 ring-slate-900/5">
           <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-lg shadow-red-500/25">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-linear-to-br from-red-500 to-red-600 flex items-center justify-center shadow-lg shadow-red-500/25">
               <span className="text-white text-3xl">⚠️</span>
             </div>
             <h2 className="text-2xl font-bold bg-linear-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent mb-2">
@@ -84,7 +84,7 @@ const StudentDetail: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-slate-50">
       {/* Premium Background Pattern */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#f0f0f0_1px,transparent_1px),linear-gradient(to_bottom,#f0f0f0_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-30 pointer-events-none" />
 
@@ -124,8 +124,8 @@ const StudentDetail: React.FC = () => {
             className="lg:col-span-1"
           >
             <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl shadow-slate-900/10 overflow-hidden border border-slate-200/60 ring-1 ring-slate-900/5">
-              <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 h-32 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
+              <div className="bg-linear-to-br from-slate-900 via-slate-800 to-slate-700 h-32 relative overflow-hidden">
+                <div className="absolute inset-0 bg-linear-to-br from-white/10 to-transparent"></div>
                 <div className="absolute top-4 right-4">
                   {student.isPremium && (
                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/90 backdrop-blur-sm rounded-full border border-amber-200/50 shadow-lg">
@@ -148,18 +148,18 @@ const StudentDetail: React.FC = () => {
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center">
+                        <div className="w-full h-full bg-linear-to-br from-slate-900 to-slate-700 flex items-center justify-center">
                           <User className="w-16 h-16 text-white" />
                         </div>
                       )}
                     </div>
                     <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-xl bg-white shadow-lg border-2 border-white flex items-center justify-center">
                       {student.isActive ? (
-                        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
+                        <div className="w-6 h-6 rounded-lg bg-linear-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
                           <Activity className="w-4 h-4 text-white" />
                         </div>
                       ) : (
-                        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-slate-300 to-slate-400 flex items-center justify-center">
+                        <div className="w-6 h-6 rounded-lg bg-linear-to-br from-slate-300 to-slate-400 flex items-center justify-center">
                           <Activity className="w-4 h-4 text-white" />
                         </div>
                       )}
@@ -241,7 +241,7 @@ const StudentDetail: React.FC = () => {
                 {/* Email */}
                 <div className="p-4 bg-white/60 backdrop-blur-sm rounded-xl border border-slate-200/60 hover:shadow-lg hover:shadow-slate-900/5 transition-all">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md shadow-blue-500/25">
+                    <div className="w-10 h-10 rounded-lg bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md shadow-blue-500/25">
                       <Mail className="w-5 h-5 text-white" />
                     </div>
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -256,7 +256,7 @@ const StudentDetail: React.FC = () => {
                 {/* Auth Provider */}
                 <div className="p-4 bg-white/60 backdrop-blur-sm rounded-xl border border-slate-200/60 hover:shadow-lg hover:shadow-slate-900/5 transition-all">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center shadow-md shadow-violet-500/25">
+                    <div className="w-10 h-10 rounded-lg bg-linear-to-br from-violet-500 to-violet-600 flex items-center justify-center shadow-md shadow-violet-500/25">
                       <Shield className="w-5 h-5 text-white" />
                     </div>
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -279,7 +279,7 @@ const StudentDetail: React.FC = () => {
                 {/* College/School */}
                 <div className="p-4 bg-white/60 backdrop-blur-sm rounded-xl border border-slate-200/60 hover:shadow-lg hover:shadow-slate-900/5 transition-all">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-md shadow-emerald-500/25">
+                    <div className="w-10 h-10 rounded-lg bg-linear-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-md shadow-emerald-500/25">
                       <Building2 className="w-5 h-5 text-white" />
                     </div>
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -294,7 +294,7 @@ const StudentDetail: React.FC = () => {
                 {/* Contact */}
                 <div className="p-4 bg-white/60 backdrop-blur-sm rounded-xl border border-slate-200/60 hover:shadow-lg hover:shadow-slate-900/5 transition-all">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-md shadow-amber-500/25">
+                    <div className="w-10 h-10 rounded-lg bg-linear-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-md shadow-amber-500/25">
                       <Phone className="w-5 h-5 text-white" />
                     </div>
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -309,7 +309,7 @@ const StudentDetail: React.FC = () => {
                 {/* Created At */}
                 <div className="p-4 bg-white/60 backdrop-blur-sm rounded-xl border border-slate-200/60 hover:shadow-lg hover:shadow-slate-900/5 transition-all">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-md shadow-slate-900/25">
+                    <div className="w-10 h-10 rounded-lg bg-linear-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-md shadow-slate-900/25">
                       <Calendar className="w-5 h-5 text-white" />
                     </div>
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
@@ -328,7 +328,7 @@ const StudentDetail: React.FC = () => {
                 {/* Last Login */}
                 <div className="p-4 bg-white/60 backdrop-blur-sm rounded-xl border border-slate-200/60 hover:shadow-lg hover:shadow-slate-900/5 transition-all">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-md shadow-indigo-500/25">
+                    <div className="w-10 h-10 rounded-lg bg-linear-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-md shadow-indigo-500/25">
                       <Clock className="w-5 h-5 text-white" />
                     </div>
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">

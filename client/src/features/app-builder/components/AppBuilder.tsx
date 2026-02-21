@@ -3,7 +3,7 @@
  * Left: BlockPalette | Center: BlockList (canvas) | Right: BlockEditor
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   ArrowLeft,
@@ -11,6 +11,13 @@ import {
   EyeOff,
   Save,
   Loader2,
+  Pencil,
+  Palette,
+  Globe,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useCustomApp, useUpdateApp, useSuggestBlocks } from "../hooks/useAppBuilder";
@@ -28,6 +35,12 @@ interface AppBuilderProps {
 }
 
 type RightPanel = "editor" | "theme" | "publish";
+
+const PANEL_TABS: { key: RightPanel; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: "editor", label: "Editor", Icon: Pencil },
+  { key: "theme", label: "Theme", Icon: Palette },
+  { key: "publish", label: "Publish", Icon: Globe },
+];
 
 export default function AppBuilder({ appId }: AppBuilderProps) {
   const navigate = useNavigate();
@@ -49,6 +62,9 @@ export default function AppBuilder({ appId }: AppBuilderProps) {
   } = useAppBuilderStore();
 
   const [rightPanel, setRightPanel] = useState<RightPanel>("editor");
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+  const initialLoadDone = useRef(false);
 
   // Fetch block suggestions when app has no blocks
   const hasNoBlocks = app && (!app.blocks || app.blocks.length === 0);
@@ -56,14 +72,19 @@ export default function AppBuilder({ appId }: AppBuilderProps) {
     hasNoBlocks ? app?.pipelineId : undefined,
   );
 
-  // Load app data into store on mount
+  // Load app data into store on initial mount only
   useEffect(() => {
-    if (app) {
+    if (app && !initialLoadDone.current) {
+      initialLoadDone.current = true;
       setBlocks(app.blocks ?? []);
       if (app.theme) setTheme(app.theme);
     }
-    return () => reset();
   }, [app]);
+
+  // Reset store on unmount only (separate effect so it doesn't run on every app change)
+  useEffect(() => {
+    return () => reset();
+  }, []);
 
   // Auto-populate builder from pipeline suggestions when app is empty
   useEffect(() => {
@@ -86,20 +107,27 @@ export default function AppBuilder({ appId }: AppBuilderProps) {
 
   if (isLoading) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+      <div className="h-full flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+          <p className="text-sm text-gray-400">Loading builder...</p>
+        </div>
       </div>
     );
   }
 
   if (!app) {
     return (
-      <div className="h-full flex items-center justify-center">
+      <div className="h-full flex items-center justify-center bg-gray-50">
         <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 flex items-center justify-center">
+            <Globe className="h-8 w-8 text-gray-300" />
+          </div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">App Not Found</h2>
+          <p className="text-sm text-gray-500 mb-4">This app may have been deleted.</p>
           <button
             onClick={() => navigate("/dashboard")}
-            className="text-indigo-600 hover:underline"
+            className="text-indigo-600 hover:underline text-sm font-medium"
           >
             Back to Dashboard
           </button>
@@ -112,11 +140,17 @@ export default function AppBuilder({ appId }: AppBuilderProps) {
   if (isPreviewMode) {
     return (
       <div className="h-full flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
-          <h2 className="text-sm font-medium text-gray-600">Preview Mode</h2>
+        <div className="flex items-center justify-between px-5 py-3 border-b bg-white shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-2.5 py-1 rounded-full text-xs font-medium border border-amber-200">
+              <Eye className="h-3 w-3" />
+              Preview Mode
+            </div>
+            <span className="text-sm text-gray-400">{app.name}</span>
+          </div>
           <button
             onClick={togglePreview}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-colors"
           >
             <EyeOff className="h-4 w-4" />
             Exit Preview
@@ -128,9 +162,13 @@ export default function AppBuilder({ appId }: AppBuilderProps) {
               <BlockRenderer key={block.id} block={block} mode="preview" theme={theme} />
             ))}
             {blocks.length === 0 && (
-              <p className="text-center text-gray-400 py-20">
-                No blocks added yet. Exit preview to start building.
-              </p>
+              <div className="text-center py-20">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 flex items-center justify-center">
+                  <Eye className="h-8 w-8 text-gray-300" />
+                </div>
+                <p className="text-gray-400 mb-1">Nothing to preview</p>
+                <p className="text-sm text-gray-300">Exit preview to start building.</p>
+              </div>
             )}
           </div>
         </div>
@@ -141,57 +179,75 @@ export default function AppBuilder({ appId }: AppBuilderProps) {
   const selectedBlock = blocks.find((b) => b.id === selectedBlockId) ?? null;
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-gray-50">
       {/* Top toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
+      <div className="flex items-center justify-between px-5 py-2.5 border-b bg-gradient-to-r from-white via-white to-indigo-50/30 shadow-sm relative z-10">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
           >
-            <ArrowLeft className="h-5 w-5 text-gray-600" />
+            <ArrowLeft className="h-4 w-4 text-gray-500" />
           </button>
+          <div className="h-6 w-px bg-gray-200" />
           <div>
-            <h1 className="text-lg font-semibold text-gray-900">{app.name}</h1>
-            <p className="text-xs text-gray-500">App Builder</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-semibold text-gray-900">{app.name}</h1>
+              {isDirty && (
+                <span className="flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200 font-medium">
+                  Unsaved
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-gray-400">
+              {blocks.length} block{blocks.length !== 1 ? "s" : ""}
+              {app.is_published && (
+                <span className="text-green-500 ml-1.5">
+                  &bull; Published
+                </span>
+              )}
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Tab switches for right panel */}
-          {(["editor", "theme", "publish"] as RightPanel[]).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setRightPanel(tab)}
-              className={`px-3 py-1.5 text-sm rounded-lg transition-colors capitalize ${
-                rightPanel === tab
-                  ? "bg-indigo-100 text-indigo-700"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
+        <div className="flex items-center gap-1">
+          {/* Panel tabs */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-0.5 mr-2">
+            {PANEL_TABS.map(({ key, label, Icon }) => (
+              <button
+                key={key}
+                onClick={() => setRightPanel(key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  rightPanel === key
+                    ? "bg-white text-gray-900 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </button>
+            ))}
+          </div>
 
-          <div className="w-px h-6 bg-gray-200 mx-1" />
+          <div className="h-6 w-px bg-gray-200 mx-1" />
 
           <button
             onClick={togglePreview}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
           >
-            <Eye className="h-4 w-4" />
+            <Eye className="h-3.5 w-3.5" />
             Preview
           </button>
 
           <button
             onClick={handleSave}
             disabled={!isDirty || updateApp.isPending}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ml-1"
           >
             {updateApp.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Save className="h-4 w-4" />
+              <Save className="h-3.5 w-3.5" />
             )}
             Save
           </button>
@@ -201,24 +257,73 @@ export default function AppBuilder({ appId }: AppBuilderProps) {
       {/* Three-panel layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Block Palette */}
-        <div className="w-56 border-r bg-white overflow-y-auto">
-          <BlockPalette />
+        <div
+          className={`border-r bg-gradient-to-b from-slate-50 to-indigo-50/40 overflow-hidden transition-all duration-300 ease-in-out flex flex-col ${
+            leftCollapsed ? "w-0 border-r-0" : "w-56"
+          }`}
+        >
+          <div className="flex-1 overflow-y-auto overflow-x-hidden">
+            <BlockPalette />
+          </div>
         </div>
 
         {/* Center: Block List / Canvas */}
-        <div className="flex-1 overflow-y-auto bg-gray-50 p-6">
-          <BlockList blocks={blocks} selectedBlockId={selectedBlockId} theme={theme} />
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          {/* Canvas toggle bar */}
+          <div className="flex items-center justify-between px-3 py-1.5 border-b bg-white/60 backdrop-blur-sm">
+            <button
+              onClick={() => setLeftCollapsed(!leftCollapsed)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+            >
+              {leftCollapsed ? (
+                <PanelLeftOpen className="h-3.5 w-3.5" />
+              ) : (
+                <PanelLeftClose className="h-3.5 w-3.5" />
+              )}
+              {leftCollapsed ? "Blocks" : "Hide"}
+            </button>
+            <span className="text-[10px] text-gray-300 font-medium">
+              {blocks.length} block{blocks.length !== 1 ? "s" : ""} on canvas
+            </span>
+            <button
+              onClick={() => setRightCollapsed(!rightCollapsed)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+            >
+              {rightCollapsed ? "Editor" : "Hide"}
+              {rightCollapsed ? (
+                <PanelRightOpen className="h-3.5 w-3.5" />
+              ) : (
+                <PanelRightClose className="h-3.5 w-3.5" />
+              )}
+            </button>
+          </div>
+          <div
+            className="flex-1 overflow-y-auto p-6"
+            style={{
+              background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #eef2ff 100%)",
+              backgroundImage: `linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #eef2ff 100%), radial-gradient(circle, #e2e8f0 1px, transparent 1px)`,
+              backgroundSize: "100% 100%, 20px 20px",
+            }}
+          >
+            <BlockList blocks={blocks} selectedBlockId={selectedBlockId} theme={theme} />
+          </div>
         </div>
 
         {/* Right: Editor / Theme / Publish */}
-        <div className="w-80 border-l bg-white overflow-y-auto">
-          {rightPanel === "editor" && (
-            <BlockEditor block={selectedBlock} />
-          )}
-          {rightPanel === "theme" && <ThemePanel />}
-          {rightPanel === "publish" && (
-            <PublishPanel app={app} />
-          )}
+        <div
+          className={`border-l bg-gradient-to-b from-slate-50/80 to-white overflow-hidden transition-all duration-300 ease-in-out flex flex-col ${
+            rightCollapsed ? "w-0 border-l-0" : "w-80"
+          }`}
+        >
+          <div className="flex-1 overflow-y-auto overflow-x-hidden">
+            {rightPanel === "editor" && (
+              <BlockEditor block={selectedBlock} />
+            )}
+            {rightPanel === "theme" && <ThemePanel />}
+            {rightPanel === "publish" && (
+              <PublishPanel app={app} />
+            )}
+          </div>
         </div>
       </div>
     </div>

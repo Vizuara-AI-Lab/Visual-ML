@@ -278,6 +278,3 @@ Visual-ML/
 | **DevOps**   | Alembic, Uvicorn, Docker-ready                             |
 | **Storage**  | AWS S3, Local filesystem                                   |
 
-
-
-

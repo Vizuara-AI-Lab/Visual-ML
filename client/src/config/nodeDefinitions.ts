@@ -23,6 +23,7 @@ import {
 import { genaiCategory } from "./genaiNodes";
 import { mlAlgorithmsCategory } from "./mlAlgorithms";
 import { resultNodes } from "./resultNodes";
+import { activityCategory } from "./activityNodes";
 
 export interface NodeCategory {
   id: string;
@@ -415,7 +416,7 @@ export const nodeCategories: NodeCategory[] = [
         defaultConfig: {
           dataset_id: "",
           column_configs: {},
-          default_strategy: "none",
+          default_strategy: "drop",
           preview_rows: 10,
           preview_mode: false,
         },
@@ -747,6 +748,7 @@ export const nodeCategories: NodeCategory[] = [
     nodes: resultNodes,
   },
   genaiCategory,
+  activityCategory,
 ];
 
 export const getAllNodes = (): NodeDefinition[] => {

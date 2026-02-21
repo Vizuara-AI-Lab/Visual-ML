@@ -18,14 +18,16 @@ export default function ImageBlock({ block }: BlockRenderProps) {
           ? "max-w-lg"
           : "w-full";
 
-  if (!config.url) {
+  const imageSrc = config.base64Data || config.url;
+
+  if (!imageSrc) {
     return (
       <div
         className={`${widthClass} mx-auto bg-gray-100 rounded-lg flex items-center justify-center py-12`}
       >
         <div className="text-center text-gray-400">
           <ImageIcon className="h-8 w-8 mx-auto mb-2" />
-          <p className="text-sm">No image URL set</p>
+          <p className="text-sm">No image set</p>
         </div>
       </div>
     );
@@ -34,7 +36,7 @@ export default function ImageBlock({ block }: BlockRenderProps) {
   return (
     <div className={`${widthClass} mx-auto`}>
       <img
-        src={config.url}
+        src={imageSrc}
         alt={config.alt}
         className="w-full rounded-lg"
       />

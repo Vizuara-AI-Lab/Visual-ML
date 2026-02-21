@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router';
-import axiosInstance from '../../lib/axios';
+import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router";
+import axiosInstance from "../../lib/axios";
 
 export default function OTPVerification() {
   const navigate = useNavigate();
   const location = useLocation();
-  const email = location.state?.email || '';
+  const email = location.state?.email || "";
 
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [resending, setResending] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
@@ -23,7 +23,7 @@ export default function OTPVerification() {
 
   // Auto-focus first input
   useEffect(() => {
-    document.getElementById('otp-0')?.focus();
+    document.getElementById("otp-0")?.focus();
   }, []);
 
   const handleChange = (index: number, value: string) => {
@@ -40,18 +40,18 @@ export default function OTPVerification() {
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
       document.getElementById(`otp-${index - 1}`)?.focus();
     }
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    const pastedData = e.clipboardData.getData('text').slice(0, 6);
+    const pastedData = e.clipboardData.getData("text").slice(0, 6);
     if (!/^\d+$/.test(pastedData)) return;
 
     const newOtp = [...otp];
-    pastedData.split('').forEach((char, i) => {
+    pastedData.split("").forEach((char, i) => {
       if (i < 6) newOtp[i] = char;
     });
     setOtp(newOtp);
@@ -63,32 +63,32 @@ export default function OTPVerification() {
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    const otpCode = otp.join('');
+    const otpCode = otp.join("");
 
     if (otpCode.length !== 6) {
-      setError('Please enter all 6 digits');
+      setError("Please enter all 6 digits");
       return;
     }
 
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
-      const response = await axiosInstance.post('/auth/verify-email', {
+      const response = await axiosInstance.post("/auth/verify-email", {
         emailId: email,
         otp: otpCode,
       });
 
       // ✅ Cookies are set automatically by backend
       // Store only user data (no tokens needed)
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.setItem("user", JSON.stringify(response.data.user));
 
       // Navigate to dashboard
-      navigate('/dashboard');
+      navigate("/dashboard");
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Invalid OTP. Please try again.');
-      setOtp(['', '', '', '', '', '']);
-      document.getElementById('otp-0')?.focus();
+      setError(err.response?.data?.detail || "Invalid OTP. Please try again.");
+      setOtp(["", "", "", "", "", ""]);
+      document.getElementById("otp-0")?.focus();
     } finally {
       setLoading(false);
     }
@@ -96,30 +96,30 @@ export default function OTPVerification() {
 
   const handleResend = async () => {
     setResending(true);
-    setError('');
+    setError("");
 
     try {
-      await axiosInstance.post('/auth/resend-otp', {
+      await axiosInstance.post("/auth/resend-otp", {
         emailId: email,
       });
 
       setCountdown(60); // 60 second cooldown
-      setOtp(['', '', '', '', '', '']);
-      document.getElementById('otp-0')?.focus();
+      setOtp(["", "", "", "", "", ""]);
+      document.getElementById("otp-0")?.focus();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to resend OTP');
+      setError(err.response?.data?.detail || "Failed to resend OTP");
     } finally {
       setResending(false);
     }
   };
 
   if (!email) {
-    navigate('/signup');
+    navigate("/signup");
     return null;
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-blue-50 to-indigo-100 px-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
         {/* Header */}
         <div className="text-center mb-8">
@@ -177,10 +177,10 @@ export default function OTPVerification() {
           {/* Verify Button */}
           <button
             type="submit"
-            disabled={loading || otp.join('').length !== 6}
+            disabled={loading || otp.join("").length !== 6}
             className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed mb-4"
           >
-            {loading ? 'Verifying...' : 'Verify Email'}
+            {loading ? "Verifying..." : "Verify Email"}
           </button>
 
           {/* Resend OTP */}
@@ -195,10 +195,10 @@ export default function OTPVerification() {
               className="text-blue-600 hover:text-blue-700 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {resending
-                ? 'Sending...'
+                ? "Sending..."
                 : countdown > 0
-                ? `Resend in ${countdown}s`
-                : 'Resend OTP'}
+                  ? `Resend in ${countdown}s`
+                  : "Resend OTP"}
             </button>
           </div>
         </form>

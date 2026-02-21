@@ -2,6 +2,7 @@
  * Metrics Card Block — Displays specific metrics from pipeline results.
  */
 
+import { Link } from "lucide-react";
 import type { BlockRenderProps } from "../BlockRenderer";
 import type { MetricsCardConfig } from "../../types/appBuilder";
 
@@ -20,9 +21,20 @@ export default function MetricsCardBlock({
     return String(value);
   };
 
+  // Collect unique node IDs referenced by metrics
+  const metricNodeIds = [...new Set(config.metrics.map((m) => m.nodeId).filter(Boolean))];
+
   return (
     <div className="bg-white rounded-xl border p-6">
-      <h3 className="text-sm font-medium text-gray-700 mb-4">{config.title}</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium text-gray-700">{config.title}</h3>
+        {mode === "edit" && metricNodeIds.length > 0 && (
+          <div className="flex items-center gap-1 text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+            <Link className="h-2.5 w-2.5" />
+            <span>{metricNodeIds.length} node{metricNodeIds.length > 1 ? "s" : ""}</span>
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         {config.metrics.map((metric) => {
@@ -49,6 +61,11 @@ export default function MetricsCardBlock({
               <p className="text-xl font-bold text-gray-900">
                 {value != null ? formatValue(value, metric.format) : "—"}
               </p>
+              {mode === "edit" && metric.nodeId && (
+                <p className="text-[9px] text-indigo-400 mt-1 truncate" title={metric.nodeId}>
+                  {metric.nodeId}
+                </p>
+              )}
             </div>
           );
         })}

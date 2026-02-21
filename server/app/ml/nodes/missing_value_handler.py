@@ -44,7 +44,7 @@ class MissingValueHandlerInput(NodeInput):
 
     # Global fallback strategy
     default_strategy: str = Field(
-        "none", description="Default strategy for columns not in column_configs"
+        "drop", description="Default strategy for columns not in column_configs"
     )
 
     # Preview mode
@@ -315,7 +315,7 @@ class MissingValueHandlerNode(BaseNode):
 
     async def _load_dataset(self, dataset_id: str) -> Optional[pd.DataFrame]:
         """
-        Load dataset from storage (S3 or local).
+        Load dataset from storage (uploads folder first, then database).
 
         Args:
             dataset_id: Dataset identifier
@@ -324,6 +324,17 @@ class MissingValueHandlerNode(BaseNode):
             DataFrame or None if not found
         """
         try:
+            # Recognize common missing value indicators: ?, NA, N/A, null, empty strings
+            missing_values = ["?", "NA", "N/A", "null", "NULL", "", " ", "NaN", "nan"]
+
+            # FIRST: Try to load from uploads folder (for sample/preprocessed datasets)
+            upload_path = Path(settings.UPLOAD_DIR) / f"{dataset_id}.csv"
+            if upload_path.exists():
+                logger.info(f"Loading dataset from uploads folder: {upload_path}")
+                df = pd.read_csv(upload_path, na_values=missing_values, keep_default_na=True)
+                return df
+
+            # SECOND: Try to load from database (for original uploaded datasets)
             db = SessionLocal()
             dataset = (
                 db.query(Dataset)
@@ -332,13 +343,9 @@ class MissingValueHandlerNode(BaseNode):
             )
 
             if not dataset:
-                logger.error(f"Dataset not found: {dataset_id}")
+                logger.error(f"Dataset not found in uploads or database: {dataset_id}")
                 db.close()
                 return None
-
-            # Load from S3 or local storage
-            # Recognize common missing value indicators: ?, NA, N/A, null, empty strings
-            missing_values = ["?", "NA", "N/A", "null", "NULL", "", " ", "NaN", "nan"]
 
             if dataset.storage_backend == "s3" and dataset.s3_key:
                 logger.info(f"Loading dataset from S3: {dataset.s3_key}")

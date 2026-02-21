@@ -17,6 +17,7 @@ import { LogisticRegressionExplorer } from "./LogisticRegressionExplorer";
 import { TransformationResults } from "./TransformationResults";
 import { ScalingResults } from "./ScalingResults";
 import { FeatureEngineeringResults } from "./FeatureEngineeringResults";
+import { lazy, Suspense } from "react";
 import {
   X,
   Table2,
@@ -24,6 +25,9 @@ import {
   BarChart3,
   Columns3,
 } from "lucide-react";
+
+const DecisionTreeAnimation = lazy(() => import("./animations/DecisionTreeAnimation"));
+const RandomForestAnimation = lazy(() => import("./animations/RandomForestAnimation"));
 import {
   R2ScoreResult,
   MSEScoreResult,
@@ -141,6 +145,8 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
     "split",
     "linear_regression",
     "logistic_regression",
+    "decision_tree",
+    "random_forest",
   ].includes(nodeType);
 
   if (!isViewNode) return null;
@@ -241,6 +247,16 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
                 {nodeType === "split" && renderSplit(nodeResult)}
                 {nodeType === "linear_regression" && renderLinearRegression(nodeResult)}
                 {nodeType === "logistic_regression" && renderLogisticRegression(nodeResult)}
+                {nodeType === "decision_tree" && (
+                  <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                    <DecisionTreeAnimation />
+                  </Suspense>
+                )}
+                {nodeType === "random_forest" && (
+                  <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                    <RandomForestAnimation />
+                  </Suspense>
+                )}
               </div>
             )}
           </div>
@@ -765,18 +781,89 @@ function MLModelResults({ result, modelType }: { result: any; modelType: string 
       <div className="bg-white border border-gray-200 rounded-lg p-4">
         <h4 className="text-sm font-semibold text-gray-900 mb-4">Training Metrics</h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {Object.entries(metrics).map(([key, value]: [string, any]) => (
+          {Object.entries(metrics)
+            .filter(([, value]) => typeof value === "number")
+            .map(([key, value]: [string, number]) => (
             <div key={key} className="bg-gray-50 rounded-lg p-3 text-center">
               <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">
                 {key.replace(/_/g, " ")}
               </div>
               <div className="text-xl font-bold text-gray-900">
-                {typeof value === "number" ? value.toFixed(4) : String(value)}
+                {value.toFixed(4)}
               </div>
             </div>
           ))}
         </div>
       </div>
+
+      {/* Per-Class Metrics (classification only) */}
+      {isClassification && metrics.per_class_metrics && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-gray-900 mb-4">Per-Class Metrics</h4>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Class</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Precision</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Recall</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">F1 Score</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {Object.entries(metrics.per_class_metrics).map(([cls, m]: [string, Record<string, number>]) => (
+                  <tr key={cls} className="hover:bg-gray-50">
+                    <td className="px-4 py-2 font-medium text-gray-900">{cls}</td>
+                    <td className="px-4 py-2 text-gray-700">{typeof m.precision === "number" ? m.precision.toFixed(4) : "N/A"}</td>
+                    <td className="px-4 py-2 text-gray-700">{typeof m.recall === "number" ? m.recall.toFixed(4) : "N/A"}</td>
+                    <td className="px-4 py-2 text-gray-700">{typeof m.f1 === "number" ? m.f1.toFixed(4) : "N/A"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Confusion Matrix (classification only) */}
+      {isClassification && metrics.confusion_matrix && (
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-gray-900 mb-4">Confusion Matrix</h4>
+          <div className="overflow-x-auto">
+            <table className="text-sm border-collapse">
+              <thead>
+                <tr>
+                  <th className="px-3 py-2 text-xs text-gray-500"></th>
+                  {(result.class_names || []).map((cls: string, i: number) => (
+                    <th key={i} className="px-3 py-2 text-xs font-semibold text-gray-700 text-center">
+                      {cls}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.confusion_matrix.map((row: number[], i: number) => (
+                  <tr key={i}>
+                    <td className="px-3 py-2 text-xs font-semibold text-gray-700">
+                      {result.class_names?.[i] ?? `Class ${i}`}
+                    </td>
+                    {row.map((val: number, j: number) => (
+                      <td
+                        key={j}
+                        className={`px-3 py-2 text-center font-mono text-sm border border-gray-200 ${
+                          i === j ? "bg-violet-100 font-bold text-violet-900" : "bg-gray-50 text-gray-700"
+                        }`}
+                      >
+                        {val}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Model Info */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
