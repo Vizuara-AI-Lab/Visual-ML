@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # API
     API_V1_PREFIX: str = "/api/v1"
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    ALLOWED_ORIGINS: list[str] = ["http://localhost:5173", "http://34.100.238.183:3000"]
 
     # Database
     DATABASE_URL: str = (
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # Google OAuth
     GOOGLE_CLIENT_ID: Optional[str] = None
     GOOGLE_CLIENT_SECRET: Optional[str] = None
-    GOOGLE_REDIRECT_URI: Optional[str] = "http://localhost:3003/api/v1/auth/student/google/callback"
+    GOOGLE_REDIRECT_URI: Optional[str] = "http://34.100.238.183:3003/api/v1/auth/student/google/callback"
 
     # Rate Limiting (for 50k traffic)
     RATE_LIMIT_PER_MINUTE: int = 100
