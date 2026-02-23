@@ -35,11 +35,14 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30  # 30 minutes for production
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7  # 7 days for refresh tokens
+    COOKIE_DOMAIN: Optional[str] = None  # e.g., ".visualml.xyz" for cross-subdomain cookies
 
     # Google OAuth
     GOOGLE_CLIENT_ID: Optional[str] = None
     GOOGLE_CLIENT_SECRET: Optional[str] = None
-    GOOGLE_REDIRECT_URI: Optional[str] = "http://34.100.238.183:3003/api/v1/auth/student/google/callback"
+    GOOGLE_REDIRECT_URI: Optional[str] = (
+        "http://34.100.238.183:3003/api/v1/auth/student/google/callback"
+    )
 
     # Rate Limiting (for 50k traffic)
     RATE_LIMIT_PER_MINUTE: int = 100
@@ -94,10 +97,10 @@ class Settings(BaseSettings):
     ENABLE_MODEL_WARMUP: bool = False
 
     # Storage Cleanup
-    CLEANUP_ENABLED: bool = True          # Toggle periodic cleanup on/off
-    CLEANUP_INTERVAL_HOURS: int = 12      # How often to run cleanup
-    UPLOAD_MAX_AGE_HOURS: int = 24        # Delete uploads older than this
-    MODEL_MAX_AGE_HOURS: int = 72         # Delete model files older than this
+    CLEANUP_ENABLED: bool = True  # Toggle periodic cleanup on/off
+    CLEANUP_INTERVAL_HOURS: int = 12  # How often to run cleanup
+    UPLOAD_MAX_AGE_HOURS: int = 24  # Delete uploads older than this
+    MODEL_MAX_AGE_HOURS: int = 72  # Delete model files older than this
 
     # Inworld TTS (AI Mentor)
     INWORLD_API_KEY: Optional[str] = None

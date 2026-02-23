@@ -238,6 +238,8 @@ def set_auth_cookies(
     """
     is_production = settings.ENVIRONMENT == "production"
     cookie_domain = getattr(settings, "COOKIE_DOMAIN", None)
+    # Use 'none' for cross-origin requests in production, 'lax' for same-origin in dev
+    samesite_policy = "none" if is_production else "lax"
 
     # Access token cookie (short-lived)
     response.set_cookie(
@@ -245,7 +247,7 @@ def set_auth_cookies(
         value=access_token,
         httponly=True,  # Prevent JavaScript access (XSS protection)
         secure=is_production,  # HTTPS only in production
-        samesite="lax",  # CSRF protection
+        samesite=samesite_policy,  # 'none' for cross-origin in production
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
         domain=cookie_domain,
@@ -257,7 +259,7 @@ def set_auth_cookies(
         value=refresh_token,
         httponly=True,
         secure=is_production,
-        samesite="lax",
+        samesite=samesite_policy,  # 'none' for cross-origin in production
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
         path="/api/v1/auth",  # Only sent to auth endpoints
         domain=cookie_domain,
