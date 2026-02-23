@@ -22,6 +22,8 @@ export type NodeType =
   | "logistic_regression"
   | "decision_tree"
   | "random_forest"
+  | "mlp_classifier"
+  | "mlp_regressor"
   | "train"
   | "evaluate"
   // Result & Metrics nodes
@@ -35,6 +37,13 @@ export type NodeType =
   | "system_prompt"
   | "chatbot_node"
   | "example_node"
+  // Image pipeline nodes
+  | "image_dataset"
+  | "image_preprocessing"
+  | "image_augmentation"
+  | "image_split"
+  | "cnn_classifier"
+  | "image_predictions"
   // Activity nodes (standalone interactive learning)
   | "activity_gradient_descent"
   | "activity_bias_variance"
@@ -42,7 +51,7 @@ export type NodeType =
   | "activity_decision_boundary"
   | "activity_neural_network";
 
-export type AlgorithmType = "linear_regression" | "logistic_regression";
+export type AlgorithmType = "linear_regression" | "logistic_regression" | "mlp_classifier" | "mlp_regressor";
 
 export type TaskType = "regression" | "classification";
 

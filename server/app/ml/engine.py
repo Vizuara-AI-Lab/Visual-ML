@@ -81,6 +81,12 @@ class MLPipelineEngine:
             ColumnInfoNode,
             ChartViewNode,
         )
+        from app.ml.nodes.image_dataset_node import ImageDatasetNode
+        from app.ml.nodes.image_preprocessing_node import ImagePreprocessingNode
+        from app.ml.nodes.image_augmentation_node import ImageAugmentationNode
+        from app.ml.nodes.image_split_node import ImageSplitNode
+        from app.ml.nodes.cnn_classifier_node import CNNClassifierNode
+        from app.ml.nodes.image_predictions_node import ImagePredictionsNode
 
         # Register all nodes
         nodes_to_register = {
@@ -108,6 +114,13 @@ class MLPipelineEngine:
             "statistics_view": StatisticsViewNode,
             "column_info": ColumnInfoNode,
             "chart_view": ChartViewNode,
+            # Image pipeline nodes
+            "image_dataset": ImageDatasetNode,
+            "image_preprocessing": ImagePreprocessingNode,
+            "image_augmentation": ImageAugmentationNode,
+            "image_split": ImageSplitNode,
+            "cnn_classifier": CNNClassifierNode,
+            "image_predictions": ImagePredictionsNode,
         }
 
         for node_type, node_class in nodes_to_register.items():
