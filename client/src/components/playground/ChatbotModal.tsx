@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Send, MessageSquare, AlertTriangle, Trash2 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { usePlaygroundStore } from "../../store/playgroundStore";
+import { env } from "../../lib/env";
 
 interface ChatbotModalProps {
   nodeId: string | null;
@@ -171,11 +172,12 @@ export const ChatbotModal = ({ nodeId, onClose }: ChatbotModalProps) => {
       ]);
 
       // Use streaming endpoint
-      const response = await fetch("/api/v1/genai/chat", {
+      const response = await fetch(`${env.API_URL}/genai/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include", // Include cookies for authentication
         body: JSON.stringify({
           message: currentMessage,
           provider: provider,
