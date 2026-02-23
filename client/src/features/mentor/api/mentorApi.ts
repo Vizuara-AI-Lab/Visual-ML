@@ -4,14 +4,14 @@
  * Handles communication with backend mentor endpoints
  */
 
-import axios from "axios";
+import axiosInstance from "../../../lib/axios";
 import type {
   MentorSuggestion,
   MentorPreferences,
   DatasetInsight,
 } from "../store/mentorStore";
 
-const API_BASE = "/api/v1/mentor";
+const API_BASE = "/mentor";
 
 export interface MentorResponse {
   success: boolean;
@@ -59,10 +59,13 @@ class MentorAPI {
     timeOfDay?: string,
   ): Promise<MentorResponse> {
     console.log("[mentorApi] greetUser called:", { userName, timeOfDay });
-    const response = await axios.post<MentorResponse>(`${API_BASE}/greet`, {
-      user_name: userName,
-      time_of_day: timeOfDay,
-    });
+    const response = await axiosInstance.post<MentorResponse>(
+      `${API_BASE}/greet`,
+      {
+        user_name: userName,
+        time_of_day: timeOfDay,
+      },
+    );
     console.log("[mentorApi] greetUser response:", response.data);
     return response.data;
   }
@@ -73,7 +76,7 @@ class MentorAPI {
   async analyzeDataset(
     request: MentorAnalysisRequest,
   ): Promise<MentorResponse> {
-    const response = await axios.post<MentorResponse>(
+    const response = await axiosInstance.post<MentorResponse>(
       `${API_BASE}/analyze-dataset`,
       request,
     );
@@ -86,7 +89,7 @@ class MentorAPI {
   async analyzePipeline(
     request: MentorAnalysisRequest,
   ): Promise<MentorResponse> {
-    const response = await axios.post<MentorResponse>(
+    const response = await axiosInstance.post<MentorResponse>(
       `${API_BASE}/analyze-pipeline`,
       request,
     );
@@ -102,7 +105,7 @@ class MentorAPI {
     nodeConfig: Record<string, unknown>,
     pipelineState?: Record<string, unknown>,
   ): Promise<MentorResponse> {
-    const response = await axios.post<MentorResponse>(
+    const response = await axiosInstance.post<MentorResponse>(
       `${API_BASE}/explain-error`,
       {
         error_message: errorMessage,
@@ -129,7 +132,7 @@ class MentorAPI {
       voiceId,
     });
     try {
-      const response = await axios.post<TTSResponse>(
+      const response = await axiosInstance.post<TTSResponse>(
         `${API_BASE}/generate-speech`,
         {
           text,
@@ -149,11 +152,8 @@ class MentorAPI {
   /**
    * Preview a voice with a short sample
    */
-  async previewVoice(
-    voiceId: string,
-    text?: string,
-  ): Promise<TTSResponse> {
-    const response = await axios.post<TTSResponse>(
+  async previewVoice(voiceId: string, text?: string): Promise<TTSResponse> {
+    const response = await axiosInstance.post<TTSResponse>(
       `${API_BASE}/preview-voice`,
       {
         text: text || "",
@@ -174,7 +174,7 @@ class MentorAPI {
     formData.append("file", audioFile);
     formData.append("display_name", displayName);
 
-    const response = await axios.post<{
+    const response = await axiosInstance.post<{
       success: boolean;
       voice_id: string;
       display_name: string;
@@ -189,7 +189,7 @@ class MentorAPI {
    * Get user's mentor preferences
    */
   async getPreferences(): Promise<MentorPreferences> {
-    const response = await axios.get<MentorPreferences>(
+    const response = await axiosInstance.get<MentorPreferences>(
       `${API_BASE}/preferences`,
     );
     return response.data;
@@ -201,7 +201,7 @@ class MentorAPI {
   async updatePreferences(
     preferences: MentorPreferences,
   ): Promise<MentorPreferences> {
-    const response = await axios.put<MentorPreferences>(
+    const response = await axiosInstance.put<MentorPreferences>(
       `${API_BASE}/preferences`,
       preferences,
     );
@@ -212,7 +212,7 @@ class MentorAPI {
    * Get step-by-step guide for a model type
    */
   async getModelGuide(modelType: string): Promise<PipelineStepGuide> {
-    const response = await axios.post<PipelineStepGuide>(
+    const response = await axiosInstance.post<PipelineStepGuide>(
       `${API_BASE}/get-guide/${modelType}`,
     );
     return response.data;
@@ -222,7 +222,7 @@ class MentorAPI {
    * Get detailed model introduction with interactive options
    */
   async getModelIntroduction(modelType: string): Promise<MentorResponse> {
-    const response = await axios.post<MentorResponse>(
+    const response = await axiosInstance.post<MentorResponse>(
       `${API_BASE}/model-introduction/${modelType}`,
     );
     return response.data;
@@ -236,7 +236,7 @@ class MentorAPI {
     modelType: string,
     nextMessage: string,
   ): Promise<MentorResponse> {
-    const response = await axios.post<MentorResponse>(
+    const response = await axiosInstance.post<MentorResponse>(
       `${API_BASE}/dataset-guidance`,
       {
         action,
