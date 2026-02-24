@@ -5,8 +5,9 @@ Production-ready with rate limiting, caching, and admin protection.
 
 import json
 import asyncio
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from fastapi import APIRouter, HTTPException, Depends, status, UploadFile, File
+from pydantic import BaseModel
 from fastapi.responses import JSONResponse, StreamingResponse
 from app.schemas.pipeline import (
     NodeExecuteRequest,
@@ -640,6 +641,160 @@ async def reload_model(
     except Exception as e:
         logger.error(f"Failed to reload model: {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+# ========== CAMERA CAPTURE ENDPOINTS ==========
+
+
+class CameraDatasetRequest(BaseModel):
+    """Request body for building a camera capture dataset."""
+    class_names: List[str]
+    target_size: str = "28x28"
+    images_per_class: Dict[str, List[List[float]]]  # className → list of pixel arrays
+
+
+class CameraDatasetResponse(BaseModel):
+    dataset_id: str
+    n_rows: int
+    n_columns: int
+    n_classes: int
+    class_names: List[str]
+    image_width: int
+    image_height: int
+
+
+class CameraPredictRequest(BaseModel):
+    """Request body for live-camera inference."""
+    model_path: str
+    pixels: List[float]          # flat grayscale pixel array
+
+
+class CameraPredictResponse(BaseModel):
+    class_name: str
+    confidence: float
+    all_scores: List[Dict[str, Any]]
+
+
+@router.post("/camera/dataset", response_model=CameraDatasetResponse)
+async def build_camera_dataset(
+    request: CameraDatasetRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Build a CSV dataset from camera-captured pixel arrays.
+
+    The frontend captures images per class, converts them to flattened grayscale
+    pixel arrays, and sends them here.  We save a CSV in the uploads directory
+    (same format as image_dataset_node) and return a dataset_id usable by the
+    rest of the image pipeline.
+    """
+    import pandas as pd
+    import numpy as np
+    from pathlib import Path
+    from app.core.config import settings
+    from app.utils.ids import generate_id
+
+    try:
+        size_parts = (request.target_size or "28x28").lower().split("x")
+        width = int(size_parts[0]) if size_parts else 28
+        height = int(size_parts[1]) if len(size_parts) > 1 else 28
+        n_pixels = width * height
+
+        rows = []
+        for class_idx, class_name in enumerate(request.class_names):
+            pixel_arrays = request.images_per_class.get(class_name, [])
+            for pixels in pixel_arrays:
+                if len(pixels) != n_pixels:
+                    raise ValueError(
+                        f"Expected {n_pixels} pixels for {width}×{height} image, "
+                        f"got {len(pixels)} for class '{class_name}'"
+                    )
+                row = {f"pixel_{i}": float(v) for i, v in enumerate(pixels)}
+                row["label"] = class_idx
+                rows.append(row)
+
+        if not rows:
+            raise ValueError("No images provided — capture at least 1 image per class")
+
+        df = pd.DataFrame(rows)
+        dataset_id = generate_id("cam")
+        upload_dir = Path(settings.UPLOAD_DIR)
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        file_path = upload_dir / f"{dataset_id}.csv"
+        df.to_csv(file_path, index=False)
+
+        logger.info(
+            f"Camera dataset built: {dataset_id}, {len(df)} images, "
+            f"{len(request.class_names)} classes, {width}×{height}px"
+        )
+
+        return CameraDatasetResponse(
+            dataset_id=dataset_id,
+            n_rows=len(df),
+            n_columns=len(df.columns),
+            n_classes=len(request.class_names),
+            class_names=request.class_names,
+            image_width=width,
+            image_height=height,
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Camera dataset build failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/camera/predict", response_model=CameraPredictResponse)
+async def camera_live_predict(
+    request: CameraPredictRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Run inference on a single camera frame (flat grayscale pixel array).
+
+    Loads the model at model_path and returns the predicted class + all class scores.
+    Designed for low-latency live-camera testing in the Image Predictions node.
+    """
+    import joblib
+    import numpy as np
+    from pathlib import Path
+
+    try:
+        model_path = Path(request.model_path)
+        if not model_path.exists():
+            raise ValueError(f"Model not found: {model_path}")
+
+        model = joblib.load(model_path)
+        X = np.array(request.pixels, dtype=float).reshape(1, -1)
+
+        predicted_idx = int(model.predict(X)[0])
+
+        # Build per-class probabilities if available
+        all_scores: List[Dict[str, Any]] = []
+        if hasattr(model, "predict_proba"):
+            proba = model.predict_proba(X)[0]
+            classes = model.classes_ if hasattr(model, "classes_") else list(range(len(proba)))
+            all_scores = [
+                {"class_name": str(cls), "score": round(float(p), 4)}
+                for cls, p in sorted(zip(classes, proba), key=lambda x: -x[1])
+            ]
+            confidence = float(proba[predicted_idx]) if predicted_idx < len(proba) else 1.0
+        else:
+            all_scores = [{"class_name": str(predicted_idx), "score": 1.0}]
+            confidence = 1.0
+
+        return CameraPredictResponse(
+            class_name=str(predicted_idx),
+            confidence=round(confidence, 4),
+            all_scores=all_scores,
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Camera live prediction failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ========== ASYNC EXECUTION ENDPOINTS (with Celery) ==========

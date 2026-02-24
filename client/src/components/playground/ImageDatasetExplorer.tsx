@@ -14,6 +14,10 @@ import {
   XCircle,
   Trophy,
   Info,
+<<<<<<< HEAD
+=======
+  Eye,
+>>>>>>> 0fd5d14d84b0e72c8bd3d47a3826baf437a070d1
 } from "lucide-react";
 
 // --- Shared Image Renderer ---

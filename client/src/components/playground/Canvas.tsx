@@ -44,6 +44,16 @@ const nodeTypes: Record<string, React.ComponentType<any>> = {
   logistic_regression: MLNode,
   decision_tree: MLNode,
   random_forest: MLNode,
+  mlp_classifier: MLNode,
+  mlp_regressor: MLNode,
+  // Image Pipeline Nodes
+  image_dataset: MLNode,
+  camera_capture: MLNode,
+  image_preprocessing: MLNode,
+  image_augmentation: MLNode,
+  image_split: MLNode,
+  cnn_classifier: MLNode,
+  image_predictions: MLNode,
   // Result & Metrics Nodes
   r2_score: MLNode,
   mse_score: MLNode,
