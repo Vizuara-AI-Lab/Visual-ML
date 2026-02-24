@@ -82,6 +82,7 @@ class MLPipelineEngine:
             ChartViewNode,
         )
         from app.ml.nodes.image_dataset_node import ImageDatasetNode
+        from app.ml.nodes.camera_capture_node import CameraCaptureNode
         from app.ml.nodes.image_preprocessing_node import ImagePreprocessingNode
         from app.ml.nodes.image_augmentation_node import ImageAugmentationNode
         from app.ml.nodes.image_split_node import ImageSplitNode
@@ -116,6 +117,7 @@ class MLPipelineEngine:
             "chart_view": ChartViewNode,
             # Image pipeline nodes
             "image_dataset": ImageDatasetNode,
+            "camera_capture": CameraCaptureNode,
             "image_preprocessing": ImagePreprocessingNode,
             "image_augmentation": ImageAugmentationNode,
             "image_split": ImageSplitNode,

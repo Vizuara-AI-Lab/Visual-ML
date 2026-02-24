@@ -48,6 +48,7 @@ const nodeTypes: Record<string, React.ComponentType<any>> = {
   mlp_regressor: MLNode,
   // Image Pipeline Nodes
   image_dataset: MLNode,
+  camera_capture: MLNode,
   image_preprocessing: MLNode,
   image_augmentation: MLNode,
   image_split: MLNode,

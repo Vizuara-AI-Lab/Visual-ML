@@ -39,6 +39,7 @@ export type NodeType =
   | "example_node"
   // Image pipeline nodes
   | "image_dataset"
+  | "camera_capture"
   | "image_preprocessing"
   | "image_augmentation"
   | "image_split"

@@ -18,7 +18,10 @@ import {
   ScatterChart,
   PieChart,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { apiClient } from "../../lib/axios";
+import { CameraCapturePanel } from "./CameraCapturePanel";
+import { LiveCameraTestPanel } from "./LiveCameraTestPanel";
 import { getNodeByType } from "../../config/nodeDefinitions";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 import { UploadDatasetButton } from "./UploadDatasetButton";
@@ -77,6 +80,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
   const [config, setConfig] = useState<Record<string, unknown>>({});
   const [userDatasets, setUserDatasets] = useState<DatasetMetadata[]>([]);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
+  const [buildingDataset, setBuildingDataset] = useState(false);
 
   // Reset config when nodeId changes to prevent config sharing between nodes
   // ALWAYS load the latest config from the store (no caching)
@@ -134,6 +138,12 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
       "feature_importance",
       "residual_plot",
       "prediction_table",
+      // Image pipeline nodes
+      "image_preprocessing",
+      "image_augmentation",
+      "image_split",
+      "cnn_classifier",
+      "image_predictions",
     ].includes(node?.type || "");
 
     if (isAutoFillNode && nodeId) {
@@ -187,7 +197,25 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
             "random_forest",
           ].includes(node?.type || "");
 
-          if (isMLNode && sourceNode?.type === "split") {
+          // CNN classifier gets train_dataset_id from image_split
+          if (node?.type === "cnn_classifier" && sourceNode?.type === "image_split") {
+            const trainDatasetId = sourceResult?.train_dataset_id;
+            setConfig((prev) => ({
+              ...prev,
+              train_dataset_id: trainDatasetId || prev.train_dataset_id,
+            }));
+          } else if (node?.type === "image_predictions" && sourceNode?.type === "cnn_classifier") {
+            // image_predictions gets test_dataset_id + model_path from cnn_classifier
+            const testDatasetId = sourceResult?.test_dataset_id;
+            const modelPath = sourceResult?.model_path;
+            const modelId = sourceResult?.model_id;
+            setConfig((prev) => ({
+              ...prev,
+              test_dataset_id: testDatasetId || prev.test_dataset_id,
+              model_path: modelPath || prev.model_path,
+              model_id: modelId || prev.model_id,
+            }));
+          } else if (isMLNode && sourceNode?.type === "split") {
             // ML nodes get train_dataset_id and target_column from split node
             const trainDatasetId = sourceResult?.train_dataset_id;
             const targetColumn = sourceResult?.target_column;
@@ -205,7 +233,11 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
               sourceResult?.encoded_dataset_id ||
               sourceResult?.transformed_dataset_id ||
               sourceResult?.scaled_dataset_id ||
-              sourceResult?.selected_dataset_id;
+              sourceResult?.selected_dataset_id ||
+              // Image pipeline specific IDs
+              sourceResult?.augmented_dataset_id ||
+              sourceResult?.camera_dataset_id ||
+              sourceResult?.dataset_id;
 
             // Priority 2: Check config for dataset_id (for upload/select nodes)
             if (!datasetId) {
@@ -231,6 +263,88 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
       }
     }
   }, [node?.type, nodeId, edges, getNodeById]);
+
+  // Build a camera dataset from captured pixel arrays and store dataset_id in config
+  const buildCameraDataset = useCallback(
+    async (payload: {
+      class_names: string[];
+      target_size: string;
+      images_per_class: Record<string, number[][]>;
+    }) => {
+      if (!nodeId) return;
+      setBuildingDataset(true);
+      try {
+        const response = await apiClient.post("/ml/camera/dataset", {
+          class_names: payload.class_names,
+          target_size: payload.target_size,
+          images_per_class: payload.images_per_class,
+        });
+        const data = response.data as {
+          dataset_id: string;
+          n_rows: number;
+          n_columns: number;
+          image_width: number;
+          image_height: number;
+        };
+        setConfig((prev) => {
+          const updated = {
+            ...prev,
+            dataset_id: data.dataset_id,
+            n_rows: data.n_rows,
+            n_columns: data.n_columns,
+            class_names: payload.class_names.join(","),
+            image_width: data.image_width,
+            image_height: data.image_height,
+          };
+          updateNodeConfig(nodeId, updated);
+          return updated;
+        });
+      } catch (err) {
+        console.error("❌ Camera dataset build failed:", err);
+      } finally {
+        setBuildingDataset(false);
+      }
+    },
+    [nodeId, updateNodeConfig],
+  );
+
+  // Live camera predict — calls /ml/camera/predict with a flat pixel array
+  const cameraLivePredict = useCallback(
+    async (pixels: number[]) => {
+      const modelPath = (config.model_path as string) || "";
+      const response = await apiClient.post("/ml/camera/predict", {
+        model_path: modelPath,
+        pixels,
+      });
+      const data = response.data as {
+        class_name: string;
+        confidence: number;
+        all_scores: { class_name: string; score: number }[];
+      };
+      // Resolve class index → class name from connected node's result
+      const incomingEdge = edges.find((e) => e.target === nodeId);
+      const srcResult = incomingEdge
+        ? (getNodeById(incomingEdge.source)?.data.result as Record<string, unknown> | undefined)
+        : undefined;
+      const classNamesArr =
+        (srcResult?.class_names as string[]) ||
+        (config.class_names as string)?.split(",").map((s) => s.trim()).filter(Boolean) ||
+        [];
+      const mapIdx = (raw: string) => {
+        const idx = parseInt(raw);
+        return !isNaN(idx) && classNamesArr[idx] ? classNamesArr[idx] : raw;
+      };
+      return {
+        class_name: mapIdx(data.class_name),
+        confidence: data.confidence,
+        all_scores: (data.all_scores as { class_name: string; score: number }[]).map((s) => ({
+          class_name: mapIdx(s.class_name),
+          score: s.score,
+        })),
+      };
+    },
+    [config, edges, nodeId, getNodeById],
+  );
 
   // Early return AFTER ALL hooks have been called
   if (!nodeId || !node || !nodeDef) return null;
@@ -480,11 +594,30 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
         sourceResult?.transformed_dataset_id ||
         sourceResult?.scaled_dataset_id ||
         sourceResult?.selected_dataset_id ||
+        sourceResult?.augmented_dataset_id ||
+        sourceResult?.camera_dataset_id ||
+        sourceResult?.dataset_id ||
         sourceConfig?.dataset_id;
 
       if (datasetId) {
         return datasetId;
       }
+    }
+
+    // Image pipeline: auto-fill train_dataset_id for cnn_classifier from image_split
+    if (fieldName === "train_dataset_id" && connectedSourceNode?.type === "image_split") {
+      const sourceResult = connectedSourceNode.data.result as Record<string, unknown> | undefined;
+      if (sourceResult?.train_dataset_id) return sourceResult.train_dataset_id;
+    }
+
+    // Image pipeline: auto-fill test_dataset_id + model_path for image_predictions from cnn_classifier
+    if (fieldName === "test_dataset_id" && connectedSourceNode?.type === "cnn_classifier") {
+      const sourceResult = connectedSourceNode.data.result as Record<string, unknown> | undefined;
+      if (sourceResult?.test_dataset_id) return sourceResult.test_dataset_id;
+    }
+    if (fieldName === "model_path" && connectedSourceNode?.type === "cnn_classifier") {
+      const sourceResult = connectedSourceNode.data.result as Record<string, unknown> | undefined;
+      if (sourceResult?.model_path) return sourceResult.model_path;
     }
 
     if (!datasetMetadata) return undefined;
@@ -1526,6 +1659,20 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                 onFieldChange={handleFieldChange}
                 connectedSourceNode={connectedSourceNode}
               />
+            ) : node.type === "camera_capture" ? (
+              <CameraCaptureConfigBlock
+                config={config}
+                onDatasetReady={(payload) => {
+                  buildCameraDataset(payload);
+                }}
+                isSubmitting={buildingDataset}
+              />
+            ) : node.type === "image_predictions" ? (
+              <ImagePredictionsConfigBlock
+                config={config}
+                connectedSourceNode={connectedSourceNode}
+                onFieldChange={handleFieldChange}
+              />
             ) : nodeDef.configFields && nodeDef.configFields.length > 0 ? (
               <div className="space-y-4">
                 {nodeDef.configFields.map((field) => {
@@ -1569,17 +1716,25 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                       "scaling",
                       "feature_selection",
                       "split",
+                      // Image pipeline nodes — inherit from connected node
+                      "image_preprocessing",
+                      "image_augmentation",
+                      "image_split",
                     ].includes(node.type);
 
                   // Check if this is a train_dataset_id field for ML nodes (should be read-only)
                   const isTrainDatasetIdField =
-                    field.name === "train_dataset_id" &&
+                    (field.name === "train_dataset_id" &&
                     [
                       "linear_regression",
                       "logistic_regression",
                       "decision_tree",
                       "random_forest",
-                    ].includes(node.type);
+                      "cnn_classifier",
+                    ].includes(node.type)) ||
+                    // Also treat image_predictions source fields as read-only
+                    (["test_dataset_id", "model_path"].includes(field.name) &&
+                      node.type === "image_predictions");
 
                   // Check if this is a model_output_id field for result nodes (should be read-only)
                   const isModelOutputIdField =
@@ -1641,7 +1796,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                           )}
                           {isDatasetIdField && !connectedSourceNode && (
                             <p className="text-xs text-amber-600 mt-1">
-                              ⚠ Connect an upload dataset node to this view node
+                              ⚠ Connect a data source node — dataset ID is inherited automatically
                             </p>
                           )}
                           {isTrainDatasetIdField && connectedSourceNode && (
