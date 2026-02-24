@@ -49,6 +49,15 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
     "logistic_regression",
     "decision_tree",
     "random_forest",
+    "mlp_classifier",
+    "mlp_regressor",
+    // Image pipeline nodes
+    "image_dataset",
+    "image_preprocessing",
+    "image_augmentation",
+    "image_split",
+    "cnn_classifier",
+    "image_predictions",
   ];
 
   const isViewNode = viewNodeTypes.includes(nodeData.type);
@@ -85,7 +94,9 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
     e.stopPropagation();
     if (datasetName) {
       window.dispatchEvent(
-        new CustomEvent("openDatasetStory", { detail: { datasetId: datasetName } }),
+        new CustomEvent("openDatasetStory", {
+          detail: { datasetId: datasetName },
+        }),
       );
     }
   };
@@ -319,45 +330,58 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
       </button>
 
       {/* Data preview tooltip on hover after execution */}
-      {hasExecutionResults && executionSuccess && !isActivityNode && (() => {
-        const out = nodeResult?.output as Record<string, unknown> | undefined;
-        return (
-          <div
-            className="absolute -top-14 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100
+      {hasExecutionResults &&
+        executionSuccess &&
+        !isActivityNode &&
+        (() => {
+          const out = nodeResult?.output as Record<string, unknown> | undefined;
+          return (
+            <div
+              className="absolute -top-14 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100
                        transition-all duration-200 pointer-events-none z-20"
-          >
-            <div className="bg-gray-900/90 backdrop-blur-sm text-white text-[10px] font-medium
-                          px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-2">
-              {out && typeof out === "object" ? (
-                <>
-                  {out.rows != null && <span>{String(out.rows)} rows</span>}
-                  {out.columns != null && (
-                    <>
-                      <span className="w-px h-3 bg-gray-600" />
-                      <span>{Array.isArray(out.columns) ? out.columns.length : String(out.columns)} cols</span>
-                    </>
-                  )}
-                  {out.accuracy != null && (
-                    <span>Acc: {(Number(out.accuracy) * 100).toFixed(1)}%</span>
-                  )}
-                  {out.r2_score != null && (
-                    <span>R²: {Number(out.r2_score).toFixed(3)}</span>
-                  )}
-                  {out.mse != null && out.r2_score == null && (
-                    <span>MSE: {Number(out.mse).toFixed(3)}</span>
-                  )}
-                  {out.rows == null && out.accuracy == null && out.r2_score == null && out.mse == null && (
-                    <span>Completed</span>
-                  )}
-                </>
-              ) : (
-                <span>Completed</span>
-              )}
+            >
+              <div
+                className="bg-gray-900/90 backdrop-blur-sm text-white text-[10px] font-medium
+                          px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-2"
+              >
+                {out && typeof out === "object" ? (
+                  <>
+                    {out.rows != null && <span>{String(out.rows)} rows</span>}
+                    {out.columns != null && (
+                      <>
+                        <span className="w-px h-3 bg-gray-600" />
+                        <span>
+                          {Array.isArray(out.columns)
+                            ? out.columns.length
+                            : String(out.columns)}{" "}
+                          cols
+                        </span>
+                      </>
+                    )}
+                    {out.accuracy != null && (
+                      <span>
+                        Acc: {(Number(out.accuracy) * 100).toFixed(1)}%
+                      </span>
+                    )}
+                    {out.r2_score != null && (
+                      <span>R²: {Number(out.r2_score).toFixed(3)}</span>
+                    )}
+                    {out.mse != null && out.r2_score == null && (
+                      <span>MSE: {Number(out.mse).toFixed(3)}</span>
+                    )}
+                    {out.rows == null &&
+                      out.accuracy == null &&
+                      out.r2_score == null &&
+                      out.mse == null && <span>Completed</span>}
+                  </>
+                ) : (
+                  <span>Completed</span>
+                )}
+              </div>
+              <div className="w-2 h-2 bg-gray-900/90 rotate-45 mx-auto -mt-1" />
             </div>
-            <div className="w-2 h-2 bg-gray-900/90 rotate-45 mx-auto -mt-1" />
-          </div>
-        );
-      })()}
+          );
+        })()}
 
       {/* Input Handle — hidden for activity nodes and sample_dataset */}
       {!isActivityNode && nodeData.type !== "sample_dataset" && (

@@ -1,5 +1,6 @@
 """
-GenAI Chat API endpoint - Simple streaming with Gemini 
+GenAI Chat API endpoint - Multi-provider streaming support
+Supports: Gemini, OpenAI, Anthropic, DynaRoute
 """
 
 from fastapi import APIRouter
@@ -11,6 +12,7 @@ import json
 from functools import partial
 from google import genai
 from dynaroute import DynaRouteClient, APIError
+
 from app.core.config import settings
 from app.core.logging import logger
 
@@ -19,7 +21,7 @@ router = APIRouter(prefix="/genai", tags=["genai"])
 
 class ChatRequest(BaseModel):
     message: str
-    provider: str = "gemini"  # "gemini" or "dynaroute"
+    provider: str = "gemini"  # "gemini", "openai", "anthropic", or "dynaroute"
     apiKey: Optional[str] = None  # Optional user-provided API key
     systemPrompt: Optional[str] = None  # Optional system prompt from System Prompt node
     examples: Optional[List[Dict[str, Any]]] = None  # Optional examples from Example node
@@ -29,7 +31,7 @@ class ChatRequest(BaseModel):
 async def chat_stream(request: ChatRequest):
     """
     Streaming chat: question → AI → streamed response
-    Supports: Gemini and DynaRoute
+    Supports: Gemini, OpenAI, Anthropic, and DynaRoute
     """
 
     async def generate():
@@ -65,9 +67,90 @@ async def chat_stream(request: ChatRequest):
                     if content:
                         yield f"data: {json.dumps({'content': content})}\n\n"
 
+            elif request.provider == "openai":
+                # OpenAI streaming (require apiKey from frontend)
+                try:
+                    from openai import OpenAI
+                except ImportError:
+                    yield f"data: {json.dumps({'error': 'OpenAI package not installed on server'})}\n\n"
+                    return
+                api_key = request.apiKey
+                if not api_key:
+                    yield f"data: {json.dumps({'error': 'OpenAI API key must be provided from frontend'})}\n\n"
+                    return
+                client = OpenAI(api_key=api_key)
+                messages = []
+                if request.systemPrompt:
+                    messages.append({"role": "system", "content": request.systemPrompt})
+                if request.examples:
+                    for example in request.examples:
+                        if example.get("userInput") and example.get("expectedOutput"):
+                            messages.append({"role": "user", "content": example["userInput"]})
+                            messages.append(
+                                {"role": "assistant", "content": example["expectedOutput"]}
+                            )
+                messages.append({"role": "user", "content": request.message})
+                loop = asyncio.get_event_loop()
+                stream = await loop.run_in_executor(
+                    None,
+                    partial(
+                        client.chat.completions.create,
+                        model="gpt-4o-mini",
+                        messages=messages,
+                        stream=True,
+                    ),
+                )
+                for chunk in stream:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        content = chunk.choices[0].delta.content
+                        yield f"data: {json.dumps({'content': content})}\n\n"
+
+            elif request.provider == "anthropic":
+                # Anthropic streaming (require apiKey from frontend)
+                try:
+                    from anthropic import Anthropic
+                except ImportError:
+                    yield f"data: {json.dumps({'error': 'Anthropic package not installed on server'})}\n\n"
+                    return
+                api_key = request.apiKey
+                if not api_key:
+                    yield f"data: {json.dumps({'error': 'Anthropic API key must be provided from frontend'})}\n\n"
+                    return
+                client = Anthropic(api_key=api_key)
+                messages = []
+                if request.examples:
+                    for example in request.examples:
+                        if example.get("userInput") and example.get("expectedOutput"):
+                            messages.append({"role": "user", "content": example["userInput"]})
+                            messages.append(
+                                {"role": "assistant", "content": example["expectedOutput"]}
+                            )
+                messages.append({"role": "user", "content": request.message})
+                system_prompt = request.systemPrompt or "You are a helpful assistant."
+                loop = asyncio.get_event_loop()
+                stream = await loop.run_in_executor(
+                    None,
+                    partial(
+                        client.messages.create,
+                        model="claude-3-5-sonnet-20241022",
+                        max_tokens=1024,
+                        system=system_prompt,
+                        messages=messages,
+                        stream=True,
+                    ),
+                )
+                for event in stream:
+                    if event.type == "content_block_delta":
+                        if hasattr(event.delta, "text"):
+                            yield f"data: {json.dumps({'content': event.delta.text})}\n\n"
+
             else:
-                # Gemini streaming
+                # Gemini streaming (default)
                 api_key = request.apiKey or settings.GEMINI_API_KEY
+                if not api_key:
+                    yield f"data: {json.dumps({'error': 'Gemini API key not configured'})}\n\n"
+                    return
+
                 client = genai.Client(api_key=api_key)
 
                 # Build content with system prompt and examples if provided

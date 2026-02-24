@@ -15,6 +15,12 @@ import { SplitExplorer } from "./SplitExplorer";
 import { LinearRegressionExplorer } from "./LinearRegressionExplorer";
 import { LogisticRegressionExplorer } from "./LogisticRegressionExplorer";
 import { TransformationResults } from "./TransformationResults";
+import { ImageDatasetExplorer } from "./ImageDatasetExplorer";
+import { ImagePreprocessingExplorer } from "./ImagePreprocessingExplorer";
+import { ImageAugmentationExplorer } from "./ImageAugmentationExplorer";
+import { ImageSplitExplorer } from "./ImageSplitExplorer";
+import { CNNClassifierExplorer } from "./CNNClassifierExplorer";
+import { ImagePredictionsExplorer } from "./ImagePredictionsExplorer";
 import { ScalingResults } from "./ScalingResults";
 import { FeatureEngineeringResults } from "./FeatureEngineeringResults";
 import { lazy, Suspense } from "react";
@@ -147,6 +153,13 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
     "logistic_regression",
     "decision_tree",
     "random_forest",
+    // Image pipeline nodes
+    "image_dataset",
+    "image_preprocessing",
+    "image_augmentation",
+    "image_split",
+    "cnn_classifier",
+    "image_predictions",
   ].includes(nodeType);
 
   if (!isViewNode) return null;
@@ -256,6 +269,24 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
                   <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
                     <RandomForestAnimation />
                   </Suspense>
+                )}
+                {nodeType === "image_dataset" && (
+                  <ImageDatasetExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
+                )}
+                {nodeType === "image_preprocessing" && (
+                  <ImagePreprocessingExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
+                )}
+                {nodeType === "image_augmentation" && (
+                  <ImageAugmentationExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
+                )}
+                {nodeType === "image_split" && (
+                  <ImageSplitExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
+                )}
+                {nodeType === "cnn_classifier" && (
+                  <CNNClassifierExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
+                )}
+                {nodeType === "image_predictions" && (
+                  <ImagePredictionsExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
                 )}
               </div>
             )}
