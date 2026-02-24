@@ -190,3 +190,50 @@
 2026-02-24 15:30:30 | INFO | app.mentor.services.tts_service:_cache_audio:227 - Cached TTS audio: 6cda9ffb39c2d017c3c536aff93ae697
 2026-02-24 15:30:30 | INFO | app.mentor.router:generate_speech:272 - 📢 TTS Response: success=True, has_audio=True, cached=False
 2026-02-24 15:30:30 | INFO | app.mentor.router:generate_speech:278 - 📢 TTS Audio size: 59980 chars (base64)
+2026-02-24 15:35:57 | INFO | main:lifespan:68 - Shutting down application
+2026-02-24 15:35:59 | INFO | app.core.logging:setup_logging:108 - Logging configured - Level: INFO, Format: text
+2026-02-24 15:36:00 | INFO | app.services.s3_service:__init__:30 - S3 Service initialized with bucket: visual-ml-datasets-prod
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: upload_file
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: select_dataset
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: sample_dataset
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: preprocess
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: missing_value_handler
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: encoding
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: transformation
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: scaling
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: feature_selection
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: split
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: confusion_matrix
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: linear_regression
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: logistic_regression
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: decision_tree
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: random_forest
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: r2_score
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: mse_score
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: rmse_score
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: mae_score
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: table_view
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: data_preview
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: statistics_view
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: column_info
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: chart_view
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: image_dataset
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: camera_capture
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: image_preprocessing
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: image_augmentation
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: image_split
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: cnn_classifier
+2026-02-24 15:36:03 | INFO | app.ml.engine:register_node:48 - Registered ML node: image_predictions
+2026-02-24 15:36:03 | WARNING | app.core.security:_get_encryption_key:522 - Using generated encryption key - NOT SECURE FOR PRODUCTION!
+2026-02-24 15:36:05 | INFO | main:lifespan:41 - Environment: production
+2026-02-24 15:36:20 | INFO | main:lifespan:45 - Database tables initialized
+2026-02-24 15:36:20 | INFO | main:lifespan:55 - Storage cleanup scheduler started
+2026-02-24 15:36:20 | INFO | main:lifespan:57 - Application startup complete
+2026-02-24 15:36:20 | INFO | app.utils.cleanup:start_cleanup_loop:131 - Storage cleanup scheduler started — interval: 12h, upload max age: 24h, model max age: 72h
+2026-02-24 15:37:12 | INFO | app.api.v1.pipelines:execute_pipeline_with_progress:320 - Pipeline streaming execution request: 2 nodes
+2026-02-24 15:37:12 | INFO | app.ml.engine:execute_pipeline:578 - Executing pipeline with 2 nodes, 1 edges (dry_run=False)
+2026-02-24 15:37:12 | INFO | app.ml.engine:execute_pipeline:601 - Execution order: ['image_dataset-1771927617055', 'image_preprocessing-1771927624157']
+2026-02-24 15:37:12 | ERROR | app.ml.engine:_execute_dag:511 - Node image_dataset-1771927617055 (image_dataset) execution failed: Node execution failed [image_dataset]: Unknown node type: image_dataset. Available: ['upload_file', 'select_dataset', 'sample_dataset', 'preprocess', 'missing_value_handler', 'encoding', 'transformation', 'scaling', 'feature_selection', 'split', 'confusion_matrix', 'linear_regression', 'logistic_regression', 'decision_tree', 'random_forest', 'r2_score', 'mse_score', 'rmse_score', 'mae_score', 'table_view', 'data_preview', 'statistics_view', 'column_info', 'chart_view']
+2026-02-24 15:37:12 | ERROR | app.ml.engine:execute_pipeline:624 - Pipeline execution failed: Node execution failed [image_dataset]: Unknown node type: image_dataset. Available: ['upload_file', 'select_dataset', 'sample_dataset', 'preprocess', 'missing_value_handler', 'encoding', 'transformation', 'scaling', 'feature_selection', 'split', 'confusion_matrix', 'linear_regression', 'logistic_regression', 'decision_tree', 'random_forest', 'r2_score', 'mse_score', 'rmse_score', 'mae_score', 'table_view', 'data_preview', 'statistics_view', 'column_info', 'chart_view']
+2026-02-24 15:37:20 | INFO | app.utils.cleanup:run_cleanup_once:111 - Cleanup complete — uploads: 0 deleted (0.0 B freed) | models: 0 deleted (0.0 B freed) | errors: 0
+2026-02-24 15:38:14 | INFO | main:lifespan:68 - Shutting down application
