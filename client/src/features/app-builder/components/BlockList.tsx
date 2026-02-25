@@ -9,10 +9,27 @@ import {
   Trash2,
   Link,
   Layers,
+  GripVertical,
 } from "lucide-react";
 import { useAppBuilderStore } from "../store/appBuilderStore";
 import BlockRenderer from "./BlockRenderer";
 import type { AppBlock, AppTheme } from "../types/appBuilder";
+
+const TYPE_COLORS: Record<string, string> = {
+  hero: "bg-indigo-500",
+  text: "bg-gray-400",
+  file_upload: "bg-emerald-500",
+  input_fields: "bg-emerald-500",
+  submit_button: "bg-emerald-500",
+  results_display: "bg-amber-500",
+  metrics_card: "bg-amber-500",
+  divider: "bg-gray-300",
+  image: "bg-violet-500",
+  spacer: "bg-gray-300",
+  alert: "bg-violet-500",
+  code: "bg-violet-500",
+  video_embed: "bg-violet-500",
+};
 
 interface BlockListProps {
   blocks: AppBlock[];
@@ -40,21 +57,30 @@ export default function BlockList({ blocks, selectedBlockId, theme }: BlockListP
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-3">
+    <div className="max-w-3xl mx-auto space-y-4">
       {blocks.map((block, index) => {
         const isSelected = block.id === selectedBlockId;
+        const typeColor = TYPE_COLORS[block.type] || "bg-gray-400";
+
         return (
           <div
             key={block.id}
             onClick={() => selectBlock(block.id)}
-            className={`relative group rounded-xl transition-all cursor-pointer ${
+            className={`relative group rounded-xl transition-all duration-200 cursor-pointer ${
               isSelected
-                ? "ring-2 ring-indigo-500 ring-offset-2"
-                : "hover:ring-2 hover:ring-gray-300 hover:ring-offset-1"
+                ? "ring-2 ring-indigo-500 ring-offset-2 shadow-lg shadow-indigo-100/50"
+                : "shadow-sm hover:shadow-md hover:ring-2 hover:ring-gray-200 hover:ring-offset-1"
             }`}
           >
+            {/* Left color bar — indicates block type */}
+            <div
+              className={`absolute left-0 top-3 bottom-3 w-1 rounded-full ${typeColor} transition-opacity ${
+                isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-60"
+              }`}
+            />
+
             {/* Block controls — left side */}
-            <div className="absolute -left-10 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute -left-11 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -65,6 +91,9 @@ export default function BlockList({ blocks, selectedBlockId, theme }: BlockListP
               >
                 <ChevronUp className="h-3.5 w-3.5 text-gray-400" />
               </button>
+              <div className="p-1 cursor-grab">
+                <GripVertical className="h-3.5 w-3.5 text-gray-300" />
+              </div>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -88,7 +117,7 @@ export default function BlockList({ blocks, selectedBlockId, theme }: BlockListP
               <Trash2 className="h-3.5 w-3.5 text-red-500" />
             </button>
 
-            {/* Node mapping badge — always visible */}
+            {/* Node mapping badge */}
             {block.nodeLabel && (
               <div className="absolute -right-3 top-8 z-10">
                 <div className="flex items-center gap-1 bg-indigo-50 text-indigo-700 text-[10px] font-medium px-2 py-0.5 rounded-full border border-indigo-200 whitespace-nowrap shadow-sm">
@@ -108,7 +137,9 @@ export default function BlockList({ blocks, selectedBlockId, theme }: BlockListP
             )}
 
             {/* Block render */}
-            <BlockRenderer block={block} mode="edit" theme={theme} />
+            <div className="bg-white rounded-xl overflow-hidden">
+              <BlockRenderer block={block} mode="edit" theme={theme} />
+            </div>
           </div>
         );
       })}

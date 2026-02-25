@@ -24,6 +24,11 @@ export interface HeroConfig {
   subtitle: string;
   alignment: "left" | "center" | "right";
   showGradient: boolean;
+  gradientFrom: string;
+  gradientTo: string;
+  size: "sm" | "md" | "lg" | "xl";
+  buttonText: string;
+  buttonUrl: string;
 }
 
 export interface TextConfig {
