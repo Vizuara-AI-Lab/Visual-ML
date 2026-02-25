@@ -238,6 +238,14 @@ function Toggle({
 
 // ─── Per-block Editors ────────────────────────────────────────────
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-1 mb-2">
+      {children}
+    </p>
+  );
+}
+
 function HeroEditor({
   config,
   update,
@@ -247,6 +255,8 @@ function HeroEditor({
 }) {
   return (
     <div className="space-y-3">
+      {/* Content */}
+      <SectionLabel>Content</SectionLabel>
       <div>
         <Label>Title</Label>
         <TextInput
@@ -261,6 +271,22 @@ function HeroEditor({
           onChange={(v) => update({ subtitle: v })}
         />
       </div>
+
+      {/* Layout */}
+      <SectionLabel>Layout</SectionLabel>
+      <div>
+        <Label>Title Size</Label>
+        <SelectInput
+          value={config.size || "lg"}
+          onChange={(v) => update({ size: v })}
+          options={[
+            { value: "sm", label: "Small" },
+            { value: "md", label: "Medium" },
+            { value: "lg", label: "Large" },
+            { value: "xl", label: "Extra Large" },
+          ]}
+        />
+      </div>
       <div>
         <Label>Alignment</Label>
         <SelectInput
@@ -273,11 +299,73 @@ function HeroEditor({
           ]}
         />
       </div>
+
+      {/* Background */}
+      <SectionLabel>Background</SectionLabel>
       <Toggle
         checked={config.showGradient}
         onChange={(v) => update({ showGradient: v })}
         label="Show gradient"
       />
+      {config.showGradient && (
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label>From Color</Label>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="color"
+                value={config.gradientFrom || "#6366f1"}
+                onChange={(e) => update({ gradientFrom: e.target.value })}
+                className="w-8 h-8 rounded cursor-pointer border-0 shrink-0"
+              />
+              <input
+                type="text"
+                value={config.gradientFrom || "#6366f1"}
+                onChange={(e) => update({ gradientFrom: e.target.value })}
+                className="w-full px-2 py-1.5 border rounded-md text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+          </div>
+          <div>
+            <Label>To Color</Label>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="color"
+                value={config.gradientTo || "#ec4899"}
+                onChange={(e) => update({ gradientTo: e.target.value })}
+                className="w-8 h-8 rounded cursor-pointer border-0 shrink-0"
+              />
+              <input
+                type="text"
+                value={config.gradientTo || "#ec4899"}
+                onChange={(e) => update({ gradientTo: e.target.value })}
+                className="w-full px-2 py-1.5 border rounded-md text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Call to Action */}
+      <SectionLabel>Call to Action</SectionLabel>
+      <div>
+        <Label>Button Text</Label>
+        <TextInput
+          value={config.buttonText || ""}
+          onChange={(v) => update({ buttonText: v })}
+          placeholder="Leave empty to hide"
+        />
+      </div>
+      {config.buttonText && (
+        <div>
+          <Label>Button URL</Label>
+          <TextInput
+            value={config.buttonUrl || ""}
+            onChange={(v) => update({ buttonUrl: v })}
+            placeholder="https://..."
+          />
+        </div>
+      )}
     </div>
   );
 }

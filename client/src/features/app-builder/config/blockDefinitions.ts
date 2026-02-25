@@ -39,6 +39,11 @@ export const BLOCK_DEFINITIONS: BlockDefinition[] = [
       subtitle: "Powered by machine learning",
       alignment: "center",
       showGradient: true,
+      gradientFrom: "#6366f1",
+      gradientTo: "#ec4899",
+      size: "lg",
+      buttonText: "",
+      buttonUrl: "",
     } as HeroConfig,
   },
   {

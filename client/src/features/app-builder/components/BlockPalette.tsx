@@ -50,7 +50,6 @@ const CATEGORY_META: Record<
   string,
   {
     Icon: React.ComponentType<{ className?: string }>;
-    accent: string;
     accentBg: string;
     accentText: string;
     hoverBg: string;
@@ -62,10 +61,9 @@ const CATEGORY_META: Record<
 > = {
   Layout: {
     Icon: Layers,
-    accent: "border-indigo-200",
     accentBg: "bg-indigo-50",
     accentText: "text-indigo-600",
-    hoverBg: "hover:bg-indigo-50",
+    hoverBg: "hover:bg-indigo-50/60",
     iconBg: "bg-indigo-50",
     iconHover: "group-hover:bg-indigo-100",
     iconText: "text-indigo-400",
@@ -73,10 +71,9 @@ const CATEGORY_META: Record<
   },
   Input: {
     Icon: LogIn,
-    accent: "border-emerald-200",
     accentBg: "bg-emerald-50",
     accentText: "text-emerald-600",
-    hoverBg: "hover:bg-emerald-50",
+    hoverBg: "hover:bg-emerald-50/60",
     iconBg: "bg-emerald-50",
     iconHover: "group-hover:bg-emerald-100",
     iconText: "text-emerald-400",
@@ -84,10 +81,9 @@ const CATEGORY_META: Record<
   },
   Output: {
     Icon: MonitorPlay,
-    accent: "border-amber-200",
     accentBg: "bg-amber-50",
     accentText: "text-amber-600",
-    hoverBg: "hover:bg-amber-50",
+    hoverBg: "hover:bg-amber-50/60",
     iconBg: "bg-amber-50",
     iconHover: "group-hover:bg-amber-100",
     iconText: "text-amber-400",
@@ -95,10 +91,9 @@ const CATEGORY_META: Record<
   },
   "Media & Content": {
     Icon: Film,
-    accent: "border-violet-200",
     accentBg: "bg-violet-50",
     accentText: "text-violet-600",
-    hoverBg: "hover:bg-violet-50",
+    hoverBg: "hover:bg-violet-50/60",
     iconBg: "bg-violet-50",
     iconHover: "group-hover:bg-violet-100",
     iconText: "text-violet-400",
@@ -133,10 +128,10 @@ export default function BlockPalette() {
     setCollapsed((prev) => ({ ...prev, [label]: !prev[label] }));
 
   return (
-    <div className="p-2.5 space-y-1.5">
+    <div className="p-3 space-y-2">
       {/* Header */}
-      <div className="px-2 pt-1 pb-2">
-        <h2 className="text-xs font-bold text-gray-600 tracking-wide">
+      <div className="px-1 pt-1 pb-1.5">
+        <h2 className="text-xs font-bold text-gray-700 tracking-wide">
           Blocks
         </h2>
         <p className="text-[10px] text-gray-400 mt-0.5">
@@ -152,15 +147,15 @@ export default function BlockPalette() {
         return (
           <div
             key={category.label}
-            className="rounded-lg border border-gray-100 bg-white/60 overflow-hidden"
+            className="rounded-xl overflow-hidden"
           >
             {/* Category header — clickable to collapse */}
             <button
               onClick={() => toggle(category.label)}
-              className={`w-full flex items-center gap-2 px-2.5 py-2 text-left transition-colors hover:bg-gray-50`}
+              className="w-full flex items-center gap-2 px-2.5 py-2 text-left transition-all rounded-xl hover:bg-gray-50/80"
             >
               {CatIcon && (
-                <div className={`w-5 h-5 rounded flex items-center justify-center ${meta.accentBg}`}>
+                <div className={`w-5 h-5 rounded-lg flex items-center justify-center ${meta.accentBg}`}>
                   <CatIcon className={`h-3 w-3 ${meta.accentText}`} />
                 </div>
               )}
@@ -177,7 +172,7 @@ export default function BlockPalette() {
 
             {/* Block items */}
             {!isCollapsed && (
-              <div className="px-1.5 pb-1.5 space-y-0.5">
+              <div className="px-1 pb-1.5 space-y-0.5">
                 {category.types.map((type) => {
                   const def = BLOCK_DEFINITIONS.find((d) => d.type === type);
                   if (!def) return null;
@@ -186,10 +181,10 @@ export default function BlockPalette() {
                     <button
                       key={def.type}
                       onClick={() => addBlock(def.type as BlockType)}
-                      className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md text-left ${meta.hoverBg} transition-all group`}
+                      className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-left ${meta.hoverBg} transition-all group`}
                     >
                       <div
-                        className={`w-7 h-7 rounded-md ${meta.iconBg} ${meta.iconHover} flex items-center justify-center shrink-0 transition-colors`}
+                        className={`w-7 h-7 rounded-lg ${meta.iconBg} ${meta.iconHover} flex items-center justify-center shrink-0 transition-colors`}
                       >
                         {Icon && (
                           <Icon
