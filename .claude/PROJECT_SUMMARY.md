@@ -205,15 +205,14 @@ nodes_to_register = {
 
 ### Image Pipeline (in execution order)
 ```
-image_dataset  →  image_preprocessing  →  image_split  →  cnn_classifier  →  image_predictions
+image_dataset  →  image_preprocessing  →  image_split  →  image_predictions
 ```
 | Type | Backend File | Special Notes |
 |------|--------------|---------------|
 | `image_dataset` | image_dataset_node.py | Merged: source=builtin or source=camera. Camera UI via CameraCapturePanel inside ImageDatasetConfigBlock in ConfigModal |
 | `image_preprocessing` | image_preprocessing_node.py | normalize_method: none/minmax/standard/divide_255 |
 | `image_split` | image_split_node.py | test_size, stratify, random_seed |
-| `cnn_classifier` | cnn_classifier_node.py | Trains model, outputs model_path |
-| `image_predictions` | image_predictions_node.py | Uses test_dataset_id + model_path from split+cnn |
+| `image_predictions` | image_predictions_node.py | All-in-one: trains MLP on train set + evaluates on test set. Gets train_dataset_id + test_dataset_id from image_split. Has training config (hidden_layers, activation, max_iter, etc.) |
 
 ### GenAI
 `llm_node` · `system_prompt` · `chatbot_node` · `example_node`
@@ -267,8 +266,7 @@ ConfigModal.tsx dispatches node config UI in this order (simplified):
 | `image_dataset` | ImageDatasetExplorer | ImageDatasetExplorer.tsx |
 | `image_preprocessing` | ImagePreprocessingExplorer | ImagePreprocessingExplorer.tsx |
 | `image_split` | ImageSplitExplorer | ImageSplitExplorer.tsx |
-| `cnn_classifier` | CNNClassifierExplorer | CNNClassifierExplorer.tsx |
-| `image_predictions` | ImagePredictionsExplorer | ImagePredictionsExplorer.tsx |
+| `image_predictions` | ImagePredictionsExplorer | ImagePredictionsExplorer.tsx (includes Architecture, Training Curves, Feature Importance tabs merged from former CNNClassifierExplorer) |
 | `split` | SplitExplorer | SplitExplorer.tsx |
 | `missing_value_handler` | MissingValueExplorer | MissingValueExplorer.tsx |
 | `encoding` | EncodingExplorer | EncodingExplorer.tsx |

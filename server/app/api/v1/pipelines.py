@@ -770,6 +770,11 @@ async def camera_live_predict(
         model = joblib.load(model_path)
         X = np.array(request.pixels, dtype=float).reshape(1, -1)
 
+        # Normalize incoming [0-255] camera pixels to [0-1] to match training
+        # (image_predictions_node always normalizes to [0-1] before training)
+        if X.max() > 1.0:
+            X = X / 255.0
+
         predicted_idx = int(model.predict(X)[0])
 
         # Build per-class probabilities if available

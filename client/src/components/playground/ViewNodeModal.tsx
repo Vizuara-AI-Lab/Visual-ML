@@ -16,9 +16,7 @@ import { SplitExplorer } from "./SplitExplorer";
 import { LinearRegressionExplorer } from "./LinearRegressionExplorer";
 import { LogisticRegressionExplorer } from "./LogisticRegressionExplorer";
 import { ImageDatasetExplorer } from "./ImageDatasetExplorer";
-import { ImagePreprocessingExplorer } from "./ImagePreprocessingExplorer";
 import { ImageSplitExplorer } from "./ImageSplitExplorer";
-import { CNNClassifierExplorer } from "./CNNClassifierExplorer";
 import { ImagePredictionsExplorer } from "./ImagePredictionsExplorer";
 import { ScalingResults } from "./ScalingResults";
 import { FeatureEngineeringResults } from "./FeatureEngineeringResults";
@@ -243,11 +241,8 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
     "mlp_regressor",
     // Image pipeline nodes
     "image_dataset",
-    "image_preprocessing",
-    "image_augmentation",
     "image_split",
-    "cnn_classifier",
-    "image_predictions",
+        "image_predictions",
   ].includes(nodeType);
 
   if (!isViewNode) return null;
@@ -370,17 +365,11 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
                 {nodeType === "image_dataset" && (
                   <ImageDatasetExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
                 )}
-                {nodeType === "image_preprocessing" && (
-                  <ImagePreprocessingExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
-                )}
-{nodeType === "image_split" && (
+                {nodeType === "image_split" && (
                   <ImageSplitExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
                 )}
-                {nodeType === "cnn_classifier" && (
-                  <CNNClassifierExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
-                )}
                 {nodeType === "image_predictions" && (
-                  <ImagePredictionsExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
+                  <ImagePredictionsExplorer result={nodeResult} />
                 )}
               </div>
             )}

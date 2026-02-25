@@ -52,9 +52,7 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
     "mlp_regressor",
     // Image pipeline nodes
     "image_dataset",
-    "image_preprocessing",
     "image_split",
-    "cnn_classifier",
     "image_predictions",
   ];
 

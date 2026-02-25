@@ -1,7 +1,8 @@
 """
-Image Predictions Node — Run predictions on test set, generate evaluation metrics.
-Produces confusion matrix, per-class metrics, sample prediction gallery.
-Returns rich explorer data for interactive analysis.
+Image Predictions Node — Train a model on training images, then evaluate on test set.
+Merged: previously CNN training was a separate node, now it's all-in-one.
+Produces: training metrics, architecture info, prediction gallery, confusion matrix,
+confidence distribution, feature importance, and quizzes.
 """
 
 from typing import Type, Optional, Dict, Any, List
@@ -10,6 +11,7 @@ import numpy as np
 import io
 from pydantic import Field
 from pathlib import Path
+from datetime import datetime
 from app.ml.nodes.base import BaseNode, NodeInput, NodeOutput, NodeMetadata, NodeCategory
 from app.core.exceptions import NodeExecutionError
 from app.core.config import settings
@@ -22,10 +24,18 @@ from app.services.s3_service import s3_service
 
 class ImagePredictionsInput(NodeInput):
     """Input schema for Image Predictions node."""
-    model_id: str = Field(..., description="Model ID from CNN classifier")
-    model_path: str = Field(..., description="Path to saved model file")
-    test_dataset_id: str = Field(..., description="Test dataset ID")
+    train_dataset_id: str = Field(..., description="Training dataset ID from image_split")
+    test_dataset_id: str = Field(..., description="Test dataset ID from image_split")
     target_column: Optional[str] = Field("label", description="Target column name")
+
+    # Training config (merged from CNN classifier)
+    hidden_layers: str = Field(
+        "64,32", description="Hidden layer sizes (comma-separated)"
+    )
+    activation: str = Field("relu", description="Activation: relu, tanh, logistic")
+    max_iter: int = Field(300, description="Maximum training iterations")
+    learning_rate_init: float = Field(0.001, description="Initial learning rate")
+    early_stopping: bool = Field(True, description="Stop when validation score plateaus")
 
     # Pass-through
     image_width: Optional[int] = Field(None, description="Image width")
@@ -36,11 +46,17 @@ class ImagePredictionsInput(NodeInput):
 
 class ImagePredictionsOutput(NodeOutput):
     """Output schema for Image Predictions node."""
-    model_id: str = Field(..., description="Model ID used")
-    test_samples: int = Field(..., description="Number of test images evaluated")
-    overall_accuracy: float = Field(..., description="Overall accuracy [0-1]")
+    model_id: str = Field(..., description="Unique model identifier")
+    model_path: str = Field(..., description="Path to saved model")
 
-    # Per-class metrics
+    # Training info
+    training_samples: int = Field(..., description="Training sample count")
+    training_time_seconds: float = Field(..., description="Training duration")
+    training_metrics: Dict[str, Any] = Field(..., description="Training metrics")
+
+    # Test evaluation
+    test_samples: int = Field(..., description="Number of test images evaluated")
+    overall_accuracy: float = Field(..., description="Overall test accuracy [0-1]")
     per_class_metrics: Dict[str, Any] = Field(..., description="Per-class precision/recall/f1")
     confusion_matrix: List[List[int]] = Field(..., description="Confusion matrix")
     class_names: List[str] = Field(..., description="Class names")
@@ -62,15 +78,30 @@ class ImagePredictionsOutput(NodeOutput):
         None, description="Auto-generated quiz questions"
     )
 
-    # Pass-through for live testing tabs (Draw / Upload / Live Camera)
-    model_path: Optional[str] = Field(None, description="Path to saved model file (for live testing)")
+    # Training details (for architecture/training curve tabs)
+    loss_curve: Optional[List[float]] = Field(None, description="Training loss curve")
+    validation_scores: Optional[List[float]] = Field(None, description="Validation scores")
+    architecture: Optional[Dict[str, Any]] = Field(None, description="Architecture details")
+    n_iterations: Optional[int] = Field(None, description="Actual training iterations")
+    architecture_diagram: Optional[Dict[str, Any]] = Field(
+        None, description="Layer-by-layer architecture visualization data"
+    )
+    training_analysis: Optional[Dict[str, Any]] = Field(
+        None, description="Training curve analysis"
+    )
+    feature_importance: Optional[Dict[str, Any]] = Field(
+        None, description="Which pixels matter most (weight magnitude heatmap)"
+    )
+
+    # Pass-through for live testing tabs
     image_width: Optional[int] = Field(None, description="Image width for model input")
     image_height: Optional[int] = Field(None, description="Image height for model input")
 
 
 class ImagePredictionsNode(BaseNode):
     """
-    Image Predictions Node — Evaluate trained model on test images.
+    Image Predictions Node — Train + Evaluate in one step.
+    Trains an MLPClassifier on train set, evaluates on test set.
     """
 
     node_type = "image_predictions"
@@ -82,6 +113,8 @@ class ImagePredictionsNode(BaseNode):
             primary_output_field="overall_accuracy",
             output_fields={
                 "overall_accuracy": "Overall test accuracy",
+                "model_id": "Model identifier",
+                "model_path": "Saved model path",
                 "per_class_metrics": "Per-class precision/recall/f1",
                 "confusion_matrix": "Confusion matrix",
             },
@@ -89,7 +122,10 @@ class ImagePredictionsNode(BaseNode):
             can_branch=False,
             produces_dataset=False,
             max_inputs=1,
-            allowed_source_categories=[NodeCategory.ML_ALGORITHM],
+            allowed_source_categories=[
+                NodeCategory.DATA_TRANSFORM,
+                NodeCategory.PREPROCESSING,
+            ],
         )
 
     def get_input_schema(self):
@@ -97,6 +133,69 @@ class ImagePredictionsNode(BaseNode):
 
     def get_output_schema(self):
         return ImagePredictionsOutput
+
+    def _augment_training_data(
+        self, X: np.ndarray, y: np.ndarray,
+        width: int, height: int, augment_factor: int = 10
+    ) -> tuple:
+        """
+        Generate augmented copies of training images with random transformations.
+        For small datasets (<200 images), this dramatically improves generalization.
+
+        Augmentations: random shift (±2px), gaussian noise, brightness jitter.
+        """
+        rng = np.random.default_rng(42)
+        augmented_X = [X.copy()]
+        augmented_y = [y.copy()]
+
+        for _ in range(augment_factor - 1):
+            batch = X.copy()
+            for i in range(len(batch)):
+                img = batch[i].reshape(height, width)
+
+                # Random shift (±2 pixels)
+                shift_x = rng.integers(-2, 3)
+                shift_y = rng.integers(-2, 3)
+                if shift_x != 0 or shift_y != 0:
+                    shifted = np.zeros_like(img)
+                    src_y1 = max(0, -shift_y)
+                    src_y2 = min(height, height - shift_y)
+                    src_x1 = max(0, -shift_x)
+                    src_x2 = min(width, width - shift_x)
+                    dst_y1 = max(0, shift_y)
+                    dst_x1 = max(0, shift_x)
+                    h_size = src_y2 - src_y1
+                    w_size = src_x2 - src_x1
+                    shifted[dst_y1:dst_y1+h_size, dst_x1:dst_x1+w_size] = \
+                        img[src_y1:src_y1+h_size, src_x1:src_x1+w_size]
+                    img = shifted
+
+                # Add gaussian noise
+                noise = rng.normal(0, 0.03, img.shape)
+                img = img + noise
+
+                # Random brightness jitter (±15%)
+                brightness = rng.uniform(0.85, 1.15)
+                img = img * brightness
+
+                batch[i] = np.clip(img.flatten(), 0, 1)
+
+            augmented_X.append(batch)
+            augmented_y.append(y.copy())
+
+        X_aug = np.concatenate(augmented_X)
+        y_aug = np.concatenate(augmented_y)
+
+        # Shuffle
+        perm = rng.permutation(len(X_aug))
+        return X_aug[perm], y_aug[perm]
+
+    def _parse_hidden_layers(self, s: str) -> tuple:
+        try:
+            parts = [int(x.strip()) for x in s.split(",") if x.strip()]
+            return tuple(max(1, p) for p in parts) if parts else (128,)
+        except ValueError:
+            return (128,)
 
     async def _load_dataset(self, dataset_id: str) -> Optional[pd.DataFrame]:
         upload_path = Path(settings.UPLOAD_DIR) / f"{dataset_id}.csv"
@@ -129,75 +228,176 @@ class ImagePredictionsNode(BaseNode):
 
     async def _execute(self, input_data: ImagePredictionsInput) -> ImagePredictionsOutput:
         try:
-            import joblib
+            from sklearn.neural_network import MLPClassifier
             from sklearn.metrics import (
                 accuracy_score, precision_score, recall_score, f1_score,
                 confusion_matrix as sklearn_cm
             )
+            import joblib
 
-            logger.info(f"Running predictions with model {input_data.model_id}")
+            # ── Load datasets ──
+            df_train = await self._load_dataset(input_data.train_dataset_id)
+            if df_train is None or df_train.empty:
+                raise ValueError(f"Training dataset {input_data.train_dataset_id} not found or empty")
 
-            # Load model
-            model_path = Path(input_data.model_path)
-            if not model_path.exists():
-                raise ValueError(f"Model file not found: {model_path}")
-            model = joblib.load(model_path)
-
-            # Load test data
             df_test = await self._load_dataset(input_data.test_dataset_id)
             if df_test is None or df_test.empty:
                 raise ValueError(f"Test dataset {input_data.test_dataset_id} not found or empty")
 
             target_col = input_data.target_column or "label"
-            if target_col not in df_test.columns:
-                target_col = df_test.columns[-1]
+            if target_col not in df_train.columns:
+                target_col = df_train.columns[-1]
 
-            pixel_cols = [c for c in df_test.columns if c != target_col]
-            X_test = df_test[pixel_cols].values
+            pixel_cols = [c for c in df_train.columns if c != target_col]
+            X_train = df_train[pixel_cols].values.astype(np.float64)
+            y_train = df_train[target_col].values
+            X_test = df_test[pixel_cols].values.astype(np.float64)
             y_true = df_test[target_col].values.astype(int)
 
-            n_classes = input_data.n_classes or len(np.unique(y_true))
+            # ── Normalize pixels to [0, 1] ──
+            # Always divide by 255 so training matches live camera prediction.
+            # This replaces the removed image_preprocessing node.
+            if X_train.max() > 1.0:
+                X_train = X_train / 255.0
+                X_test = X_test / 255.0
+                logger.info("Auto-normalized pixel values from [0-255] to [0-1]")
+
+            n_classes = len(np.unique(np.concatenate([y_train, y_true])))
             class_names = input_data.class_names or [str(i) for i in range(n_classes)]
             width = input_data.image_width or int(np.sqrt(len(pixel_cols)))
             height = input_data.image_height or int(np.sqrt(len(pixel_cols)))
 
-            # Predictions
+            hidden_layers = self._parse_hidden_layers(input_data.hidden_layers)
+
+            # ── Data augmentation for small datasets ──
+            # With <200 training images, the model can't generalize from raw pixels.
+            # Generate shifted/noisy copies to 10x the effective training set.
+            original_train_size = len(X_train)
+            if len(X_train) < 200:
+                X_train, y_train = self._augment_training_data(
+                    X_train, y_train, width, height, augment_factor=10
+                )
+                logger.info(
+                    f"Augmented training data: {original_train_size} → {len(X_train)} images"
+                )
+
+            logger.info(
+                f"Training + evaluating: {len(pixel_cols)} features, "
+                f"{hidden_layers} hidden, {len(X_train)} train / {len(X_test)} test, "
+                f"{n_classes} classes"
+            )
+
+            # ── Train ──
+            model = MLPClassifier(
+                hidden_layer_sizes=hidden_layers,
+                activation=input_data.activation,
+                solver="adam",
+                max_iter=input_data.max_iter,
+                learning_rate_init=input_data.learning_rate_init,
+                early_stopping=input_data.early_stopping,
+                random_state=42,
+                verbose=False,
+            )
+
+            training_start = datetime.utcnow()
+            model.fit(X_train, y_train)
+            training_time = (datetime.utcnow() - training_start).total_seconds()
+
+            # Training metrics
+            y_train_pred = model.predict(X_train)
+            train_accuracy = float(accuracy_score(y_train, y_train_pred))
+            training_metrics = {
+                "accuracy": round(train_accuracy, 4),
+                "precision_macro": round(float(precision_score(y_train, y_train_pred, average="macro", zero_division=0)), 4),
+                "recall_macro": round(float(recall_score(y_train, y_train_pred, average="macro", zero_division=0)), 4),
+                "f1_macro": round(float(f1_score(y_train, y_train_pred, average="macro", zero_division=0)), 4),
+            }
+
+            # Save model + training pixel stats for live prediction normalization
+            model_id = generate_id("model_img")
+            model_dir = Path(settings.MODEL_ARTIFACTS_DIR) / "image_predictions"
+            model_dir.mkdir(parents=True, exist_ok=True)
+            model_version = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            model_filename = f"{model_id}_v{model_version}.joblib"
+            model_path = model_dir / model_filename
+            joblib.dump(model, model_path)
+
+            # Save pixel normalization metadata so camera/predict can match
+            import json
+            train_pixel_min = float(X_train.min())
+            train_pixel_max = float(X_train.max())
+            meta_path = model_path.with_suffix(".meta.json")
+            meta = {
+                "train_pixel_min": train_pixel_min,
+                "train_pixel_max": train_pixel_max,
+                "train_pixel_mean": float(X_train.mean()),
+                "train_pixel_std": float(X_train.std()),
+                "n_features": len(pixel_cols),
+                "n_classes": n_classes,
+                "class_names": class_names,
+                "image_width": width,
+                "image_height": height,
+            }
+            with open(meta_path, "w") as f:
+                json.dump(meta, f)
+
+            loss_curve = list(model.loss_curve_) if hasattr(model, "loss_curve_") else []
+            val_scores = list(model.validation_scores_) if hasattr(model, "validation_scores_") and model.validation_scores_ else []
+            n_iter = model.n_iter_ if hasattr(model, "n_iter_") else 0
+
+            layers = [len(pixel_cols)] + list(hidden_layers) + [n_classes]
+            architecture = {
+                "layers": layers,
+                "layer_names": (
+                    ["Input (pixels)"]
+                    + [f"Hidden ({s} neurons)" for s in hidden_layers]
+                    + [f"Output ({n_classes} classes)"]
+                ),
+                "activation": input_data.activation,
+                "total_params": sum(
+                    layers[i] * layers[i + 1] + layers[i + 1]
+                    for i in range(len(layers) - 1)
+                ),
+            }
+
+            logger.info(
+                f"Training done: train_acc={train_accuracy:.4f}, "
+                f"{n_iter} iterations, {training_time:.1f}s"
+            )
+
+            # ── Evaluate on test set ──
             y_pred = model.predict(X_test)
             y_proba = model.predict_proba(X_test) if hasattr(model, "predict_proba") else None
 
-            # Overall metrics
             accuracy = float(accuracy_score(y_true, y_pred))
-
-            # Per-class metrics
-            per_class = {}
             labels = list(range(n_classes))
             prec = precision_score(y_true, y_pred, average=None, labels=labels, zero_division=0)
             rec = recall_score(y_true, y_pred, average=None, labels=labels, zero_division=0)
-            f1 = f1_score(y_true, y_pred, average=None, labels=labels, zero_division=0)
+            f1_vals = f1_score(y_true, y_pred, average=None, labels=labels, zero_division=0)
 
+            per_class = {}
             for i, name in enumerate(class_names):
                 n_true = int(np.sum(y_true == i))
-                n_pred = int(np.sum(y_pred == i))
+                n_pred_count = int(np.sum(y_pred == i))
                 n_correct = int(np.sum((y_true == i) & (y_pred == i)))
                 per_class[name] = {
                     "precision": round(float(prec[i]), 4),
                     "recall": round(float(rec[i]), 4),
-                    "f1": round(float(f1[i]), 4),
+                    "f1": round(float(f1_vals[i]), 4),
                     "support": n_true,
-                    "predicted": n_pred,
+                    "predicted": n_pred_count,
                     "correct": n_correct,
                 }
 
-            # Confusion matrix
             cm = sklearn_cm(y_true, y_pred, labels=labels)
             cm_list = cm.tolist()
 
             logger.info(
-                f"Predictions complete: accuracy={accuracy:.4f}, "
+                f"Evaluation done: test_acc={accuracy:.4f}, "
                 f"{len(X_test)} test images, {n_classes} classes"
             )
 
-            # --- Explorer data ---
+            # ── Explorer data ──
             prediction_gallery = self._generate_prediction_gallery(
                 X_test, y_true, y_pred, y_proba, class_names, width, height
             )
@@ -211,13 +411,28 @@ class ImagePredictionsNode(BaseNode):
                 accuracy, per_class, class_names, len(X_test)
             )
             quiz_questions = self._generate_quiz(
-                accuracy, n_classes, class_names, per_class, cm_list, len(X_test)
+                accuracy, n_classes, class_names, per_class, cm_list, len(X_test),
+                hidden_layers, input_data.activation, len(X_train),
+                len(pixel_cols), training_time, n_iter
+            )
+            architecture_diagram = self._generate_architecture_diagram(
+                architecture, hidden_layers, input_data.activation, width, height
+            )
+            training_analysis = self._generate_training_analysis(
+                loss_curve, val_scores, n_iter, input_data.max_iter, training_metrics
+            )
+            feature_importance = self._generate_feature_importance(
+                model, width, height, len(pixel_cols)
             )
 
             return ImagePredictionsOutput(
                 node_type=self.node_type,
-                execution_time_ms=0,
-                model_id=input_data.model_id,
+                execution_time_ms=int(training_time * 1000),
+                model_id=model_id,
+                model_path=str(model_path),
+                training_samples=len(X_train),
+                training_time_seconds=training_time,
+                training_metrics=training_metrics,
                 test_samples=len(X_test),
                 overall_accuracy=round(accuracy, 4),
                 per_class_metrics=per_class,
@@ -228,7 +443,13 @@ class ImagePredictionsNode(BaseNode):
                 confidence_distribution=confidence_distribution,
                 metrics_summary=metrics_summary,
                 quiz_questions=quiz_questions,
-                model_path=input_data.model_path,
+                loss_curve=loss_curve,
+                validation_scores=val_scores,
+                architecture=architecture,
+                n_iterations=n_iter,
+                architecture_diagram=architecture_diagram,
+                training_analysis=training_analysis,
+                feature_importance=feature_importance,
                 image_width=width,
                 image_height=height,
             )
@@ -243,25 +464,21 @@ class ImagePredictionsNode(BaseNode):
 
     def _generate_prediction_gallery(
         self, X: np.ndarray, y_true: np.ndarray, y_pred: np.ndarray,
-        y_proba: Optional[np.ndarray], class_names: list,
-        width: int, height: int, n_correct: int = 12, n_wrong: int = 12
+        y_proba, class_names: list, width: int, height: int,
+        n_correct: int = 12, n_wrong: int = 12
     ) -> List[Dict[str, Any]]:
-        """Sample predictions with images, showing correct and incorrect."""
         rng = np.random.default_rng(42)
         gallery = []
-
         correct_mask = y_true == y_pred
         wrong_mask = ~correct_mask
 
-        # Correct predictions
         correct_indices = np.where(correct_mask)[0]
         if len(correct_indices) > 0:
             chosen = rng.choice(correct_indices, size=min(n_correct, len(correct_indices)), replace=False)
             for idx in chosen:
                 item = {
                     "pixels": X[idx].tolist(),
-                    "width": width,
-                    "height": height,
+                    "width": width, "height": height,
                     "true_label": str(class_names[int(y_true[idx])] if int(y_true[idx]) < len(class_names) else y_true[idx]),
                     "pred_label": str(class_names[int(y_pred[idx])] if int(y_pred[idx]) < len(class_names) else y_pred[idx]),
                     "correct": True,
@@ -274,15 +491,13 @@ class ImagePredictionsNode(BaseNode):
                     }
                 gallery.append(item)
 
-        # Wrong predictions
         wrong_indices = np.where(wrong_mask)[0]
         if len(wrong_indices) > 0:
             chosen = rng.choice(wrong_indices, size=min(n_wrong, len(wrong_indices)), replace=False)
             for idx in chosen:
                 item = {
                     "pixels": X[idx].tolist(),
-                    "width": width,
-                    "height": height,
+                    "width": width, "height": height,
                     "true_label": str(class_names[int(y_true[idx])] if int(y_true[idx]) < len(class_names) else y_true[idx]),
                     "pred_label": str(class_names[int(y_pred[idx])] if int(y_pred[idx]) < len(class_names) else y_pred[idx]),
                     "correct": False,
@@ -302,11 +517,9 @@ class ImagePredictionsNode(BaseNode):
         X: np.ndarray, y_true: np.ndarray, y_pred: np.ndarray,
         width: int, height: int
     ) -> Dict[str, Any]:
-        """Analyze confusion matrix: most confused pairs with examples."""
         rng = np.random.default_rng(42)
         n = len(class_names)
 
-        # Find most confused pairs
         confused_pairs = []
         for i in range(n):
             for j in range(n):
@@ -316,14 +529,11 @@ class ImagePredictionsNode(BaseNode):
                         "predicted_class": str(class_names[j]),
                         "count": int(cm[i][j]),
                     })
-
         confused_pairs.sort(key=lambda x: x["count"], reverse=True)
 
-        # Add example images for top confused pairs
         for pair in confused_pairs[:5]:
             true_idx = class_names.index(pair["true_class"]) if pair["true_class"] in class_names else -1
             pred_idx = class_names.index(pair["predicted_class"]) if pair["predicted_class"] in class_names else -1
-
             if true_idx >= 0 and pred_idx >= 0:
                 mask = (y_true == true_idx) & (y_pred == pred_idx)
                 indices = np.where(mask)[0]
@@ -333,17 +543,14 @@ class ImagePredictionsNode(BaseNode):
                     pair["width"] = width
                     pair["height"] = height
 
-        # Per-class accuracy
         per_class_accuracy = []
         for i, name in enumerate(class_names):
             total = int(cm[i].sum())
             correct = int(cm[i][i])
             acc = round(correct / total, 4) if total > 0 else 0
             per_class_accuracy.append({
-                "class_name": str(name),
-                "accuracy": acc,
-                "correct": correct,
-                "total": total,
+                "class_name": str(name), "accuracy": acc,
+                "correct": correct, "total": total,
             })
 
         return {
@@ -354,20 +561,16 @@ class ImagePredictionsNode(BaseNode):
         }
 
     def _generate_confidence_distribution(
-        self, y_proba: Optional[np.ndarray],
-        y_true: np.ndarray, y_pred: np.ndarray
+        self, y_proba, y_true: np.ndarray, y_pred: np.ndarray
     ) -> Dict[str, Any]:
-        """Distribution of prediction confidence for correct vs incorrect."""
         if y_proba is None:
             return {"has_data": False}
 
         max_proba = np.max(y_proba, axis=1)
         correct_mask = y_true == y_pred
-
         correct_conf = max_proba[correct_mask]
         wrong_conf = max_proba[~correct_mask]
 
-        # Histograms
         bins = np.linspace(0, 1, 21)
         h_correct, _ = np.histogram(correct_conf, bins=bins)
         h_wrong, _ = np.histogram(wrong_conf, bins=bins)
@@ -390,14 +593,10 @@ class ImagePredictionsNode(BaseNode):
     def _generate_metrics_summary(
         self, accuracy: float, per_class: Dict, class_names: list, n_test: int
     ) -> Dict[str, Any]:
-        """Visual dashboard metrics summary."""
-        # Best/worst classes
         sorted_classes = sorted(
             [(name, data) for name, data in per_class.items()],
-            key=lambda x: x[1]["f1"],
-            reverse=True
+            key=lambda x: x[1]["f1"], reverse=True
         )
-
         best_class = sorted_classes[0] if sorted_classes else None
         worst_class = sorted_classes[-1] if sorted_classes else None
 
@@ -412,14 +611,8 @@ class ImagePredictionsNode(BaseNode):
             "macro_f1": round(float(macro_f1), 4),
             "n_test_samples": n_test,
             "n_classes": len(class_names),
-            "best_class": {
-                "name": best_class[0],
-                "f1": best_class[1]["f1"],
-            } if best_class else None,
-            "worst_class": {
-                "name": worst_class[0],
-                "f1": worst_class[1]["f1"],
-            } if worst_class else None,
+            "best_class": {"name": best_class[0], "f1": best_class[1]["f1"]} if best_class else None,
+            "worst_class": {"name": worst_class[0], "f1": worst_class[1]["f1"]} if worst_class else None,
             "grade": (
                 "A+" if accuracy >= 0.95 else
                 "A" if accuracy >= 0.90 else
@@ -429,15 +622,104 @@ class ImagePredictionsNode(BaseNode):
             ),
         }
 
+    def _generate_architecture_diagram(
+        self, architecture: Dict[str, Any], hidden_layers: tuple,
+        activation: str, width: int, height: int
+    ) -> Dict[str, Any]:
+        layers_info = []
+        sizes = architecture["layers"]
+        names = architecture["layer_names"]
+
+        for i, (size, name) in enumerate(zip(sizes, names)):
+            layer = {
+                "index": i, "name": name, "size": size,
+                "type": "input" if i == 0 else "output" if i == len(sizes) - 1 else "hidden",
+            }
+            if i > 0:
+                params = sizes[i - 1] * size + size
+                layer["params"] = params
+                layer["activation"] = activation if i < len(sizes) - 1 else "softmax"
+
+            if i == 0:
+                layer["description"] = f"Each {width}x{height} image flattened to {size} pixel values"
+            elif i == len(sizes) - 1:
+                layer["description"] = f"One neuron per class, softmax gives probability for each class"
+            else:
+                layer["description"] = f"{size} neurons with {activation} activation"
+
+            layers_info.append(layer)
+
+        return {
+            "layers": layers_info,
+            "total_params": architecture["total_params"],
+            "input_shape": f"{width}x{height} = {width * height} pixels",
+            "output_shape": f"{sizes[-1]} classes",
+        }
+
+    def _generate_training_analysis(
+        self, loss_curve: list, val_scores: list,
+        n_iter: int, max_iter: int, metrics: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        if not loss_curve:
+            return {"has_data": False}
+
+        analysis = {
+            "has_data": True,
+            "loss_values": loss_curve,
+            "validation_scores": val_scores,
+            "n_iterations": n_iter,
+            "max_iterations": max_iter,
+            "initial_loss": round(loss_curve[0], 6),
+            "final_loss": round(loss_curve[-1], 6),
+            "loss_reduction_pct": round(
+                (1 - loss_curve[-1] / loss_curve[0]) * 100, 1
+            ) if loss_curve[0] > 0 else 0,
+        }
+
+        if n_iter < max_iter:
+            analysis["convergence"] = "converged"
+            analysis["convergence_message"] = (
+                f"Training converged in {n_iter} iterations (limit was {max_iter})."
+            )
+        else:
+            analysis["convergence"] = "hit_limit"
+            analysis["convergence_message"] = (
+                f"Training reached the maximum of {max_iter} iterations without fully converging. "
+                f"Try increasing max_iter or adjusting the learning rate."
+            )
+
+        return analysis
+
+    def _generate_feature_importance(
+        self, model, width: int, height: int, n_features: int
+    ) -> Dict[str, Any]:
+        try:
+            first_layer_weights = model.coefs_[0]
+            importance = np.sum(np.abs(first_layer_weights), axis=1)
+            importance = (importance - importance.min()) / (importance.max() - importance.min() + 1e-8)
+            return {
+                "heatmap": importance.tolist(),
+                "width": width, "height": height,
+                "description": (
+                    "Brighter pixels = more important for classification. "
+                    "This shows which parts of the image the model pays most attention to."
+                ),
+            }
+        except Exception as e:
+            logger.warning(f"Feature importance generation failed: {e}")
+            return {"heatmap": [], "width": width, "height": height, "description": "Not available"}
+
     def _generate_quiz(
         self, accuracy: float, n_classes: int, class_names: list,
-        per_class: Dict, cm: list, n_test: int
+        per_class: Dict, cm: list, n_test: int,
+        hidden_layers: tuple, activation: str, n_train: int,
+        n_features: int, training_time: float, n_iter: int
     ) -> List[Dict[str, Any]]:
-        """Quiz about model evaluation."""
         import random as _random
         questions = []
         q_id = 0
 
+        # Evaluation questions
         q_id += 1
         questions.append({
             "id": f"q{q_id}",
@@ -449,7 +731,7 @@ class ImagePredictionsNode(BaseNode):
                 "Accuracy is unreliable for all tasks",
             ],
             "correct_answer": 0,
-            "explanation": f"With {n_classes} classes, if one class has 90% of samples, a model predicting only that class gets 90% accuracy while failing on all others! Precision (of those predicted as X, how many are actually X), recall (of actual X, how many were found), and F1 (harmonic mean) give a complete picture.",
+            "explanation": f"With {n_classes} classes, if one class has 90% of samples, a model predicting only that class gets 90% accuracy while failing on all others!",
             "difficulty": "medium",
         })
 
@@ -458,34 +740,64 @@ class ImagePredictionsNode(BaseNode):
             "id": f"q{q_id}",
             "question": "What does a confusion matrix show?",
             "options": [
-                "For each true class (row), how many images were predicted as each class (column) — showing where the model gets confused",
+                "For each true class (row), how many images were predicted as each class (column)",
                 "How confused the model is overall",
                 "The training loss over time",
                 "Which images are most similar",
             ],
             "correct_answer": 0,
-            "explanation": f"The {n_classes}×{n_classes} confusion matrix has rows = true labels, columns = predicted labels. Diagonal cells are correct predictions. Off-diagonal cells show errors — e.g., if cell [3,8] is high, the model often confuses class '{class_names[3] if 3 < len(class_names) else 3}' as '{class_names[8] if 8 < len(class_names) else 8}'.",
+            "explanation": f"The {n_classes}x{n_classes} confusion matrix: rows = true labels, columns = predicted. Diagonal = correct, off-diagonal = errors.",
             "difficulty": "medium",
         })
 
-        # Find interesting per-class comparison
+        # Training questions
+        q_id += 1
+        questions.append({
+            "id": f"q{q_id}",
+            "question": f"This network has {n_features} input features. Why so many?",
+            "options": [
+                f"Each pixel is a feature — a {int(np.sqrt(n_features))}x{int(np.sqrt(n_features))} image has {n_features} pixels",
+                "The model created extra features",
+                "It's always 784 for image models",
+                "The number is random",
+            ],
+            "correct_answer": 0,
+            "explanation": f"When we flatten a {int(np.sqrt(n_features))}x{int(np.sqrt(n_features))} image, each pixel becomes a separate feature.",
+            "difficulty": "medium",
+        })
+
+        q_id += 1
+        questions.append({
+            "id": f"q{q_id}",
+            "question": f"The architecture uses layers {hidden_layers}. Why do later layers have fewer neurons?",
+            "options": [
+                "Each layer extracts higher-level, more abstract features — fewer neurons needed",
+                "Fewer neurons means faster training, no other reason",
+                "It's just a convention with no technical reason",
+                "Layers must always decrease in size",
+            ],
+            "correct_answer": 0,
+            "explanation": f"The 'funnel' shape ({' -> '.join(str(h) for h in hidden_layers)}) is a common pattern: early layers detect low-level features, later layers combine them into abstract concepts.",
+            "difficulty": "hard",
+        })
+
+        # Per-class comparison
         if per_class:
             classes_sorted = sorted(per_class.items(), key=lambda x: x[1]["f1"])
             worst_name, worst_data = classes_sorted[0]
             best_name, best_data = classes_sorted[-1]
-
             q_id += 1
             questions.append({
                 "id": f"q{q_id}",
-                "question": f"'{best_name}' has F1={best_data['f1']:.2f} but '{worst_name}' has F1={worst_data['f1']:.2f}. What could cause this difference?",
+                "question": f"'{best_name}' has F1={best_data['f1']:.2f} but '{worst_name}' has F1={worst_data['f1']:.2f}. What could cause this?",
                 "options": [
-                    f"'{worst_name}' might look similar to other classes, have fewer training examples, or have more visual variation",
+                    f"'{worst_name}' might look similar to other classes, have fewer examples, or more visual variation",
                     "The model always performs equally on all classes",
                     "F1 scores are random",
                     f"'{worst_name}' images are larger",
                 ],
                 "correct_answer": 0,
-                "explanation": f"Some classes are harder to classify. '{worst_name}' (F1={worst_data['f1']:.2f}) might be confused with visually similar classes, or the training set might have fewer/less-variety examples of this class. Check the confusion matrix to see which classes it's confused with!",
+                "explanation": f"Some classes are harder. '{worst_name}' might be confused with visually similar classes. Check the confusion matrix!",
                 "difficulty": "hard",
             })
 
@@ -500,23 +812,8 @@ class ImagePredictionsNode(BaseNode):
                 "Precision is always higher than recall",
             ],
             "correct_answer": 0,
-            "explanation": "Think of it as: Precision answers 'when I predict X, how often am I right?' (quality of predictions). Recall answers 'of all actual X items, how many did I catch?' (coverage). High precision + low recall = picky but accurate. Low precision + high recall = catches everything but with many false positives.",
+            "explanation": "Precision: 'when I predict X, how often am I right?' Recall: 'of all actual X, how many did I catch?'",
             "difficulty": "hard",
-        })
-
-        q_id += 1
-        questions.append({
-            "id": f"q{q_id}",
-            "question": "If the model has 95% training accuracy but 60% test accuracy, what happened?",
-            "options": [
-                "Overfitting — the model memorized training data instead of learning generalizable patterns",
-                "The model is working perfectly",
-                "The test set is broken",
-                "Underfitting — the model is too simple",
-            ],
-            "correct_answer": 0,
-            "explanation": "A large gap between training accuracy (95%) and test accuracy (60%) is a classic sign of overfitting. The model learned to recognize specific training images rather than general class features. Solutions: more training data, augmentation, regularization, or simpler architecture.",
-            "difficulty": "medium",
         })
 
         _random.shuffle(questions)

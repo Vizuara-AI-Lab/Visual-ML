@@ -82,9 +82,7 @@ class MLPipelineEngine:
             ChartViewNode,
         )
         from app.ml.nodes.image_dataset_node import ImageDatasetNode
-        from app.ml.nodes.image_preprocessing_node import ImagePreprocessingNode
         from app.ml.nodes.image_split_node import ImageSplitNode
-        from app.ml.nodes.cnn_classifier_node import CNNClassifierNode
         from app.ml.nodes.mlp_classifier_node import MLPClassifierNode
         from app.ml.nodes.mlp_regressor_node import MLPRegressorNode
         from app.ml.nodes.image_predictions_node import ImagePredictionsNode
@@ -118,9 +116,7 @@ class MLPipelineEngine:
             "chart_view": ChartViewNode,
             # Image pipeline nodes
             "image_dataset": ImageDatasetNode,
-            "image_preprocessing": ImagePreprocessingNode,
             "image_split": ImageSplitNode,
-            "cnn_classifier": CNNClassifierNode,
             "image_predictions": ImagePredictionsNode,
         }
 
@@ -412,6 +408,18 @@ class MLPipelineEngine:
             if not merged_data.get("train_dataset_id"):
                 merged_data["train_dataset_id"] = dataset_id_from_dag
             logger.info(f"[DAG DEBUG] Forcing dataset_id from DAG: {dataset_id_from_dag}")
+
+        # Override empty test_dataset_id from predecessor (e.g. image_split → image_predictions)
+        for pred_id in predecessors:
+            pred_result = self.execution_context.get(pred_id)
+            if pred_result and isinstance(pred_result, dict):
+                if pred_result.get("test_dataset_id") and not merged_data.get("test_dataset_id"):
+                    merged_data["test_dataset_id"] = pred_result["test_dataset_id"]
+                    logger.info(f"[DAG DEBUG] Auto-filling test_dataset_id from DAG: {pred_result['test_dataset_id']}")
+                if pred_result.get("model_path") and not merged_data.get("model_path"):
+                    merged_data["model_path"] = pred_result["model_path"]
+                if pred_result.get("model_id") and not merged_data.get("model_id"):
+                    merged_data["model_id"] = pred_result["model_id"]
 
         # Override empty target_column with value from split node
         if target_column_from_dag is not None and not merged_data.get("target_column"):
