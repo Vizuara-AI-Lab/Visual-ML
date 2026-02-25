@@ -22,10 +22,15 @@ import {
   Database,
   Layers,
   Leaf,
+  Sparkles,
 } from "lucide-react";
 
 const DecisionTreeAnimation = lazy(
   () => import("./animations/DecisionTreeAnimation")
+);
+
+const PredictionPlayground = lazy(
+  () => import("./PredictionPlayground")
 );
 
 interface DecisionTreeExplorerProps {
@@ -35,6 +40,7 @@ interface DecisionTreeExplorerProps {
 type ExplorerTab =
   | "results"
   | "tree_viz"
+  | "try_prediction"
   | "feature_importance"
   | "decision_path"
   | "metric_explainer"
@@ -58,6 +64,12 @@ export const DecisionTreeExplorer = ({
       label: "Tree Visualization",
       icon: TreePine,
       available: !!result.metadata?.full_training_metadata?.tree_structure?.length,
+    },
+    {
+      id: "try_prediction",
+      label: "Try Prediction",
+      icon: Sparkles,
+      available: true,
     },
     {
       id: "feature_importance",
@@ -133,6 +145,17 @@ export const DecisionTreeExplorer = ({
             }
           >
             <DecisionTreeAnimation result={result} />
+          </Suspense>
+        )}
+        {activeTab === "try_prediction" && (
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center py-12">
+                <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            }
+          >
+            <PredictionPlayground result={result} variant="decision_tree" />
           </Suspense>
         )}
         {activeTab === "feature_importance" && (
@@ -248,7 +271,16 @@ function ResultsTab({
 
       {/* All Metrics */}
       <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <h4 className="text-sm font-semibold text-gray-900 mb-4">Training Metrics</h4>
+        <div className="flex items-center gap-2 mb-4">
+          <h4 className="text-sm font-semibold text-gray-900">
+            {result.metadata?.evaluated_on === "test" ? "Test Metrics" : "Training Metrics"}
+          </h4>
+          {result.metadata?.evaluated_on === "test" ? (
+            <span className="text-[10px] font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">on unseen data</span>
+          ) : (
+            <span className="text-[10px] font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">on training data</span>
+          )}
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Object.entries(metrics)
             .filter(([key, value]) => typeof value === "number" && key !== "confusion_matrix")
@@ -465,10 +497,19 @@ function MetricExplainerTab({ data }: { data: any }) {
     <div className="space-y-4">
       <div className="flex items-start gap-3 rounded-lg border border-purple-200 bg-purple-50 px-4 py-3">
         <Gauge className="mt-0.5 h-5 w-5 shrink-0 text-purple-600" />
-        <p className="text-sm text-purple-800">
-          <span className="font-semibold">Understanding your metrics</span> — Each metric
-          tells a different part of the story about your model's performance.
-        </p>
+        <div className="text-sm text-purple-800">
+          <p>
+            <span className="font-semibold">Understanding your metrics</span> — Each metric
+            tells a different part of the story about your model's performance.
+          </p>
+          {data?.evaluated_on && (
+            <p className="mt-1 text-xs font-medium">
+              {data.evaluated_on === "test"
+                ? "Evaluated on test data (unseen by the model during training)"
+                : "Evaluated on training data — these may look inflated since the model has seen this data before"}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -698,19 +739,15 @@ function HowItWorksTab() {
       <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
         <Cog className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
         <div className="text-sm text-green-800 space-y-2">
-          <p className="font-semibold">How Decision Trees Work</p>
-          <ol className="list-decimal list-inside space-y-1">
-            <li>Start with all training data at the root node</li>
-            <li>Find the best feature and threshold to split the data (minimizing impurity)</li>
-            <li>Create two child nodes: one for "yes" and one for "no"</li>
-            <li>Repeat recursively until a stopping condition is met (e.g., max depth, pure node, min samples)</li>
-            <li>Each leaf node holds a prediction (class label or value)</li>
+          <p className="font-semibold">How a Decision Tree Works</p>
+          <p className="text-green-700">Think of it like a game of 20 Questions — the tree asks yes/no questions about your data, one at a time, to narrow down the answer.</p>
+          <ol className="list-decimal list-inside space-y-2 mt-2">
+            <li><strong>Start with all the data:</strong> Everything begins at the top (the "root"). The tree looks at all the training rows together.</li>
+            <li><strong>Ask the best question:</strong> The tree tries every possible yes/no question (like "Is age &lt; 30?") and picks the one that splits the data into the cleanest groups.</li>
+            <li><strong>Split into two groups:</strong> Rows that answer "yes" go left, "no" go right. Now each side has a more similar set of data.</li>
+            <li><strong>Keep splitting:</strong> Each group asks its own best question and splits again. This repeats until the groups are pure (all same label) or we hit a limit.</li>
+            <li><strong>Make predictions:</strong> Each final group (called a "leaf") holds an answer. New data follows the questions from top to bottom and lands on a leaf — that's the prediction.</li>
           </ol>
-          <p className="mt-2">
-            <strong>Key concepts:</strong> Gini impurity measures how mixed the classes are at a node.
-            Feature importance shows which features are most useful for splitting.
-            Deeper trees can overfit — use max_depth and min_samples to control complexity.
-          </p>
         </div>
       </div>
 
@@ -718,31 +755,34 @@ function HowItWorksTab() {
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
             <TreePine className="w-4 h-4 text-green-600" />
-            Splitting
+            How It Picks Questions
           </h4>
           <p className="text-sm text-gray-600">
-            At each node, the tree tries every possible split and picks the one that
-            best separates the target classes (or reduces variance for regression).
+            The tree tries every column and every possible split point. It picks
+            the one that separates the groups most cleanly — like sorting mixed
+            fruit into separate baskets with the fewest mistakes.
           </p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
             <Target className="w-4 h-4 text-blue-600" />
-            Prediction
+            How It Predicts
           </h4>
           <p className="text-sm text-gray-600">
-            To predict, a new sample follows the tree from root to leaf. At each node,
-            it answers the split question. The leaf's value is the prediction.
+            New data starts at the top and answers each question: go left for "yes",
+            right for "no". It follows the path down until it reaches a leaf —
+            the leaf's label is the prediction.
           </p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
             <Timer className="w-4 h-4 text-orange-600" />
-            Overfitting
+            Watch Out: Memorizing
           </h4>
           <p className="text-sm text-gray-600">
-            A very deep tree memorizes training data. Use max_depth, min_samples_split,
-            and min_samples_leaf to limit complexity and improve generalization.
+            If the tree goes too deep, it memorizes the training data instead of
+            learning real patterns. Limiting the depth or requiring more rows
+            per split keeps it from "cheating" on the training data.
           </p>
         </div>
       </div>

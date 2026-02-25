@@ -14,6 +14,7 @@ from app.core.logging import logger
 from app.core.redis_cache import redis_cache
 from app.db.session import get_db
 from app.ml.nodes.upload import UploadFileNode, UploadFileInput
+from app.core.exceptions import FileUploadError, InvalidDatasetError
 from app.services.s3_service import s3_service
 from app.core.config import settings
 from datetime import datetime
@@ -132,19 +133,19 @@ async def upload_dataset(
         # Re-raise HTTP exceptions (401, 403, 404, etc.)
         raise
     except FileUploadError as e:
-        logger.error(f"File upload error: {str(e)}")
+        logger.error("File upload error: {}", str(e))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"File upload failed: {str(e)}",
         )
     except InvalidDatasetError as e:
-        logger.error(f"Invalid dataset: {str(e)}")
+        logger.error("Invalid dataset: {}", str(e))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid dataset: {str(e)}",
         )
     except Exception as e:
-        logger.error(f"Dataset upload failed: {str(e)}", exc_info=True)
+        logger.error("Dataset upload failed: {}", str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to upload dataset: {str(e)}",
@@ -283,7 +284,7 @@ async def download_dataset(
             return FileResponse(local_path_val, filename=filename_val, media_type="text/csv")
 
     except Exception as e:
-        logger.error(f"Failed to generate download URL: {str(e)}")
+        logger.error("Failed to generate download URL: {}", str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate download URL",
@@ -379,7 +380,7 @@ async def delete_dataset(
 
     except Exception as e:
         db.rollback()
-        logger.error(f"Failed to delete dataset: {str(e)}")
+        logger.error("Failed to delete dataset: {}", str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete dataset"
         )
@@ -459,7 +460,7 @@ async def download_file_from_uploads(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error downloading file {file_id}: {str(e)}")
+        logger.error("Error downloading file {}: {}", file_id, str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to download file"
         )

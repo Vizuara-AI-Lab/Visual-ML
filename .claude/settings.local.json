@@ -20,7 +20,8 @@
       "Bash(xargs -I {} basename {})",
       "Bash(for model in \"KnowledgeBase\\\\|DocumentChunk\\\\|KnowledgeBaseDocument\")",
       "Bash(do echo \"=== Checking $model ===\" grep -r \"$model\" /c/CodeBase/Visual-ML/server/app --include=\"*.py\")",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(python -m py_compile:*)"
     ]
   }
 }

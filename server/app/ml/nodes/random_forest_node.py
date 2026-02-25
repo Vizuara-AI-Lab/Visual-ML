@@ -236,7 +236,23 @@ class RandomForestNode(BaseNode):
 
             # Generate learning activity data (non-blocking)
             feature_names = X_train.columns.tolist()
-            metrics = training_metadata.get("training_metrics", {})
+            train_metrics = training_metadata.get("training_metrics", {})
+
+            # Evaluate on TEST data if available (gives realistic metrics)
+            test_metrics = None
+            if input_data.test_dataset_id:
+                try:
+                    df_test = await self._load_dataset(input_data.test_dataset_id)
+                    if df_test is not None and not df_test.empty and input_data.target_column in df_test.columns:
+                        X_test = df_test.drop(columns=[input_data.target_column])
+                        y_test = df_test[input_data.target_column]
+                        test_metrics = model.evaluate(X_test, y_test)
+                        logger.info(f"Test metrics calculated: accuracy={test_metrics.get('accuracy', 'N/A')}")
+                except Exception as e:
+                    logger.warning(f"Could not evaluate on test data: {e}")
+
+            # Use test metrics for display if available, otherwise fall back to train metrics
+            metrics = test_metrics if test_metrics else train_metrics
 
             feature_importance_analysis = None
             try:
@@ -256,10 +272,19 @@ class RandomForestNode(BaseNode):
                 logger.warning(f"Tree comparison generation failed: {e}")
 
             metric_explainer = None
+            eval_sample_count = len(X_train)
+            if test_metrics and input_data.test_dataset_id:
+                try:
+                    df_t = await self._load_dataset(input_data.test_dataset_id)
+                    if df_t is not None:
+                        eval_sample_count = len(df_t)
+                except Exception:
+                    pass
             try:
                 metric_explainer = self._generate_metric_explainer(
                     metrics, input_data.task_type,
-                    len(X_train), input_data.target_column,
+                    eval_sample_count, input_data.target_column,
+                    evaluated_on="test" if test_metrics else "train",
                 )
             except Exception as e:
                 logger.warning(f"Metric explainer generation failed: {e}")
@@ -296,6 +321,9 @@ class RandomForestNode(BaseNode):
                         "random_state": input_data.random_state,
                     },
                     "full_training_metadata": training_metadata,
+                    "train_metrics": train_metrics,
+                    "test_metrics": test_metrics,
+                    "evaluated_on": "test" if test_metrics else "train",
                 },
                 feature_importance_analysis=feature_importance_analysis,
                 tree_comparison=tree_comparison,
@@ -364,10 +392,12 @@ class RandomForestNode(BaseNode):
         }
 
     def _generate_metric_explainer(
-        self, metrics: Dict, task_type: str, n_samples: int, target_column: str
+        self, metrics: Dict, task_type: str, n_samples: int, target_column: str,
+        evaluated_on: str = "train",
     ) -> Dict[str, Any]:
         """Metric explanation cards with real values and analogies."""
         explanations = []
+        data_label = "test" if evaluated_on == "test" else "training"
 
         if task_type == "classification":
             acc = metrics.get("accuracy")
@@ -379,7 +409,7 @@ class RandomForestNode(BaseNode):
                     "value": round(float(acc), 4),
                     "value_pct": round(float(acc) * 100, 1),
                     "color": "green" if acc >= 0.8 else "yellow" if acc >= 0.6 else "red",
-                    "analogy": f"Out of {n_samples} predictions, {correct} were correct and {wrong} were wrong.",
+                    "analogy": f"Out of {n_samples} {data_label} predictions, {correct} were correct and {wrong} were wrong.",
                     "when_useful": "Good for balanced datasets where all classes are equally important.",
                 })
             prec = metrics.get("precision")
@@ -449,6 +479,7 @@ class RandomForestNode(BaseNode):
             "task_type": task_type,
             "n_samples": n_samples,
             "target_column": target_column,
+            "evaluated_on": evaluated_on,
         }
 
     def _generate_random_forest_quiz(

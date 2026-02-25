@@ -87,8 +87,9 @@ class RandomForestRegressor:
             self.model.fit(X_array, y_array)
             training_time = (datetime.utcnow() - start_time).total_seconds()
 
-            y_pred = self.model.predict(X_array)
-            metrics = self._calculate_metrics(y_array, y_pred)
+            # Training metrics (evaluated on training data)
+            y_pred_train = self.model.predict(X_array)
+            metrics = self._calculate_metrics(y_array, y_pred_train)
 
             # Extract feature importances
             feature_importances = [
@@ -107,6 +108,63 @@ class RandomForestRegressor:
                     "tree_index": i,
                     "depth": int(tree.get_depth()),
                     "n_leaves": int(tree.get_n_leaves()),
+                })
+
+            # Generate per-tree predictions for a sample row (for animation)
+            # Pick a sample where trees show the most spread (diverse predictions).
+            sample_predictions = None
+            try:
+                trees_5 = self.model.estimators_[:5]
+                best_sample = None
+                best_spread = 0.0
+                rng = np.random.RandomState(42)
+                candidate_idxs = rng.choice(len(X_array), size=min(30, len(X_array)), replace=False)
+                for idx in candidate_idxs:
+                    row = X_array[idx:idx + 1]
+                    vals = [float(t.predict(row)[0]) for t in trees_5]
+                    spread = max(vals) - min(vals)
+                    if spread > best_spread:
+                        best_spread = spread
+                        best_sample = int(idx)
+
+                sample_idx = best_sample if best_sample is not None else 0
+                sample_row = X_array[sample_idx:sample_idx + 1]
+                sample_actual = round(float(y_array[sample_idx]), 4)
+                sample_features = {
+                    f: round(float(sample_row[0][j]), 4)
+                    for j, f in enumerate(self.feature_names or [])
+                }
+                tree_preds = []
+                for i, tree in enumerate(trees_5):
+                    pred_val = round(float(tree.predict(sample_row)[0]), 2)
+                    tree_preds.append({
+                        "tree_index": i,
+                        "prediction": str(pred_val),
+                        "numeric_value": pred_val,
+                    })
+                ensemble_pred = round(float(self.model.predict(sample_row)[0]), 2)
+                sample_predictions = {
+                    "sample_index": sample_idx,
+                    "sample_features": sample_features,
+                    "actual_value": sample_actual,
+                    "tree_predictions": tree_preds,
+                    "ensemble_prediction": str(ensemble_pred),
+                    "ensemble_numeric": ensemble_pred,
+                    "task_type": "regression",
+                }
+            except Exception as e:
+                logger.warning(f"Sample prediction generation failed: {e}")
+
+            # Compute feature statistics for interactive prediction UI
+            feature_stats = []
+            for col in X.columns:
+                vals = X[col].dropna()
+                feature_stats.append({
+                    "name": col,
+                    "min": round(float(vals.min()), 4),
+                    "max": round(float(vals.max()), 4),
+                    "mean": round(float(vals.mean()), 4),
+                    "median": round(float(vals.median()), 4),
                 })
 
             self.training_metadata = {
@@ -128,6 +186,8 @@ class RandomForestRegressor:
                 "training_metrics": metrics,
                 "feature_importances": feature_importances,
                 "individual_trees": individual_trees,
+                "sample_predictions": sample_predictions,
+                "feature_stats": feature_stats,
             }
 
             self.is_trained = True

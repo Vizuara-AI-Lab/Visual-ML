@@ -583,6 +583,233 @@ async def predict_classification(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e.to_dict())
 
 
+# ========== INTERACTIVE PREDICTION ENDPOINT ==========
+
+
+class InteractivePredictRequest(BaseModel):
+    """Request for interactive prediction with rich model-specific output."""
+    model_path: str
+    model_type: str  # "random_forest" or "decision_tree"
+    task_type: str   # "classification" or "regression"
+    features: Dict[str, Any]
+
+
+@router.post("/predict/interactive")
+async def predict_interactive(
+    request: InteractivePredictRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Interactive prediction endpoint that returns rich, model-specific output
+    for the prediction playground UI.
+
+    For Random Forest: returns per-tree predictions, vote summary, probabilities.
+    For Decision Tree: returns the decision path through the tree.
+    """
+    import joblib
+    import numpy as np
+    from pathlib import Path
+
+    try:
+        model_path = Path(request.model_path)
+        if not model_path.exists():
+            raise HTTPException(status_code=400, detail=f"Model not found: {model_path}")
+
+        model_data = joblib.load(model_path)
+
+        # model_data is a dict: { model, feature_names, class_names, training_metadata, ... }
+        sklearn_model = model_data["model"]
+        feature_names = model_data.get("feature_names", [])
+        class_names = model_data.get("class_names", [])
+        training_metadata = model_data.get("training_metadata", {})
+
+        # Build feature DataFrame in correct order
+        import pandas as pd
+        feature_values = {fn: float(request.features.get(fn, 0)) for fn in feature_names}
+        df = pd.DataFrame([feature_values])
+        X = df[feature_names].values
+
+        # Core prediction
+        prediction_raw = sklearn_model.predict(X)[0]
+        prediction = prediction_raw.item() if hasattr(prediction_raw, "item") else prediction_raw
+
+        # Probabilities (classification only)
+        probabilities = {}
+        confidence = 1.0
+        if request.task_type == "classification" and hasattr(sklearn_model, "predict_proba"):
+            proba = sklearn_model.predict_proba(X)[0]
+            classes = sklearn_model.classes_
+            for cls, p in zip(classes, proba):
+                probabilities[str(cls)] = round(float(p), 4)
+            pred_idx = list(classes).index(prediction_raw) if prediction_raw in classes else 0
+            confidence = round(float(proba[pred_idx]), 4)
+
+        result: Dict[str, Any] = {
+            "prediction": str(prediction) if request.task_type == "classification" else round(float(prediction), 4),
+            "probabilities": probabilities,
+            "confidence": confidence,
+            "model_type": request.model_type,
+            "task_type": request.task_type,
+            "class_names": [str(c) for c in class_names] if class_names else [],
+            "feature_stats": training_metadata.get("feature_stats", []),
+        }
+
+        # --- Random Forest specifics: per-tree predictions ---
+        if request.model_type == "random_forest" and hasattr(sklearn_model, "estimators_"):
+            per_tree = []
+            vote_summary: Dict[str, Any] = {}
+            trees = sklearn_model.estimators_[:10]  # cap at 10 trees for UI
+            for i, tree in enumerate(trees):
+                tree_pred_raw = tree.predict(X)[0]
+                tree_pred = tree_pred_raw.item() if hasattr(tree_pred_raw, "item") else tree_pred_raw
+                entry: Dict[str, Any] = {"tree_index": i}
+                if request.task_type == "classification":
+                    label = str(tree_pred)
+                    entry["prediction"] = label
+                    vote_summary[label] = vote_summary.get(label, 0) + 1
+                    # Per-tree class probabilities
+                    if hasattr(tree, "predict_proba"):
+                        try:
+                            tp = tree.predict_proba(X)[0]
+                            entry["probabilities"] = {
+                                str(c): round(float(p), 4)
+                                for c, p in zip(sklearn_model.classes_, tp)
+                            }
+                        except Exception:
+                            pass
+                else:
+                    val = round(float(tree_pred), 4)
+                    entry["prediction"] = str(val)
+                    entry["numeric_value"] = val
+                # Extract full tree structure (capped at depth 4) + highlight prediction path
+                try:
+                    ts = tree.tree_
+                    MAX_DEPTH = 4
+                    # Walk prediction path first to know which nodes are on it
+                    path_node_ids = set()
+                    nid = 0
+                    while True:
+                        path_node_ids.add(int(nid))
+                        if ts.children_left[nid] == ts.children_right[nid]:
+                            break
+                        fi = ts.feature[nid]
+                        fn = feature_names[fi] if fi < len(feature_names) else f"feature_{fi}"
+                        fv = float(feature_values.get(fn, 0))
+                        nid = ts.children_left[nid] if fv <= ts.threshold[nid] else ts.children_right[nid]
+
+                    # BFS to extract all nodes up to MAX_DEPTH
+                    tree_nodes = []
+                    bfs_queue = [(0, 0)]  # (node_id, depth)
+                    while bfs_queue:
+                        nid, depth = bfs_queue.pop(0)
+                        if depth > MAX_DEPTH:
+                            continue
+                        is_leaf = ts.children_left[nid] == ts.children_right[nid]
+                        node_info: Dict[str, Any] = {
+                            "id": int(nid),
+                            "depth": depth,
+                            "n_samples": int(ts.n_node_samples[nid]),
+                            "impurity": round(float(ts.impurity[nid]), 4),
+                            "on_path": int(nid) in path_node_ids,
+                        }
+                        if is_leaf or depth == MAX_DEPTH:
+                            node_info["type"] = "leaf"
+                            if request.task_type == "classification":
+                                ci = int(np.argmax(ts.value[nid]))
+                                node_info["class_label"] = str(class_names[ci]) if ci < len(class_names) else str(ci)
+                            else:
+                                node_info["value"] = round(float(ts.value[nid][0][0]), 4)
+                        else:
+                            node_info["type"] = "internal"
+                            fi = ts.feature[nid]
+                            node_info["feature"] = feature_names[fi] if fi < len(feature_names) else f"feature_{fi}"
+                            node_info["threshold"] = round(float(ts.threshold[nid]), 4)
+                            lc = int(ts.children_left[nid])
+                            rc = int(ts.children_right[nid])
+                            node_info["left_child"] = lc
+                            node_info["right_child"] = rc
+                            bfs_queue.append((lc, depth + 1))
+                            bfs_queue.append((rc, depth + 1))
+                        tree_nodes.append(node_info)
+                    entry["tree_structure"] = tree_nodes
+                    entry["tree_depth"] = int(tree.get_depth())
+                    entry["n_leaves"] = int(tree.get_n_leaves())
+                except Exception:
+                    pass  # Graceful degradation
+
+                per_tree.append(entry)
+
+            result["per_tree_predictions"] = per_tree
+            if request.task_type == "classification":
+                result["vote_summary"] = vote_summary
+            else:
+                vals = [e["numeric_value"] for e in per_tree if "numeric_value" in e]
+                result["regression_mean"] = round(sum(vals) / len(vals), 4) if vals else None
+
+        # --- Decision Tree specifics: decision path ---
+        if request.model_type == "decision_tree" and hasattr(sklearn_model, "tree_"):
+            tree = sklearn_model.tree_
+            path_nodes = []
+            node_id = 0
+            while True:
+                is_leaf = tree.children_left[node_id] == tree.children_right[node_id]
+                if is_leaf:
+                    # Leaf node
+                    if request.task_type == "classification":
+                        class_idx = int(np.argmax(tree.value[node_id]))
+                        leaf_label = str(class_names[class_idx]) if class_idx < len(class_names) else str(class_idx)
+                        dist = tree.value[node_id][0].tolist()
+                        total = sum(dist)
+                        leaf_probs = {}
+                        for ci, cnt in enumerate(dist):
+                            cn = str(class_names[ci]) if ci < len(class_names) else str(ci)
+                            leaf_probs[cn] = round(cnt / total, 4) if total > 0 else 0
+                        path_nodes.append({
+                            "node_id": int(node_id),
+                            "type": "leaf",
+                            "prediction": leaf_label,
+                            "samples": int(tree.n_node_samples[node_id]),
+                            "probabilities": leaf_probs,
+                        })
+                    else:
+                        val = round(float(tree.value[node_id][0][0]), 4)
+                        path_nodes.append({
+                            "node_id": int(node_id),
+                            "type": "leaf",
+                            "prediction": str(val),
+                            "numeric_value": val,
+                            "samples": int(tree.n_node_samples[node_id]),
+                        })
+                    break
+
+                feat_idx = tree.feature[node_id]
+                threshold = round(float(tree.threshold[node_id]), 4)
+                feat_name = feature_names[feat_idx] if feat_idx < len(feature_names) else f"feature_{feat_idx}"
+                feat_value = float(feature_values.get(feat_name, 0))
+                go_left = feat_value <= threshold
+                path_nodes.append({
+                    "node_id": int(node_id),
+                    "type": "split",
+                    "feature": feat_name,
+                    "threshold": threshold,
+                    "value": round(feat_value, 4),
+                    "direction": "left" if go_left else "right",
+                    "samples": int(tree.n_node_samples[node_id]),
+                    "impurity": round(float(tree.impurity[node_id]), 4),
+                })
+                node_id = tree.children_left[node_id] if go_left else tree.children_right[node_id]
+
+            result["decision_path"] = path_nodes
+
+        return make_json_serializable(result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Interactive prediction failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/models", response_model=ModelListResponse)
 async def list_models(
     algorithm: Optional[str] = None, current_user: Dict[str, Any] = Depends(get_current_user)
