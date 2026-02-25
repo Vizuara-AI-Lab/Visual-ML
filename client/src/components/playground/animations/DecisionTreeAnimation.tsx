@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import {
   Play,
   Pause,
@@ -12,118 +12,215 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-interface TreeNode {
+interface BackendTreeNode {
+  id: number;
+  type: "internal" | "leaf";
+  depth: number;
+  n_samples: number;
+  impurity: number;
+  feature?: string;
+  threshold?: number;
+  left_child?: number;
+  right_child?: number;
+  class_label?: string;
+  class_distribution?: number[];
+  value?: number;
+}
+
+interface LayoutNode {
   id: number;
   parentId: number | null;
-  /** "internal" nodes carry a split; "leaf" nodes carry a class label */
   type: "internal" | "leaf";
-  /** Display position (SVG coordinates) */
   x: number;
   y: number;
-  /** Internal-node fields */
   feature?: string;
   threshold?: number;
   gini?: number;
-  /** Leaf-node fields */
   classLabel?: string;
-  samples?: number;
-  /** Colour used for leaf badges */
+  samples: number;
   color?: string;
-  /** Which side of the parent ("left" | "right") – used for edge labels */
   side?: "left" | "right";
+  /** For regression leaves */
+  value?: number;
+}
+
+interface DecisionTreeAnimationProps {
+  result?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
-// Pre-defined Iris decision-tree structure (7 nodes, 3 levels)
+// Colour palette for up to 10 distinct classes
 // ---------------------------------------------------------------------------
 
-const TREE_NODES: TreeNode[] = [
-  // Level 0 – root
-  {
-    id: 0,
-    parentId: null,
-    type: "internal",
-    x: 300,
-    y: 45,
-    feature: "Petal Length",
-    threshold: 2.5,
-    gini: 0.667,
-  },
-  // Level 1
-  {
-    id: 1,
-    parentId: 0,
-    type: "leaf",
-    x: 130,
-    y: 150,
-    classLabel: "Setosa",
-    samples: 50,
-    color: "#22c55e",
-    side: "left",
-  },
-  {
-    id: 2,
-    parentId: 0,
-    type: "internal",
-    x: 470,
-    y: 150,
-    feature: "Petal Width",
-    threshold: 1.8,
-    gini: 0.5,
-    side: "right",
-  },
-  // Level 2
-  {
-    id: 3,
-    parentId: 2,
-    type: "internal",
-    x: 340,
-    y: 260,
-    feature: "Petal Length",
-    threshold: 4.9,
-    gini: 0.168,
-    side: "left",
-  },
-  {
-    id: 4,
-    parentId: 2,
-    type: "leaf",
-    x: 530,
-    y: 260,
-    classLabel: "Virginica",
-    samples: 43,
-    color: "#a855f7",
-    side: "right",
-  },
-  // Level 3
-  {
-    id: 5,
-    parentId: 3,
-    type: "leaf",
-    x: 260,
-    y: 355,
-    classLabel: "Versicolor",
-    samples: 47,
-    color: "#f97316",
-    side: "left",
-  },
-  {
-    id: 6,
-    parentId: 3,
-    type: "leaf",
-    x: 420,
-    y: 355,
-    classLabel: "Virginica",
-    samples: 3,
-    color: "#a855f7",
-    side: "right",
-  },
+const CLASS_COLORS = [
+  "#22c55e", // green
+  "#f97316", // orange
+  "#a855f7", // purple
+  "#3b82f6", // blue
+  "#ef4444", // red
+  "#14b8a6", // teal
+  "#f59e0b", // amber
+  "#ec4899", // pink
+  "#6366f1", // indigo
+  "#84cc16", // lime
 ];
 
-// Node dimensions
+// ---------------------------------------------------------------------------
+// Layout helpers
+// ---------------------------------------------------------------------------
+
 const NODE_W = 140;
 const NODE_H_INTERNAL = 58;
 const NODE_H_LEAF = 48;
+const SVG_W = 600;
+const SVG_H = 420;
+const Y_PADDING_TOP = 45;
+const Y_LEVEL_GAP = 100;
+
+function buildLayoutNodes(backendNodes: BackendTreeNode[]): LayoutNode[] {
+  if (!backendNodes || backendNodes.length === 0) return [];
+
+  // Build a lookup map by id
+  const byId = new Map<number, BackendTreeNode>();
+  for (const n of backendNodes) byId.set(n.id, n);
+
+  // Find max depth
+  const maxDepth = Math.max(...backendNodes.map((n) => n.depth));
+
+  // Collect unique class labels for color mapping
+  const classLabels: string[] = [];
+  for (const n of backendNodes) {
+    if (n.type === "leaf" && n.class_label && !classLabels.includes(n.class_label)) {
+      classLabels.push(n.class_label);
+    }
+  }
+  const classColorMap = new Map<string, string>();
+  classLabels.forEach((label, i) => {
+    classColorMap.set(label, CLASS_COLORS[i % CLASS_COLORS.length]);
+  });
+
+  // Build parent map + side map from parent's left_child/right_child
+  const parentMap = new Map<number, number>(); // childId -> parentId
+  const sideMap = new Map<number, "left" | "right">();
+  for (const n of backendNodes) {
+    if (n.type === "internal") {
+      if (n.left_child !== undefined) {
+        parentMap.set(n.left_child, n.id);
+        sideMap.set(n.left_child, "left");
+      }
+      if (n.right_child !== undefined) {
+        parentMap.set(n.right_child, n.id);
+        sideMap.set(n.right_child, "right");
+      }
+    }
+  }
+
+  // Group nodes by depth for positioning
+  const byDepth = new Map<number, BackendTreeNode[]>();
+  for (const n of backendNodes) {
+    const list = byDepth.get(n.depth) || [];
+    list.push(n);
+    byDepth.set(n.depth, list);
+  }
+
+  // Compute x positions using subtree size approach
+  // First compute subtree widths
+  const subtreeWidth = new Map<number, number>();
+  function computeWidth(nodeId: number): number {
+    const node = byId.get(nodeId);
+    if (!node || node.type === "leaf") {
+      subtreeWidth.set(nodeId, 1);
+      return 1;
+    }
+    let w = 0;
+    if (node.left_child !== undefined && byId.has(node.left_child)) {
+      w += computeWidth(node.left_child);
+    }
+    if (node.right_child !== undefined && byId.has(node.right_child)) {
+      w += computeWidth(node.right_child);
+    }
+    if (w === 0) w = 1;
+    subtreeWidth.set(nodeId, w);
+    return w;
+  }
+
+  // Root is the first node (id of depth 0)
+  const rootNode = backendNodes.find((n) => n.depth === 0);
+  if (!rootNode) return [];
+  computeWidth(rootNode.id);
+
+  // Assign x positions
+  const xPos = new Map<number, number>();
+  const totalWidth = subtreeWidth.get(rootNode.id) || 1;
+  const unitWidth = (SVG_W - 40) / totalWidth; // leave some padding
+
+  function assignX(nodeId: number, leftBound: number) {
+    const node = byId.get(nodeId);
+    if (!node) return;
+    const w = subtreeWidth.get(nodeId) || 1;
+    const cx = leftBound + (w * unitWidth) / 2;
+    xPos.set(nodeId, cx);
+
+    if (node.type === "internal") {
+      let offset = leftBound;
+      if (node.left_child !== undefined && byId.has(node.left_child)) {
+        const lw = subtreeWidth.get(node.left_child) || 1;
+        assignX(node.left_child, offset);
+        offset += lw * unitWidth;
+      }
+      if (node.right_child !== undefined && byId.has(node.right_child)) {
+        assignX(node.right_child, offset);
+      }
+    }
+  }
+  assignX(rootNode.id, 20);
+
+  // BFS order for animation
+  const bfsOrder: number[] = [];
+  const queue = [rootNode.id];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    bfsOrder.push(id);
+    const node = byId.get(id);
+    if (node && node.type === "internal") {
+      if (node.left_child !== undefined && byId.has(node.left_child)) queue.push(node.left_child);
+      if (node.right_child !== undefined && byId.has(node.right_child)) queue.push(node.right_child);
+    }
+  }
+
+  // Build LayoutNode array in BFS order
+  return bfsOrder.map((nodeId) => {
+    const n = byId.get(nodeId)!;
+    const y = Y_PADDING_TOP + n.depth * Y_LEVEL_GAP;
+    const x = xPos.get(nodeId) || SVG_W / 2;
+
+    const layout: LayoutNode = {
+      id: nodeId,
+      parentId: parentMap.get(nodeId) ?? null,
+      type: n.type,
+      x,
+      y,
+      samples: n.n_samples,
+      gini: n.impurity,
+      side: sideMap.get(nodeId),
+    };
+
+    if (n.type === "internal") {
+      layout.feature = n.feature;
+      layout.threshold = n.threshold;
+    } else {
+      if (n.class_label) {
+        layout.classLabel = n.class_label;
+        layout.color = classColorMap.get(n.class_label) || "#94a3b8";
+      } else if (n.value !== undefined) {
+        layout.classLabel = `${n.value}`;
+        layout.color = "#3b82f6";
+      }
+    }
+
+    return layout;
+  });
+}
 
 // Speed presets (ms per step)
 const SPEED_MAP: Record<string, number> = {
@@ -136,17 +233,49 @@ const SPEED_MAP: Record<string, number> = {
 // Component
 // ---------------------------------------------------------------------------
 
-const DecisionTreeAnimation = () => {
-  // How many nodes are currently visible (0 = nothing, 7 = full tree)
+const DecisionTreeAnimation = ({ result }: DecisionTreeAnimationProps) => {
+  // Extract tree data from result
+  const treeNodes = useMemo(() => {
+    const fullMeta = (result?.metadata as Record<string, unknown>)?.full_training_metadata as Record<string, unknown> | undefined;
+    const backendNodes = fullMeta?.tree_structure as BackendTreeNode[] | undefined;
+    if (backendNodes && backendNodes.length > 0) {
+      return buildLayoutNodes(backendNodes);
+    }
+    return [];
+  }, [result]);
+
+  const taskType = (result?.task_type as string) || "classification";
+  const isRegression = taskType === "regression";
+
+  // Extract class names for legend
+  const classInfo = useMemo(() => {
+    const classes: { label: string; color: string }[] = [];
+    const seen = new Set<string>();
+    for (const n of treeNodes) {
+      if (n.type === "leaf" && n.classLabel && n.color && !seen.has(n.classLabel)) {
+        seen.add(n.classLabel);
+        classes.push({ label: n.classLabel, color: n.color });
+      }
+    }
+    return classes;
+  }, [treeNodes]);
+
+  // How many nodes are currently visible
   const [visibleCount, setVisibleCount] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState<string>("medium");
 
-  // Refs for requestAnimationFrame loop
   const rafRef = useRef<number | null>(null);
   const lastStepTimeRef = useRef<number>(0);
 
-  // ------- Animation loop (rAF-based) -------
+  // Computed SVG height based on tree depth
+  const svgH = useMemo(() => {
+    if (treeNodes.length === 0) return SVG_H;
+    const maxY = Math.max(...treeNodes.map((n) => n.y));
+    return Math.max(SVG_H, maxY + 80);
+  }, [treeNodes]);
+
+  // ------- Animation loop -------
 
   const stopLoop = useCallback(() => {
     if (rafRef.current !== null) {
@@ -163,29 +292,27 @@ const DecisionTreeAnimation = () => {
         lastStepTimeRef.current = timestamp;
         setVisibleCount((prev) => {
           const next = prev + 1;
-          if (next >= TREE_NODES.length) {
-            // Tree is fully built – stop on next frame
+          if (next >= treeNodes.length) {
             setTimeout(() => stopLoop(), 0);
-            return TREE_NODES.length;
+            return treeNodes.length;
           }
           return next;
         });
       }
       rafRef.current = requestAnimationFrame(tick);
     },
-    [speed, stopLoop],
+    [speed, stopLoop, treeNodes.length],
   );
 
   const startLoop = useCallback(() => {
     setIsPlaying(true);
     lastStepTimeRef.current = performance.now();
-    // If already complete, reset first
     setVisibleCount((prev) => {
-      if (prev >= TREE_NODES.length) return 0;
+      if (prev >= treeNodes.length) return 0;
       return prev;
     });
     rafRef.current = requestAnimationFrame(tick);
-  }, [tick]);
+  }, [tick, treeNodes.length]);
 
   // ------- Control handlers -------
 
@@ -199,22 +326,35 @@ const DecisionTreeAnimation = () => {
 
   const handleStep = useCallback(() => {
     if (isPlaying) stopLoop();
-    setVisibleCount((prev) => Math.min(prev + 1, TREE_NODES.length));
-  }, [isPlaying, stopLoop]);
+    setVisibleCount((prev) => Math.min(prev + 1, treeNodes.length));
+  }, [isPlaying, stopLoop, treeNodes.length]);
 
   const handleReset = useCallback(() => {
     stopLoop();
     setVisibleCount(0);
   }, [stopLoop]);
 
+  // ------- No data fallback -------
+
+  if (treeNodes.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-gray-400 gap-3">
+        <TreePine className="h-10 w-10" />
+        <p className="text-sm font-medium">No tree structure data available</p>
+        <p className="text-xs text-gray-400">Run the pipeline to see the trained decision tree</p>
+      </div>
+    );
+  }
+
   // ------- Render helpers -------
 
-  /** Render a single edge from child to parent */
-  const renderEdge = (node: TreeNode, index: number) => {
+  const nodeById = new Map(treeNodes.map((n) => [n.id, n]));
+
+  const renderEdge = (node: LayoutNode, index: number) => {
     if (node.parentId === null) return null;
-    const parent = TREE_NODES.find((n) => n.id === node.parentId)!;
-    const parentH =
-      parent.type === "internal" ? NODE_H_INTERNAL : NODE_H_LEAF;
+    const parent = nodeById.get(node.parentId);
+    if (!parent) return null;
+    const parentH = parent.type === "internal" ? NODE_H_INTERNAL : NODE_H_LEAF;
     const visible = index < visibleCount;
 
     return (
@@ -232,11 +372,16 @@ const DecisionTreeAnimation = () => {
             transition: "opacity 0.5s ease",
           }}
         />
-        {/* Yes / No label */}
         {visible && (
           <text
             x={(parent.x + node.x) / 2 + (node.side === "left" ? -12 : 12)}
-            y={(parent.y + parentH / 2 + node.y - (node.type === "internal" ? NODE_H_INTERNAL : NODE_H_LEAF) / 2) / 2}
+            y={
+              (parent.y +
+                parentH / 2 +
+                node.y -
+                (node.type === "internal" ? NODE_H_INTERNAL : NODE_H_LEAF) / 2) /
+              2
+            }
             textAnchor="middle"
             fontSize={11}
             fontWeight={600}
@@ -253,8 +398,7 @@ const DecisionTreeAnimation = () => {
     );
   };
 
-  /** Render a single tree node */
-  const renderNode = (node: TreeNode, index: number) => {
+  const renderNode = (node: LayoutNode, index: number) => {
     const visible = index < visibleCount;
     const h = node.type === "internal" ? NODE_H_INTERNAL : NODE_H_LEAF;
 
@@ -280,7 +424,6 @@ const DecisionTreeAnimation = () => {
             stroke="#3b82f6"
             strokeWidth={2}
           />
-          {/* Feature + threshold */}
           <text
             x={node.x}
             y={node.y - 10}
@@ -291,7 +434,6 @@ const DecisionTreeAnimation = () => {
           >
             {node.feature} &lt; {node.threshold}
           </text>
-          {/* Gini */}
           <text
             x={node.x}
             y={node.y + 10}
@@ -299,7 +441,7 @@ const DecisionTreeAnimation = () => {
             fontSize={10}
             fill="#64748b"
           >
-            Gini = {node.gini?.toFixed(3)}
+            {isRegression ? "MSE" : "Gini"} = {node.gini?.toFixed(3)}
           </text>
         </g>
       );
@@ -327,7 +469,6 @@ const DecisionTreeAnimation = () => {
           stroke={node.color ?? "#94a3b8"}
           strokeWidth={2}
         />
-        {/* Class label */}
         <text
           x={node.x}
           y={node.y - 5}
@@ -338,7 +479,6 @@ const DecisionTreeAnimation = () => {
         >
           {node.classLabel}
         </text>
-        {/* Samples */}
         <text
           x={node.x}
           y={node.y + 12}
@@ -352,6 +492,9 @@ const DecisionTreeAnimation = () => {
     );
   };
 
+  // ------- Metrics summary -------
+  const metrics = result?.training_metrics as Record<string, number> | undefined;
+
   // ------- JSX -------
 
   return (
@@ -362,22 +505,26 @@ const DecisionTreeAnimation = () => {
         <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 mb-4">
           <Info className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
           <p className="text-sm text-green-800">
-            <span className="font-semibold">Decision Trees</span> learn by
-            recursively splitting the data on the feature and threshold that
-            best separates the classes, measured by <em>Gini impurity</em>.
-            Each internal node represents a question; each leaf holds a
-            prediction. Watch the tree grow node-by-node to see how it
-            partitions the Iris dataset.
+            <span className="font-semibold">Decision Tree</span> trained on{" "}
+            <strong>{result?.training_samples as number ?? "?"}</strong> samples with{" "}
+            <strong>{result?.n_features as number ?? "?"}</strong> features.
+            {metrics && !isRegression && (
+              <> Training accuracy: <strong>{(metrics.accuracy * 100).toFixed(1)}%</strong>.</>
+            )}
+            {metrics && isRegression && (
+              <> Training R²: <strong>{metrics.r2?.toFixed(4)}</strong>.</>
+            )}
+            {" "}Watch the tree grow node-by-node to see how it partitions the data.
           </p>
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-2 shadow-sm">
           <svg
-            viewBox="0 0 600 400"
+            viewBox={`0 0 ${SVG_W} ${svgH}`}
             className="w-full h-auto"
             style={{ minHeight: 280 }}
           >
-            {/* Background grid (subtle) */}
+            {/* Background grid */}
             <defs>
               <pattern
                 id="dt-grid"
@@ -393,19 +540,19 @@ const DecisionTreeAnimation = () => {
                 />
               </pattern>
             </defs>
-            <rect width="600" height="400" fill="url(#dt-grid)" />
+            <rect width={SVG_W} height={svgH} fill="url(#dt-grid)" />
 
-            {/* Edges (rendered first so nodes sit on top) */}
-            {TREE_NODES.map((node, i) => renderEdge(node, i))}
+            {/* Edges */}
+            {treeNodes.map((node, i) => renderEdge(node, i))}
 
             {/* Nodes */}
-            {TREE_NODES.map((node, i) => renderNode(node, i))}
+            {treeNodes.map((node, i) => renderNode(node, i))}
 
             {/* Empty-state prompt */}
             {visibleCount === 0 && (
               <text
-                x={300}
-                y={200}
+                x={SVG_W / 2}
+                y={svgH / 2}
                 textAnchor="middle"
                 fontSize={14}
                 fill="#94a3b8"
@@ -422,12 +569,12 @@ const DecisionTreeAnimation = () => {
             <div
               className="h-full rounded-full bg-blue-500 transition-all duration-300"
               style={{
-                width: `${(visibleCount / TREE_NODES.length) * 100}%`,
+                width: `${(visibleCount / treeNodes.length) * 100}%`,
               }}
             />
           </div>
           <span className="text-xs font-medium text-gray-500 tabular-nums">
-            {visibleCount}/{TREE_NODES.length}
+            {visibleCount}/{treeNodes.length}
           </span>
         </div>
       </div>
@@ -464,7 +611,7 @@ const DecisionTreeAnimation = () => {
 
           <button
             onClick={handleStep}
-            disabled={visibleCount >= TREE_NODES.length}
+            disabled={visibleCount >= treeNodes.length}
             className="inline-flex items-center justify-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <SkipForward className="h-4 w-4" /> Step
@@ -503,38 +650,52 @@ const DecisionTreeAnimation = () => {
         </div>
 
         {/* Legend */}
-        <div className="space-y-2">
+        {!isRegression && classInfo.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Legend
+            </h4>
+            <div className="space-y-1.5 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="inline-block h-3 w-5 rounded border-2 border-blue-500 bg-blue-50" />
+                <span className="text-gray-600">Internal node (split)</span>
+              </div>
+              {classInfo.map((c) => (
+                <div key={c.label} className="flex items-center gap-2">
+                  <span
+                    className="inline-block h-3 w-5 rounded border-2"
+                    style={{
+                      borderColor: c.color,
+                      backgroundColor: `${c.color}20`,
+                    }}
+                  />
+                  <span className="text-gray-600">{c.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tree stats */}
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-1">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Legend
+            Tree Info
           </h4>
-          <div className="space-y-1.5 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="inline-block h-3 w-5 rounded border-2 border-blue-500 bg-blue-50" />
-              <span className="text-gray-600">Internal node (split)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-block h-3 w-5 rounded border-2 border-green-500 bg-green-50" />
-              <span className="text-gray-600">Setosa</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-block h-3 w-5 rounded border-2 border-orange-500 bg-orange-50" />
-              <span className="text-gray-600">Versicolor</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-block h-3 w-5 rounded border-2 border-purple-500 bg-purple-50" />
-              <span className="text-gray-600">Virginica</span>
-            </div>
+          <div className="text-sm text-gray-700 space-y-0.5">
+            <p>Depth: <span className="font-medium">{result?.tree_depth as number ?? "?"}</span></p>
+            <p>Leaves: <span className="font-medium">{result?.n_leaves as number ?? "?"}</span></p>
+            <p>Task: <span className="font-medium capitalize">{taskType}</span></p>
           </div>
         </div>
 
         {/* Current-node detail card */}
-        {visibleCount > 0 && visibleCount <= TREE_NODES.length && (
+        {visibleCount > 0 && visibleCount <= treeNodes.length && (
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-1">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
               Last Added Node
             </h4>
             {(() => {
-              const node = TREE_NODES[visibleCount - 1];
+              const node = treeNodes[visibleCount - 1];
               if (node.type === "internal") {
                 return (
                   <>
@@ -542,7 +703,7 @@ const DecisionTreeAnimation = () => {
                       {node.feature} &lt; {node.threshold}
                     </p>
                     <p className="text-xs text-gray-500">
-                      Gini impurity: {node.gini?.toFixed(3)}
+                      {isRegression ? "MSE" : "Gini"}: {node.gini?.toFixed(3)} | n = {node.samples}
                     </p>
                   </>
                 );
@@ -565,9 +726,9 @@ const DecisionTreeAnimation = () => {
         )}
 
         {/* Completion badge */}
-        {visibleCount >= TREE_NODES.length && (
+        {visibleCount >= treeNodes.length && (
           <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-center text-sm font-medium text-green-700">
-            Tree complete! All {TREE_NODES.length} nodes placed.
+            Tree complete! All {treeNodes.length} nodes placed.
           </div>
         )}
       </div>

@@ -308,8 +308,9 @@ async def execute_pipeline_stream(
 
         except Exception as e:
             logger.error(f"SSE streaming error: {str(e)}", exc_info=True)
+            from app.ml.error_formatter import format_error
             error_data = make_json_serializable(
-                {"event": "pipeline_failed", "success": False, "error": str(e)}
+                {"event": "pipeline_failed", "success": False, "error": format_error(e)}
             )
             yield f"data: {json.dumps(error_data, allow_nan=False)}\n\n"
 
@@ -369,9 +370,10 @@ async def execute_pipeline_stream(
 
         except Exception as e:
             logger.error(f"Pipeline execution error: {str(e)}", exc_info=True)
+            from app.ml.error_formatter import format_error
             await event_queue.put(
                 make_json_serializable(
-                    {"event": "pipeline_failed", "success": False, "error": str(e)}
+                    {"event": "pipeline_failed", "success": False, "error": format_error(e)}
                 )
             )
         finally:

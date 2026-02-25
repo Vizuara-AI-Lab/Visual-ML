@@ -11,11 +11,7 @@ from app.models.genai import (
     GenAIEdge,
     GenAIPipelineRun,
     GenAINodeExecution,
-    KnowledgeBase,
-    KnowledgeBaseDocument,
-    DocumentChunk,
     APISecret,
-    ConversationMemory,
 )
 from app.models.custom_app import CustomApp
 from app.models.gamification import StudentBadge

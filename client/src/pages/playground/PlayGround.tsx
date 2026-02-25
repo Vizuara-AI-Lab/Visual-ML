@@ -21,6 +21,7 @@ import type { NodeType, BaseNodeData } from "../../types/pipeline";
 import { useProjectState } from "../../hooks/queries/useProjectState";
 import { useSaveProject } from "../../hooks/mutations/useSaveProject";
 import { validatePipeline } from "../../utils/validation";
+import { getFriendlyMessage, getErrorSuggestion } from "../../utils/errorFormatter";
 import { MentorAssistant } from "../../features/mentor";
 import { useAuthStore } from "../../store/authStore";
 import { useMentorContext } from "../../features/mentor";
@@ -601,7 +602,7 @@ export default function PlayGround() {
               event: "node_failed",
               nodeId: event.node_id,
               nodeLabel: event.label,
-              message: `Failed: ${event.label} — ${event.error}`,
+              message: `Failed: ${event.label} — ${getFriendlyMessage(event.error)}`,
             });
           },
           onPipelineCompleted: (event) => {
@@ -630,36 +631,24 @@ export default function PlayGround() {
           onPipelineFailed: (event) => {
             console.log("❌ Pipeline failed:", event);
 
-            // Format user-friendly error message
-            let userFriendlyError = event.error || "Pipeline execution failed";
-            let errorSuggestion: string | undefined = undefined;
-
-            // Handle specific error types
-            if (userFriendlyError.includes("Missing values found")) {
-              const columnMatch = userFriendlyError.match(/column '([^']+)'/);
-              const column = columnMatch ? columnMatch[1] : "a column";
-              userFriendlyError = `Missing values detected in "${column}"`;
-              errorSuggestion = "Please handle missing values before encoding.";
-            } else if (userFriendlyError.includes("column_configs")) {
-              userFriendlyError = "No columns configured for encoding";
-              errorSuggestion =
-                "Please configure encoding settings for at least one column.";
-            }
+            // Use structured error from backend (or fallback to string)
+            const friendlyMsg = getFriendlyMessage(event.error) || "Pipeline execution failed";
+            const suggestion = getErrorSuggestion(event.error) || undefined;
 
             // Keep incrementally-built nodeResults, add error info
             const currentResult = usePlaygroundStore.getState().executionResult;
             setExecutionResult({
               ...currentResult,
               success: false,
-              error: userFriendlyError,
-              errorSuggestion: errorSuggestion,
+              error: friendlyMsg,
+              errorSuggestion: suggestion,
               timestamp: new Date().toISOString(),
             });
 
             addExecutionLog({
               timestamp: new Date().toISOString(),
               event: "pipeline_failed",
-              message: `Pipeline failed: ${userFriendlyError}`,
+              message: `Pipeline failed: ${friendlyMsg}`,
             });
 
             setIsExecuting(false);

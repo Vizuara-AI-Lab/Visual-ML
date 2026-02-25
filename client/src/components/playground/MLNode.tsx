@@ -36,7 +36,6 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
     "chart_view",
     "missing_value_handler",
     "encoding",
-    "transformation",
     "scaling",
     "feature_selection",
     "r2_score",
@@ -54,7 +53,6 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
     // Image pipeline nodes
     "image_dataset",
     "image_preprocessing",
-    "image_augmentation",
     "image_split",
     "cnn_classifier",
     "image_predictions",

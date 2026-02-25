@@ -8,29 +8,10 @@ import {
   Boxes,
 } from "lucide-react";
 import type { PipelineExecutionResult } from "../../../../store/playgroundStore";
+import { getFriendlyMessage } from "../../../../utils/errorFormatter";
 
 interface SummaryTabProps {
   executionResult: PipelineExecutionResult;
-}
-
-function getErrorMessage(error: unknown): string {
-  if (typeof error === "string") return error;
-  if (error && typeof error === "object") {
-    const errorObj = error as Record<string, unknown>;
-    if (errorObj.details && typeof errorObj.details === "object") {
-      const details = errorObj.details as Record<string, unknown>;
-      if (details.reason && typeof details.reason === "string")
-        return details.reason;
-    }
-    if (errorObj.message && typeof errorObj.message === "string") {
-      const match = errorObj.message.match(/\[.*?\]: (.+)/);
-      return match ? match[1] : errorObj.message;
-    }
-    if (errorObj.error && typeof errorObj.error === "string")
-      return errorObj.error;
-    return JSON.stringify(error);
-  }
-  return "Unknown error";
 }
 
 export function SummaryTab({ executionResult }: SummaryTabProps) {
@@ -102,7 +83,7 @@ export function SummaryTab({ executionResult }: SummaryTabProps) {
             </h4>
             {executionResult.error && (
               <p className="text-sm text-red-700 mt-2 leading-relaxed">
-                {getErrorMessage(executionResult.error)}
+                {getFriendlyMessage(executionResult.error)}
               </p>
             )}
           </div>

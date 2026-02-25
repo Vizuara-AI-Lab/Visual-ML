@@ -442,8 +442,6 @@ async def run_pipeline(
         studentId=current_student.id,
         status=RunStatus.PENDING,
         inputData=run_data.inputData,
-        totalTokensUsed=0,
-        totalCostUSD=0.0,
     )
 
     db.add(run)
@@ -481,8 +479,6 @@ async def run_pipeline(
         # Update run record
         run.status = RunStatus.COMPLETED if result["success"] else RunStatus.FAILED
         run.finalOutput = result.get("finalOutput")
-        run.totalTokensUsed = result.get("totalTokens", 0)
-        run.totalCostUSD = result.get("totalCost", 0.0)
         run.executionTimeMs = result.get("executionTimeMs")
         run.error = result.get("error")
         run.completedAt = (
@@ -495,8 +491,6 @@ async def run_pipeline(
                 runId=run.id,
                 nodeId=node_exec["nodeId"],
                 status=RunStatus[node_exec["status"]],
-                tokensUsed=node_exec.get("tokensUsed"),
-                costUSD=node_exec.get("costUSD"),
                 executionTimeMs=node_exec.get("executionTimeMs"),
                 error=node_exec.get("error"),
             )
@@ -518,8 +512,6 @@ async def run_pipeline(
                 status=RunStatus[ne["status"]],
                 inputData=None,
                 outputData=None,
-                tokensUsed=ne.get("tokensUsed"),
-                costUSD=ne.get("costUSD"),
                 executionTimeMs=ne.get("executionTimeMs"),
                 error=ne.get("error"),
                 provider=ne.get("provider"),
@@ -536,8 +528,6 @@ async def run_pipeline(
             pipelineId=run.pipelineId,
             status=run.status,
             finalOutput=run.finalOutput,
-            totalTokensUsed=run.totalTokensUsed,
-            totalCostUSD=run.totalCostUSD,
             executionTimeMs=run.executionTimeMs,
             error=run.error,
             startedAt=run.startedAt,
@@ -615,8 +605,6 @@ async def get_run(
             status=e.status,
             inputData=None,
             outputData=None,
-            tokensUsed=e.tokensUsed,
-            costUSD=e.costUSD,
             executionTimeMs=e.executionTimeMs,
             error=e.error,
             provider=e.provider,
@@ -633,8 +621,6 @@ async def get_run(
         pipelineId=run.pipelineId,
         status=run.status,
         finalOutput=run.finalOutput,
-        totalTokensUsed=run.totalTokensUsed,
-        totalCostUSD=run.totalCostUSD,
         executionTimeMs=run.executionTimeMs,
         error=run.error,
         startedAt=run.startedAt,

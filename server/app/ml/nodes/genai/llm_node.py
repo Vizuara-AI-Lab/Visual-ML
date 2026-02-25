@@ -35,9 +35,6 @@ class LLMNode(GenAIBaseNode):
 
     Output:
         response: Generated text
-        tokensUsed: Total tokens
-        inputTokens: Input tokens
-        outputTokens: Output tokens
         model: Model used
         provider: Provider used
     """

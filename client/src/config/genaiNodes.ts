@@ -126,6 +126,8 @@ export const genaiCategory: NodeCategory = {
       color: "#10B981",
       defaultConfig: {
         sessionId: "default",
+        maxHistory: 20,
+        clearOnRun: false,
       },
       configFields: [
         {
@@ -135,6 +137,23 @@ export const genaiCategory: NodeCategory = {
           defaultValue: "default",
           description: "Unique identifier for this conversation",
           placeholder: "default",
+        },
+        {
+          name: "maxHistory",
+          label: "Max History",
+          type: "number",
+          min: 2,
+          max: 50,
+          step: 2,
+          defaultValue: 20,
+          description: "Maximum messages to keep in conversation history",
+        },
+        {
+          name: "clearOnRun",
+          label: "Clear on Run",
+          type: "checkbox",
+          defaultValue: false,
+          description: "Reset conversation history each pipeline run",
         },
       ],
     },

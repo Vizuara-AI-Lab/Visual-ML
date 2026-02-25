@@ -275,6 +275,8 @@ class ImageSplitNode(BaseNode):
         """Split ratio summary."""
         total = train_size + test_size
         return {
+            "train_count": train_size,
+            "test_count": test_size,
             "train_ratio": round(train_size / total, 3),
             "test_ratio": round(test_size / total, 3),
             "train_pct": round(train_size / total * 100, 1),

@@ -152,9 +152,14 @@ IMAGE_DATASET_ALIASES = {
 
 class ImageDatasetInput(NodeInput):
     """Input schema for Image Dataset node."""
+    source: str = Field("builtin", description="'builtin' or 'camera'")
     dataset_name: str = Field(
         "digits_8x8", description="Built-in image dataset to load"
     )
+    # Camera-source fields (populated by the frontend camera capture UI)
+    dataset_id: Optional[str] = Field(None, description="Pre-built camera dataset ID")
+    target_size: str = Field("28x28", description="WxH used when capturing")
+    class_names: Optional[str] = Field(None, description="Comma-separated class names")
 
 
 class ImageDatasetOutput(NodeOutput):
@@ -233,6 +238,84 @@ class ImageDatasetNode(BaseNode):
         return ImageDatasetOutput
 
     async def _execute(self, input_data: ImageDatasetInput) -> ImageDatasetOutput:
+        if input_data.source == "camera":
+            return await self._execute_camera(input_data)
+        return await self._execute_builtin(input_data)
+
+    async def _execute_camera(self, input_data: ImageDatasetInput) -> ImageDatasetOutput:
+        """Load a pre-built camera dataset (created by /ml/camera/dataset)."""
+        dataset_id = input_data.dataset_id
+        if not dataset_id:
+            raise ValueError(
+                "Camera source requires a dataset_id. "
+                "Please capture images first using the camera panel."
+            )
+
+        upload_dir = Path(settings.UPLOAD_DIR)
+        file_path = upload_dir / f"{dataset_id}.csv"
+        if not file_path.exists():
+            raise ValueError(
+                f"Camera dataset '{dataset_id}' not found. "
+                "Please re-capture images and rebuild the dataset."
+            )
+
+        logger.info(f"Image Dataset node (camera): loading {dataset_id}")
+        df = pd.read_csv(file_path)
+
+        size_parts = (input_data.target_size or "28x28").lower().split("x")
+        width = int(size_parts[0]) if len(size_parts) > 0 else 28
+        height = int(size_parts[1]) if len(size_parts) > 1 else 28
+
+        label_col = "label"
+        if label_col not in df.columns:
+            raise ValueError(f"Camera dataset CSV is missing a 'label' column.")
+
+        unique_labels = sorted(df[label_col].unique())
+        n_classes = len(unique_labels)
+        if input_data.class_names:
+            class_names = [c.strip() for c in input_data.class_names.split(",") if c.strip()]
+            if len(class_names) != n_classes:
+                class_names = [str(lbl) for lbl in unique_labels]
+        else:
+            class_names = [str(lbl) for lbl in unique_labels]
+
+        dtypes = {col: str(dtype) for col, dtype in df.dtypes.items()}
+        memory_mb = df.memory_usage(deep=True).sum() / (1024 * 1024)
+
+        pixel_cols = [c for c in df.columns if c.startswith("pixel_")]
+        X = df[pixel_cols].values
+        y_arr = df[label_col].values
+        # remap labels to 0-based indices
+        label_to_idx = {lbl: i for i, lbl in enumerate(unique_labels)}
+        y = np.array([label_to_idx[lbl] for lbl in y_arr])
+
+        sample_images = self._generate_sample_images(X, y, class_names, width, height, 1)
+        class_distribution = self._generate_class_distribution(y, class_names)
+
+        return ImageDatasetOutput(
+            node_type=self.node_type,
+            execution_time_ms=0,
+            dataset_id=dataset_id,
+            filename=f"{dataset_id}.csv",
+            file_path=str(file_path),
+            storage_backend="local",
+            n_rows=len(df),
+            n_columns=len(df.columns),
+            columns=df.columns.tolist(),
+            dtypes=dtypes,
+            memory_usage_mb=round(memory_mb, 2),
+            image_width=width,
+            image_height=height,
+            n_channels=1,
+            n_classes=n_classes,
+            class_names=class_names,
+            dataset_label="Camera Capture Dataset",
+            sample_images=sample_images,
+            class_distribution=class_distribution,
+        )
+
+    async def _execute_builtin(self, input_data: ImageDatasetInput) -> ImageDatasetOutput:
+        """Load a built-in image dataset (MNIST, Digits, etc.)."""
         requested_name = input_data.dataset_name
         dataset_name = IMAGE_DATASET_ALIASES.get(requested_name, requested_name)
 

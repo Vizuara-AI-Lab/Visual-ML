@@ -62,6 +62,11 @@ class ImagePredictionsOutput(NodeOutput):
         None, description="Auto-generated quiz questions"
     )
 
+    # Pass-through for live testing tabs (Draw / Upload / Live Camera)
+    model_path: Optional[str] = Field(None, description="Path to saved model file (for live testing)")
+    image_width: Optional[int] = Field(None, description="Image width for model input")
+    image_height: Optional[int] = Field(None, description="Image height for model input")
+
 
 class ImagePredictionsNode(BaseNode):
     """
@@ -223,6 +228,9 @@ class ImagePredictionsNode(BaseNode):
                 confidence_distribution=confidence_distribution,
                 metrics_summary=metrics_summary,
                 quiz_questions=quiz_questions,
+                model_path=input_data.model_path,
+                image_width=width,
+                image_height=height,
             )
 
         except Exception as e:

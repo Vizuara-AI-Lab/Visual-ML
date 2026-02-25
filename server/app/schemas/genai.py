@@ -44,14 +44,10 @@ class NodeTypeEnum(str, Enum):
 
     LLM = "llm"
     SYSTEM_PROMPT = "system_prompt"
-    FEW_SHOT = "few_shot"
-    PROMPT_TEMPLATE = "prompt_template"
     TEXT_GENERATION = "text_generation"
     CHATBOT = "chatbot"
     RAG = "rag"
     IMAGE_GENERATION = "image_generation"
-    OUTPUT_PARSER = "output_parser"
-    MEMORY = "memory"
     CONDITIONAL = "conditional"
     AGGREGATOR = "aggregator"
 
@@ -152,72 +148,6 @@ class SystemPromptNodeConfig(BaseModel):
 
     systemRole: str = Field(..., description="System role (e.g., 'helpful assistant')")
     systemPrompt: str = Field(..., description="System instruction")
-
-
-class FewShotExample(BaseModel):
-    """Few-shot example pair."""
-
-    input: str = Field(..., description="Example input")
-    output: str = Field(..., description="Expected output")
-
-
-class FewShotNodeConfig(BaseModel):
-    """Few-shot examples node configuration."""
-
-    examples: List[FewShotExample] = Field(..., min_length=1)
-    prefix: Optional[str] = Field(
-        "Here are some examples:", description="Prefix text before examples"
-    )
-
-
-class PromptTemplateNodeConfig(BaseModel):
-    """Prompt template node configuration."""
-
-    template: str = Field(..., description="Template with {{variables}}")
-    variables: Dict[str, Any] = Field(default_factory=dict, description="Variable definitions")
-    allowMissingVars: bool = Field(False, description="Allow missing variables")
-    defaultValues: Optional[Dict[str, str]] = None
-
-
-class RAGNodeConfig(BaseModel):
-    """RAG node configuration."""
-
-    knowledgeBaseId: int = Field(..., description="Knowledge base ID")
-    topK: int = Field(5, ge=1, le=50, description="Number of chunks to retrieve")
-    scoreThreshold: float = Field(0.7, ge=0.0, le=1.0, description="Minimum similarity score")
-    contextTemplate: str = Field(
-        "Context:\n{context}\n\nQuestion: {query}", description="Template for injecting context"
-    )
-
-
-class ImageGenerationNodeConfig(BaseModel):
-    """Image generation node configuration."""
-
-    provider: str = Field("openai", description="openai, stable-diffusion")
-    model: str = Field("dall-e-3", description="Model name")
-    size: str = Field("1024x1024", description="Image size")
-    quality: str = Field("standard", description="standard or hd")
-    useOwnApiKey: bool = False
-    apiKeyRef: Optional[int] = None
-
-
-class OutputParserNodeConfig(BaseModel):
-    """Output parser node configuration."""
-
-    parserType: str = Field("json", description="json, regex, schema")
-    jsonSchema: Optional[Dict[str, Any]] = Field(None, description="JSON schema for validation")
-    regexPattern: Optional[str] = None
-    retryOnError: bool = Field(True, description="Retry with fix prompt on parse error")
-    maxRetries: int = Field(2, ge=0, le=5)
-
-
-class MemoryNodeConfig(BaseModel):
-    """Memory node configuration."""
-
-    sessionId: str = Field(..., description="Session identifier")
-    maxTurns: int = Field(10, ge=1, le=100, description="Max messages to keep")
-    summarizeMemory: bool = Field(False, description="Summarize old messages")
-    retrieveRelevant: bool = Field(False, description="Retrieve relevant past context")
 
 
 class NodeCreate(BaseModel):
@@ -325,8 +255,6 @@ class NodeExecutionResult(BaseModel):
     status: RunStatusEnum
     inputData: Optional[Dict[str, Any]]
     outputData: Optional[Dict[str, Any]]
-    tokensUsed: Optional[int]
-    costUSD: Optional[float]
     executionTimeMs: Optional[int]
     provider: Optional[str]
     model: Optional[str]
@@ -343,8 +271,6 @@ class PipelineRunResponse(BaseModel):
     pipelineId: int
     status: RunStatusEnum
     finalOutput: Optional[Dict[str, Any]]
-    totalTokensUsed: int
-    totalCostUSD: float
     executionTimeMs: Optional[int]
     error: Optional[str]
     startedAt: Optional[datetime]
@@ -361,106 +287,11 @@ class PipelineRunListItem(BaseModel):
     id: int
     runId: str
     status: RunStatusEnum
-    totalTokensUsed: int
-    totalCostUSD: float
     startedAt: Optional[datetime]
     completedAt: Optional[datetime]
 
     class Config:
         from_attributes = True
-
-
-# ========== Knowledge Base Schemas ==========
-
-
-class KnowledgeBaseCreate(BaseModel):
-    """Create knowledge base request."""
-
-    name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = None
-    embeddingModel: str = Field("text-embedding-ada-002")
-    chunkSize: int = Field(500, ge=100, le=2000)
-    chunkOverlap: int = Field(50, ge=0, le=500)
-    vectorStore: str = Field("chroma", description="chroma, pinecone, qdrant")
-
-
-class KnowledgeBaseUpdate(BaseModel):
-    """Update knowledge base request."""
-
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = None
-
-
-class KnowledgeBaseResponse(BaseModel):
-    """Knowledge base response."""
-
-    id: int
-    name: str
-    description: Optional[str]
-    studentId: int
-    embeddingModel: str
-    chunkSize: int
-    chunkOverlap: int
-    vectorStore: str
-    totalDocuments: int
-    totalChunks: int
-    indexedAt: Optional[datetime]
-    createdAt: datetime
-    updatedAt: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class DocumentUploadResponse(BaseModel):
-    """Document upload response."""
-
-    id: int
-    filename: str
-    fileType: Optional[str]
-    fileSize: Optional[int]
-    totalChunks: int
-    isIndexed: bool
-    uploadedAt: datetime
-
-
-class DocumentListItem(BaseModel):
-    """Document list item."""
-
-    id: int
-    filename: str
-    fileType: Optional[str]
-    fileSize: Optional[int]
-    totalChunks: int
-    isIndexed: bool
-    uploadedAt: datetime
-    indexedAt: Optional[datetime]
-
-
-class IndexKnowledgeBaseRequest(BaseModel):
-    """Index knowledge base request."""
-
-    forceReindex: bool = Field(False, description="Force re-indexing")
-
-
-class RetrievalResult(BaseModel):
-    """RAG retrieval result."""
-
-    documentId: int
-    filename: str
-    chunkIndex: int
-    content: str
-    score: float
-    metadata: Optional[Dict[str, Any]] = None
-
-
-class RAGQueryResponse(BaseModel):
-    """RAG query response."""
-
-    answer: str
-    sources: List[RetrievalResult]
-    totalTokens: int
-    costUSD: float
 
 
 # ========== API Secret Schemas ==========

@@ -231,8 +231,6 @@ class GenAIPipelineRun(Base):
     finalOutput = Column(JSON, nullable=True)  # Final result
 
     # Performance tracking
-    totalTokensUsed = Column(Integer, nullable=False, default=0)
-    totalCostUSD = Column(Float, nullable=False, default=0.0)
     executionTimeMs = Column(Integer, nullable=True)
 
     # Error handling
@@ -281,8 +279,6 @@ class GenAINodeExecution(Base):
     outputData = Column(JSON, nullable=True)
 
     # Performance metrics
-    tokensUsed = Column(Integer, nullable=True)
-    costUSD = Column(Float, nullable=True)
     executionTimeMs = Column(Integer, nullable=True)
 
     # Provider metadata (for LLM nodes)
@@ -304,122 +300,6 @@ class GenAINodeExecution(Base):
 
     def __repr__(self):
         return f"<GenAINodeExecution(id={self.id}, node={self.nodeId}, status={self.status})>"
-
-
-class KnowledgeBase(Base):
-    """
-    Knowledge Base model for RAG.
-    Stores document collections for retrieval.
-    """
-
-    __tablename__ = "knowledge_bases"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(255), nullable=False)
-    description = Column(Text, nullable=True)
-
-    # Owner
-    studentId = Column(
-        Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-
-    # Configuration
-    embeddingModel = Column(String(100), nullable=False, default="text-embedding-ada-002")
-    chunkSize = Column(Integer, nullable=False, default=500)
-    chunkOverlap = Column(Integer, nullable=False, default=50)
-    vectorStore = Column(String(50), nullable=False, default="chroma")  # chroma, pinecone, qdrant
-
-    # Metadata
-    totalDocuments = Column(Integer, nullable=False, default=0)
-    totalChunks = Column(Integer, nullable=False, default=0)
-    indexedAt = Column(DateTime, nullable=True)
-
-    # Timestamps
-    createdAt = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
-    updatedAt = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    # Relationships
-    documents = relationship(
-        "KnowledgeBaseDocument", back_populates="knowledge_base", cascade="all, delete-orphan"
-    )
-
-    def __repr__(self):
-        return f"<KnowledgeBase(id={self.id}, name='{self.name}', docs={self.totalDocuments})>"
-
-
-class KnowledgeBaseDocument(Base):
-    """
-    Knowledge Base Document model.
-    Individual documents within a knowledge base.
-    """
-
-    __tablename__ = "kb_documents"
-
-    id = Column(Integer, primary_key=True, index=True)
-    kbId = Column(
-        Integer, ForeignKey("knowledge_bases.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-
-    # Document metadata
-    filename = Column(String(500), nullable=False)
-    fileType = Column(String(50), nullable=True)  # pdf, txt, md, docx
-    fileSize = Column(Integer, nullable=True)  # bytes
-    filePath = Column(String(1000), nullable=True)  # Storage path
-
-    # Content
-    content = Column(Text, nullable=True)  # Raw text content
-    documentMetadata = Column(JSON, nullable=True)  # Custom metadata
-
-    # Processing
-    totalChunks = Column(Integer, nullable=False, default=0)
-    isIndexed = Column(Boolean, nullable=False, default=False)
-
-    # Timestamps
-    uploadedAt = Column(DateTime, nullable=False, default=datetime.utcnow)
-    indexedAt = Column(DateTime, nullable=True)
-
-    # Relationships
-    knowledge_base = relationship("KnowledgeBase", back_populates="documents")
-    chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
-
-    def __repr__(self):
-        return f"<KBDocument(id={self.id}, filename='{self.filename}')>"
-
-
-class DocumentChunk(Base):
-    """
-    Document Chunk model.
-    Chunked text segments with embeddings for retrieval.
-    """
-
-    __tablename__ = "document_chunks"
-
-    id = Column(Integer, primary_key=True, index=True)
-    documentId = Column(
-        Integer, ForeignKey("kb_documents.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-
-    # Chunk data
-    chunkIndex = Column(Integer, nullable=False)
-    content = Column(Text, nullable=False)
-
-    # Embedding (stored as JSON array or use pgvector)
-    embedding = Column(JSON, nullable=True)  # List of floats
-    embeddingModel = Column(String(100), nullable=True)
-
-    # Metadata
-    startChar = Column(Integer, nullable=True)
-    endChar = Column(Integer, nullable=True)
-    tokenCount = Column(Integer, nullable=True)
-
-    # Timestamps
-    createdAt = Column(DateTime, nullable=False, default=datetime.utcnow)
-
-    # Relationships
-    document = relationship("KnowledgeBaseDocument", back_populates="chunks")
-
-    def __repr__(self):
-        return f"<DocumentChunk(id={self.id}, doc={self.documentId}, idx={self.chunkIndex})>"
 
 
 class APISecret(Base):
@@ -461,41 +341,3 @@ class APISecret(Base):
         return f"<APISecret(id={self.id}, provider='{self.provider}', name='{self.name}')>"
 
 
-class ConversationMemory(Base):
-    """
-    Conversation Memory model.
-    Stores chat history for Memory nodes.
-    """
-
-    __tablename__ = "conversation_memory"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    # Session identification
-    sessionId = Column(String(255), nullable=False, index=True)
-    studentId = Column(
-        Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    pipelineId = Column(
-        Integer, ForeignKey("genai_pipelines.id", ondelete="CASCADE"), nullable=True, index=True
-    )
-
-    # Message data
-    role = Column(String(50), nullable=False)  # user, assistant, system
-    content = Column(Text, nullable=False)
-
-    # Metadata
-    messageMetadata = Column(JSON, nullable=True)  # Tokens, model, etc.
-    turnIndex = Column(Integer, nullable=False)  # Message order
-
-    # Memory management
-    isSummarized = Column(Boolean, nullable=False, default=False)
-    summaryId = Column(
-        Integer, ForeignKey("conversation_memory.id", ondelete="SET NULL"), nullable=True
-    )
-
-    # Timestamps
-    createdAt = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
-
-    def __repr__(self):
-        return f"<ConversationMemory(id={self.id}, session='{self.sessionId}', role='{self.role}')>"

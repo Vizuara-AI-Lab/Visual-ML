@@ -14,7 +14,6 @@ export type NodeType =
   | "preprocess"
   | "missing_value_handler"
   | "encoding"
-  | "transformation"
   | "split"
   | "feature_selection"
   | "scaling"
@@ -24,8 +23,6 @@ export type NodeType =
   | "random_forest"
   | "mlp_classifier"
   | "mlp_regressor"
-  | "train"
-  | "evaluate"
   // Result & Metrics nodes
   | "r2_score"
   | "mse_score"
@@ -39,18 +36,22 @@ export type NodeType =
   | "example_node"
   // Image pipeline nodes
   | "image_dataset"
-  | "camera_capture"
   | "image_preprocessing"
-  | "image_augmentation"
   | "image_split"
   | "cnn_classifier"
   | "image_predictions"
   // Activity nodes (standalone interactive learning)
+  | "activity_loss_functions"
+  | "activity_linear_regression"
   | "activity_gradient_descent"
-  | "activity_bias_variance"
-  | "activity_knn_playground"
-  | "activity_decision_boundary"
-  | "activity_neural_network";
+  | "activity_logistic_regression"
+  | "activity_kmeans_clustering"
+  | "activity_decision_tree"
+  | "activity_confusion_matrix"
+  | "activity_activation_functions"
+  | "activity_neural_network"
+  | "activity_backpropagation"
+  | "activity_cnn_filters";
 
 export type AlgorithmType = "linear_regression" | "logistic_regression" | "mlp_classifier" | "mlp_regressor";
 

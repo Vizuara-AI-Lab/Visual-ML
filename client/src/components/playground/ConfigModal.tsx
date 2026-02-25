@@ -17,8 +17,12 @@ import {
   BarChart,
   ScatterChart,
   PieChart,
+  Camera,
+  ImagePlus,
+  Trash2,
+  Loader2,
 } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { apiClient } from "../../lib/axios";
 import { CameraCapturePanel } from "./CameraCapturePanel";
 import { LiveCameraTestPanel } from "./LiveCameraTestPanel";
@@ -59,6 +63,445 @@ const SAMPLE_DATASETS: Record<
   student: { label: "Student Performance", description: "Predict student academic performance", rows: "395", cols: "33", task: "Regression" },
   linnerud: { label: "Linnerud", description: "Relate exercise to physiological measurements", rows: "20", cols: "6", task: "Multivariate" },
 };
+
+// --- Shared config fields for camera & upload modes ---
+function ImageClassConfig({
+  config,
+  onFieldChange,
+}: {
+  config: Record<string, unknown>;
+  onFieldChange: (name: string, value: unknown) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      {/* Class names input */}
+      <div className="space-y-1">
+        <label className="block text-sm font-medium text-gray-700">
+          Class Labels
+        </label>
+        <input
+          type="text"
+          value={(config.class_names as string) || ""}
+          onChange={(e) => onFieldChange("class_names", e.target.value)}
+          placeholder="e.g. rock, paper, scissors"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+        />
+        <p className="text-xs text-gray-400">
+          Comma-separated class names for your dataset
+        </p>
+      </div>
+
+      {/* Target size + images per class */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="block text-xs font-medium text-gray-600">
+            Image Size
+          </label>
+          <select
+            value={(config.target_size as string) || "28x28"}
+            onChange={(e) => onFieldChange("target_size", e.target.value)}
+            className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          >
+            <option value="8x8">8x8</option>
+            <option value="28x28">28x28</option>
+            <option value="32x32">32x32</option>
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="block text-xs font-medium text-gray-600">
+            Images / Class
+          </label>
+          <input
+            type="number"
+            min={5}
+            max={100}
+            value={Number(config.images_per_class) || 20}
+            onChange={(e) =>
+              onFieldChange("images_per_class", parseInt(e.target.value) || 20)
+            }
+            className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Upload images panel ---
+interface UploadedImage {
+  id: string;
+  file: File;
+  preview: string;
+  className: string;
+  pixels: number[];
+}
+
+function ImageUploadPanel({
+  config,
+  onDatasetReady,
+  isSubmitting,
+}: {
+  config: Record<string, unknown>;
+  onDatasetReady: (payload: {
+    class_names: string[];
+    target_size: string;
+    images_per_class: Record<string, number[][]>;
+  }) => void;
+  isSubmitting: boolean;
+}) {
+  const [images, setImages] = useState<UploadedImage[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const classNamesRaw = (config.class_names as string) || "";
+  const classNames = classNamesRaw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const targetSize = (config.target_size as string) || "28x28";
+  const [tw, th] = targetSize.split("x").map(Number);
+  const targetW = tw || 28;
+  const targetH = th || 28;
+
+  // Convert a File to grayscale pixels at target resolution
+  const processFile = useCallback(
+    (file: File, assignClass: string): Promise<UploadedImage> => {
+      return new Promise((resolve) => {
+        const img = new window.Image();
+        img.onload = () => {
+          // ML pixels at target resolution
+          const canvas = document.createElement("canvas");
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext("2d")!;
+          ctx.fillStyle = "#000";
+          ctx.fillRect(0, 0, targetW, targetH);
+          const side = Math.min(img.width, img.height);
+          const sx = (img.width - side) / 2;
+          const sy = (img.height - side) / 2;
+          ctx.drawImage(img, sx, sy, side, side, 0, 0, targetW, targetH);
+          const data = ctx.getImageData(0, 0, targetW, targetH).data;
+          const pxArr: number[] = [];
+          for (let i = 0; i < data.length; i += 4) {
+            pxArr.push(
+              Math.round(
+                0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2],
+              ),
+            );
+          }
+
+          // High-res preview
+          const prevCanvas = document.createElement("canvas");
+          const PREVIEW = 112;
+          prevCanvas.width = PREVIEW;
+          prevCanvas.height = PREVIEW;
+          const pctx = prevCanvas.getContext("2d")!;
+          pctx.imageSmoothingEnabled = true;
+          pctx.imageSmoothingQuality = "high";
+          pctx.drawImage(img, sx, sy, side, side, 0, 0, PREVIEW, PREVIEW);
+
+          URL.revokeObjectURL(img.src);
+          resolve({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            file,
+            preview: prevCanvas.toDataURL("image/png"),
+            className: assignClass,
+            pixels: pxArr,
+          });
+        };
+        img.src = URL.createObjectURL(file);
+      });
+    },
+    [targetW, targetH],
+  );
+
+  const handleFiles = useCallback(
+    async (files: FileList | null) => {
+      if (!files || files.length === 0 || classNames.length === 0) return;
+      const defaultClass = classNames[0];
+      const newImages: UploadedImage[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.type.startsWith("image/")) continue;
+        const processed = await processFile(file, defaultClass);
+        newImages.push(processed);
+      }
+      setImages((prev) => [...prev, ...newImages]);
+    },
+    [classNames, processFile],
+  );
+
+  const removeImage = useCallback((id: string) => {
+    setImages((prev) => prev.filter((img) => img.id !== id));
+  }, []);
+
+  const changeImageClass = useCallback(
+    (id: string, newClass: string) => {
+      setImages((prev) =>
+        prev.map((img) =>
+          img.id === id ? { ...img, className: newClass } : img,
+        ),
+      );
+    },
+    [],
+  );
+
+  const handleBuildDataset = useCallback(() => {
+    if (classNames.length === 0 || images.length === 0) return;
+    // Group pixels by class
+    const imagesPerClass: Record<string, number[][]> = {};
+    for (const cls of classNames) {
+      imagesPerClass[cls] = images
+        .filter((img) => img.className === cls)
+        .map((img) => img.pixels);
+    }
+    onDatasetReady({
+      class_names: classNames,
+      target_size: targetSize,
+      images_per_class: imagesPerClass,
+    });
+  }, [classNames, images, targetSize, onDatasetReady]);
+
+  // Count per class
+  const classCounts: Record<string, number> = {};
+  for (const cls of classNames) {
+    classCounts[cls] = images.filter((img) => img.className === cls).length;
+  }
+  const minRequired = Number(config.images_per_class) || 5;
+  const allReady =
+    classNames.length > 0 &&
+    classNames.every((cls) => (classCounts[cls] || 0) >= minRequired);
+
+  if (classNames.length === 0) {
+    return (
+      <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-6 text-center">
+        <ImagePlus className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+        <p className="text-sm font-medium text-slate-500">
+          Enter class labels above first
+        </p>
+        <p className="text-xs text-slate-400 mt-1">
+          e.g. rock, paper, scissors
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Class counts summary */}
+      <div className="flex flex-wrap gap-2">
+        {classNames.map((cls) => {
+          const count = classCounts[cls] || 0;
+          const enough = count >= minRequired;
+          return (
+            <div
+              key={cls}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${
+                enough
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                  : "bg-amber-50 border-amber-200 text-amber-700"
+              }`}
+            >
+              {cls}: {count}/{minRequired}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Drop zone */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          handleFiles(e.dataTransfer.files);
+        }}
+        onClick={() => fileInputRef.current?.click()}
+        className={`rounded-xl border-2 border-dashed p-5 text-center cursor-pointer transition-colors ${
+          dragOver
+            ? "border-purple-400 bg-purple-50"
+            : "border-slate-300 bg-slate-50 hover:border-purple-300 hover:bg-purple-50/30"
+        }`}
+      >
+        <Upload
+          className={`w-8 h-8 mx-auto mb-2 ${dragOver ? "text-purple-500" : "text-slate-400"}`}
+        />
+        <p className="text-sm font-medium text-slate-600">
+          Drop images here or click to browse
+        </p>
+        <p className="text-xs text-slate-400 mt-0.5">
+          PNG, JPG — multiple files supported
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => handleFiles(e.target.files)}
+        />
+      </div>
+
+      {/* Image grid */}
+      {images.length > 0 && (
+        <div className="grid grid-cols-4 gap-2 max-h-[240px] overflow-y-auto pr-1">
+          {images.map((img) => (
+            <div
+              key={img.id}
+              className="relative group rounded-lg border border-slate-200 overflow-hidden bg-black"
+            >
+              <img
+                src={img.preview}
+                alt={img.file.name}
+                className="w-full aspect-square object-cover"
+              />
+              {/* Class selector overlay */}
+              <select
+                value={img.className}
+                onChange={(e) => changeImageClass(img.id, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] px-1 py-0.5 border-0 outline-none cursor-pointer"
+              >
+                {classNames.map((cls) => (
+                  <option key={cls} value={cls}>
+                    {cls}
+                  </option>
+                ))}
+              </select>
+              {/* Delete button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeImage(img.id);
+                }}
+                className="absolute top-0.5 right-0.5 p-0.5 bg-red-500 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <Trash2 className="w-2.5 h-2.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Build dataset button */}
+      <button
+        onClick={handleBuildDataset}
+        disabled={!allReady || isSubmitting}
+        className="w-full flex items-center justify-center gap-2 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg text-sm font-semibold transition-colors"
+      >
+        {isSubmitting ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <CheckCircle2 className="w-4 h-4" />
+        )}
+        {isSubmitting ? "Building Dataset…" : "Build Dataset"}
+      </button>
+
+      {!allReady && images.length > 0 && (
+        <p className="text-xs text-amber-600 text-center">
+          Upload at least {minRequired} images per class to build the dataset
+        </p>
+      )}
+    </div>
+  );
+}
+
+// --- Merged Image Dataset config block (built-in dataset, camera, or upload) ---
+function ImageDatasetConfigBlock({
+  config,
+  onFieldChange,
+  onDatasetReady,
+  isSubmitting,
+}: {
+  config: Record<string, unknown>;
+  onFieldChange: (name: string, value: unknown) => void;
+  onDatasetReady: (payload: {
+    class_names: string[];
+    target_size: string;
+    images_per_class: Record<string, number[][]>;
+  }) => void;
+  isSubmitting: boolean;
+}) {
+  const source = (config.source as string) || "builtin";
+
+  return (
+    <div className="space-y-4">
+      {/* Source toggle — 3 buttons */}
+      <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+        <button
+          onClick={() => onFieldChange("source", "builtin")}
+          className={`flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+            source === "builtin"
+              ? "bg-purple-600 text-white"
+              : "bg-white text-gray-600 hover:bg-gray-50"
+          }`}
+        >
+          <Database className="w-3.5 h-3.5" />
+          Dataset
+        </button>
+        <button
+          onClick={() => onFieldChange("source", "camera")}
+          className={`flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 border-l border-gray-200 ${
+            source === "camera"
+              ? "bg-purple-600 text-white"
+              : "bg-white text-gray-600 hover:bg-gray-50"
+          }`}
+        >
+          <Camera className="w-3.5 h-3.5" />
+          Camera
+        </button>
+        <button
+          onClick={() => onFieldChange("source", "upload")}
+          className={`flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 border-l border-gray-200 ${
+            source === "upload"
+              ? "bg-purple-600 text-white"
+              : "bg-white text-gray-600 hover:bg-gray-50"
+          }`}
+        >
+          <ImagePlus className="w-3.5 h-3.5" />
+          Upload
+        </button>
+      </div>
+
+      {source === "builtin" ? (
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">Dataset</label>
+          <select
+            value={(config.dataset_name as string) || "digits_8x8"}
+            onChange={(e) => onFieldChange("dataset_name", e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          >
+            <option value="digits_8x8">Digits (8x8, 10 classes)</option>
+            <option value="mnist_28x28">MNIST (28x28, 10 classes)</option>
+            <option value="fashion_mnist">Fashion-MNIST (28x28, 10 classes)</option>
+          </select>
+        </div>
+      ) : source === "camera" ? (
+        <div className="space-y-3">
+          <ImageClassConfig config={config} onFieldChange={onFieldChange} />
+          <CameraCapturePanel
+            config={config}
+            onDatasetReady={onDatasetReady}
+            isSubmitting={isSubmitting}
+          />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <ImageClassConfig config={config} onFieldChange={onFieldChange} />
+          <ImageUploadPanel
+            config={config}
+            onDatasetReady={onDatasetReady}
+            isSubmitting={isSubmitting}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface ConfigModalProps {
   nodeId: string | null;
@@ -119,7 +562,6 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
       "chart_view",
       "missing_value_handler",
       "encoding",
-      "transformation",
       "scaling",
       "feature_selection",
       "split",
@@ -395,7 +837,6 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
       // Define preprocessing nodes where config.columns is a SELECTION, not all available columns
       const preprocessingNodesWithColumnSelection = [
         "scaling",
-        "transformation",
         "feature_selection",
       ];
 
@@ -466,7 +907,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
         }
       }
 
-      // Priority 5: Check result.final_columns (for transformation/scaling nodes)
+      // Priority 5: Check result.final_columns (for scaling nodes)
       if (
         sourceResult?.final_columns &&
         Array.isArray(sourceResult.final_columns)
@@ -1659,19 +2100,12 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                 onFieldChange={handleFieldChange}
                 connectedSourceNode={connectedSourceNode}
               />
-            ) : node.type === "camera_capture" ? (
-              <CameraCaptureConfigBlock
+            ) : node.type === "image_dataset" ? (
+              <ImageDatasetConfigBlock
                 config={config}
-                onDatasetReady={(payload) => {
-                  buildCameraDataset(payload);
-                }}
-                isSubmitting={buildingDataset}
-              />
-            ) : node.type === "image_predictions" ? (
-              <ImagePredictionsConfigBlock
-                config={config}
-                connectedSourceNode={connectedSourceNode}
                 onFieldChange={handleFieldChange}
+                onDatasetReady={buildCameraDataset}
+                isSubmitting={buildingDataset}
               />
             ) : nodeDef.configFields && nodeDef.configFields.length > 0 ? (
               <div className="space-y-4">

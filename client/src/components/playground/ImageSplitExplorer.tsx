@@ -351,13 +351,13 @@ function SplitRatiosTab({ data }: { data: any }) {
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
             <div className="text-xs text-green-500">Training Images</div>
             <div className="text-2xl font-bold text-green-700">
-              {data.train_count.toLocaleString()}
+              {(data.train_count ?? 0).toLocaleString()}
             </div>
           </div>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
             <div className="text-xs text-blue-500">Test Images</div>
             <div className="text-2xl font-bold text-blue-700">
-              {data.test_count.toLocaleString()}
+              {(data.test_count ?? 0).toLocaleString()}
             </div>
           </div>
         </div>

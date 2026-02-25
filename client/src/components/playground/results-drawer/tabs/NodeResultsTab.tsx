@@ -6,34 +6,20 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  Lightbulb,
 } from "lucide-react";
 import { type Node } from "@xyflow/react";
 import type { BaseNodeData } from "../../../../types/pipeline";
 import type { PipelineExecutionResult } from "../../../../store/playgroundStore";
+import {
+  getFriendlyMessage,
+  getErrorSuggestion,
+  getTechnicalDetail,
+} from "../../../../utils/errorFormatter";
 
 interface NodeResultsTabProps {
   executionResult: PipelineExecutionResult;
   nodes: Node<BaseNodeData>[];
-}
-
-function getErrorMessage(error: unknown): string {
-  if (typeof error === "string") return error;
-  if (error && typeof error === "object") {
-    const errorObj = error as Record<string, unknown>;
-    if (errorObj.details && typeof errorObj.details === "object") {
-      const details = errorObj.details as Record<string, unknown>;
-      if (details.reason && typeof details.reason === "string")
-        return details.reason;
-    }
-    if (errorObj.message && typeof errorObj.message === "string") {
-      const match = errorObj.message.match(/\[.*?\]: (.+)/);
-      return match ? match[1] : errorObj.message;
-    }
-    if (errorObj.error && typeof errorObj.error === "string")
-      return errorObj.error;
-    return JSON.stringify(error);
-  }
-  return "Unknown error";
 }
 
 function NodeResultCard({
@@ -141,11 +127,35 @@ function NodeResultCard({
 
         {/* Error */}
         {result.error && (
-          <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-            <span className="text-sm text-red-700">
-              {getErrorMessage(result.error)}
-            </span>
+          <div className="space-y-2">
+            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+              <span className="text-sm text-red-700">
+                {getFriendlyMessage(result.error)}
+              </span>
+            </div>
+
+            {/* Suggestion */}
+            {getErrorSuggestion(result.error) && (
+              <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <Lightbulb className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <span className="text-sm text-blue-700">
+                  {getErrorSuggestion(result.error)}
+                </span>
+              </div>
+            )}
+
+            {/* Technical details (collapsible) */}
+            {getTechnicalDetail(result.error) && (
+              <details className="text-xs">
+                <summary className="cursor-pointer text-slate-500 hover:text-slate-700">
+                  Show technical details
+                </summary>
+                <pre className="mt-1 p-2 bg-slate-50 border border-slate-200 rounded text-slate-600 overflow-x-auto whitespace-pre-wrap">
+                  {getTechnicalDetail(result.error)}
+                </pre>
+              </details>
+            )}
           </div>
         )}
 

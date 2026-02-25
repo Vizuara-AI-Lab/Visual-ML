@@ -33,7 +33,7 @@ export interface PipelineExecutionResult {
   pipeline_name?: string;
   nodeResults?: Record<
     string,
-    { success: boolean; output?: unknown; error?: string }
+    { success: boolean; output?: unknown; error?: unknown }
   >;
   metrics?: Record<string, number | string>;
   error?: string;
@@ -79,7 +79,7 @@ interface PlaygroundStore {
   setAllNodesPending: (nodeIds: string[]) => void;
   clearExecutionStatus: () => void;
   animateEdgesForNode: (nodeId: string) => void;
-  addNodeResult: (nodeId: string, result: { success: boolean; output?: unknown; error?: string }) => void;
+  addNodeResult: (nodeId: string, result: { success: boolean; output?: unknown; error?: unknown }) => void;
 
   // Project state
   currentProjectId: string | null;

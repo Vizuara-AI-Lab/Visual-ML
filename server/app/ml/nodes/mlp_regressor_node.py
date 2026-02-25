@@ -41,16 +41,16 @@ class MLPRegressorInput(NodeInput):
     activation: str = Field("relu", description="Activation function: relu, tanh, logistic")
 
     # Training
-    solver: str = Field("adam", description="Optimizer: adam, sgd, lbfgs")
-    max_iter: int = Field(200, description="Maximum training iterations")
-    learning_rate_init: float = Field(0.001, description="Initial learning rate")
-    alpha: float = Field(0.0001, description="L2 regularization strength")
-    batch_size: str = Field("auto", description="Mini-batch size ('auto' or integer)")
+    solver: Optional[str] = Field("adam", description="Optimizer: adam, sgd, lbfgs")
+    max_iter: Optional[int] = Field(200, description="Maximum training iterations")
+    learning_rate_init: Optional[float] = Field(0.001, description="Initial learning rate")
+    alpha: Optional[float] = Field(0.0001, description="L2 regularization strength")
+    batch_size: Optional[str] = Field("auto", description="Mini-batch size ('auto' or integer)")
 
     # Early stopping
-    early_stopping: bool = Field(True, description="Stop training when validation score plateaus")
+    early_stopping: Optional[bool] = Field(True, description="Stop training when validation score plateaus")
 
-    random_state: int = Field(42, description="Random seed for reproducibility")
+    random_state: Optional[int] = Field(42, description="Random seed for reproducibility")
 
 
 class MLPRegressorOutput(NodeOutput):
@@ -87,6 +87,9 @@ class MLPRegressorOutput(NodeOutput):
     )
     prediction_playground: Optional[Dict[str, Any]] = Field(
         None, description="Data for interactive prediction playground"
+    )
+    metric_explainer: Optional[Dict[str, Any]] = Field(
+        None, description="Metric explanation cards with analogies"
     )
     quiz_questions: Optional[List[Dict[str, Any]]] = Field(
         None, description="Auto-generated quiz questions about neural networks"
@@ -242,9 +245,55 @@ class MLPRegressorNode(BaseNode):
                     f"Please encode categorical variables before training."
                 )
 
-            # Parse architecture config
-            hidden_layer_sizes = self._parse_hidden_layers(input_data.hidden_layer_sizes)
-            batch_size = self._parse_batch_size(input_data.batch_size)
+            # Handle NaN/None values — MLP requires clean numeric data
+            nan_count = int(X_train.isna().sum().sum())
+            if nan_count > 0:
+                logger.warning(
+                    f"Found {nan_count} NaN values in features. Dropping rows with NaN."
+                )
+                combined = pd.concat([X_train, y_train], axis=1)
+                combined = combined.dropna()
+                X_train = combined.drop(columns=[input_data.target_column])
+                y_train = combined[input_data.target_column]
+                logger.info(f"After dropping NaN: {len(X_train)} samples remain")
+
+                if len(X_train) < 10:
+                    raise ValueError(
+                        f"Only {len(X_train)} samples remain after removing NaN values. "
+                        f"Need at least 10. Please handle missing values before training."
+                    )
+
+            # Ensure numeric dtype (convert nullable Int64/Float64 to standard numpy types)
+            X_train = X_train.apply(pd.to_numeric, errors="coerce").astype(np.float64)
+            y_train = pd.to_numeric(y_train, errors="coerce").astype(np.float64)
+
+            # Re-check for NaN after numeric conversion (to_numeric can introduce new NaN)
+            new_nan_count = int(X_train.isna().sum().sum()) + int(y_train.isna().sum())
+            if new_nan_count > 0:
+                logger.warning(
+                    f"Found {new_nan_count} new NaN values after numeric conversion. Dropping rows."
+                )
+                combined = pd.concat([X_train, y_train], axis=1)
+                combined = combined.dropna()
+                X_train = combined.drop(columns=[input_data.target_column])
+                y_train = combined[input_data.target_column]
+                logger.info(f"After post-conversion cleanup: {len(X_train)} samples remain")
+
+                if len(X_train) < 10:
+                    raise ValueError(
+                        f"Only {len(X_train)} samples remain after cleaning. Need at least 10."
+                    )
+
+            # Parse architecture config with None-safe defaults
+            hidden_layer_sizes = self._parse_hidden_layers(input_data.hidden_layer_sizes or "100")
+            batch_size = self._parse_batch_size(input_data.batch_size or "auto")
+            activation = input_data.activation or "relu"
+            solver = input_data.solver or "adam"
+            max_iter = input_data.max_iter if input_data.max_iter is not None else 200
+            learning_rate_init = input_data.learning_rate_init if input_data.learning_rate_init is not None else 0.001
+            alpha = input_data.alpha if input_data.alpha is not None else 0.0001
+            early_stopping = input_data.early_stopping if input_data.early_stopping is not None else True
+            random_state = input_data.random_state if input_data.random_state is not None else 42
 
             logger.info(
                 f"MLP Architecture: input={X_train.shape[1]} → "
@@ -254,18 +303,18 @@ class MLPRegressorNode(BaseNode):
             # Initialize and train model
             model = MLPRegressor(
                 hidden_layer_sizes=hidden_layer_sizes,
-                activation=input_data.activation,
-                solver=input_data.solver,
-                max_iter=input_data.max_iter,
-                learning_rate_init=input_data.learning_rate_init,
-                alpha=input_data.alpha,
+                activation=activation,
+                solver=solver,
+                max_iter=max_iter,
+                learning_rate_init=learning_rate_init,
+                alpha=alpha,
                 batch_size=batch_size,
-                early_stopping=input_data.early_stopping,
-                random_state=input_data.random_state,
+                early_stopping=early_stopping,
+                random_state=random_state,
             )
 
             training_start = datetime.utcnow()
-            training_metadata = model.train(X_train, y_train, validate=True)
+            training_metadata = model.train(X_train, y_train, validate=False)
             training_time = (datetime.utcnow() - training_start).total_seconds()
 
             # Generate model ID
@@ -306,6 +355,14 @@ class MLPRegressorNode(BaseNode):
             except Exception as e:
                 logger.warning(f"Prediction playground generation failed: {e}")
 
+            metric_explainer = None
+            try:
+                metric_explainer = self._generate_metric_explainer(
+                    metrics, len(X_train), input_data.target_column
+                )
+            except Exception as e:
+                logger.warning(f"Metric explainer generation failed: {e}")
+
             quiz_questions = None
             try:
                 quiz_questions = self._generate_mlp_regressor_quiz(
@@ -332,6 +389,7 @@ class MLPRegressorNode(BaseNode):
                 n_iterations=training_metadata.get("n_iter", 0),
                 loss_curve_analysis=loss_curve_analysis,
                 prediction_playground=prediction_playground,
+                metric_explainer=metric_explainer,
                 quiz_questions=quiz_questions,
             )
 
@@ -342,6 +400,60 @@ class MLPRegressorNode(BaseNode):
             )
 
     # --- Learning Activity Helpers ---
+
+    def _generate_metric_explainer(
+        self, metrics: Dict, n_samples: int, target_column: str
+    ) -> Dict[str, Any]:
+        """Metric explanation cards with real values and analogies for regression."""
+        explanations = []
+
+        r2 = metrics.get("r2")
+        if r2 is not None:
+            explanations.append({
+                "metric": "R² Score",
+                "value": round(float(r2), 4),
+                "value_pct": round(float(r2) * 100, 1),
+                "color": "green" if r2 >= 0.8 else "yellow" if r2 >= 0.5 else "red",
+                "analogy": f"The neural network explains {round(float(r2) * 100, 1)}% of the variation in '{target_column}'.",
+                "when_useful": "Shows how well the model captures the overall pattern. 1.0 is perfect, 0 is no better than predicting the mean.",
+            })
+        mae = metrics.get("mae")
+        if mae is not None:
+            explanations.append({
+                "metric": "MAE",
+                "value": round(float(mae), 4),
+                "value_pct": None,
+                "color": "blue",
+                "analogy": f"On average, predictions are off by {round(float(mae), 2)} units.",
+                "when_useful": "Easy to interpret — the average error in the same units as the target.",
+            })
+        mse = metrics.get("mse")
+        if mse is not None:
+            explanations.append({
+                "metric": "MSE",
+                "value": round(float(mse), 4),
+                "value_pct": None,
+                "color": "orange",
+                "analogy": f"Average squared error is {round(float(mse), 2)}. Larger errors are penalized more heavily.",
+                "when_useful": "Used as the loss function during training. Penalizes large errors disproportionately.",
+            })
+        rmse = metrics.get("rmse")
+        if rmse is not None:
+            explanations.append({
+                "metric": "RMSE",
+                "value": round(float(rmse), 4),
+                "value_pct": None,
+                "color": "purple",
+                "analogy": f"Typical prediction error is about {round(float(rmse), 2)} units.",
+                "when_useful": "Like MAE but more sensitive to outliers. Same units as the target.",
+            })
+
+        return {
+            "metrics": explanations,
+            "task_type": "regression",
+            "n_samples": n_samples,
+            "target_column": target_column,
+        }
 
     def _generate_loss_curve_analysis(
         self, loss_curve: list, validation_scores: list, n_iter: int, max_iter: int

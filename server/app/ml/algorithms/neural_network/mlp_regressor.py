@@ -106,9 +106,19 @@ class MLPRegressor:
             self.feature_names = X.columns.tolist()
             self.target_name = y.name if hasattr(y, "name") else "target"
 
-            # Convert to numpy for training
-            X_array = X.values
-            y_array = y.values
+            # Convert to numpy for training — ensure no Python None values remain
+            X_array = np.asarray(X.values, dtype=np.float64)
+            y_array = np.asarray(y.values, dtype=np.float64)
+
+            # Safety check: ensure no NaN in features or target
+            nan_mask = np.isnan(X_array).any(axis=1) | np.isnan(y_array)
+            if nan_mask.any():
+                X_array = X_array[~nan_mask]
+                y_array = y_array[~nan_mask]
+                logger.warning(
+                    f"Dropped {nan_mask.sum()} rows with NaN during final cleanup. "
+                    f"{len(X_array)} samples remain."
+                )
 
             # Train model
             start_time = datetime.utcnow()
@@ -119,15 +129,15 @@ class MLPRegressor:
             y_pred = self.model.predict(X_array)
             metrics = self._calculate_metrics(y_array, y_pred)
 
-            # Extract loss curve for visualization
+            # Extract loss curve for visualization (guard against None values)
             loss_curve = []
             if hasattr(self.model, "loss_curve_") and self.model.loss_curve_:
-                loss_curve = [float(l) for l in self.model.loss_curve_]
+                loss_curve = [float(l) for l in self.model.loss_curve_ if l is not None]
 
             # Extract validation scores if early_stopping was used
             validation_scores = []
             if hasattr(self.model, "validation_scores_") and self.model.validation_scores_:
-                validation_scores = [float(s) for s in self.model.validation_scores_]
+                validation_scores = [float(s) for s in self.model.validation_scores_ if s is not None]
 
             # Build architecture description
             hidden_layers = list(self.model.hidden_layer_sizes) if hasattr(
@@ -152,7 +162,7 @@ class MLPRegressor:
                 "training_time_seconds": training_time,
                 "timestamp": datetime.utcnow().isoformat(),
                 "n_iter": self.model.n_iter_,
-                "best_loss": float(self.model.best_loss_) if hasattr(self.model, "best_loss_") else None,
+                "best_loss": float(self.model.best_loss_) if hasattr(self.model, "best_loss_") and self.model.best_loss_ is not None else None,
                 "hyperparameters": {
                     "hidden_layer_sizes": hidden_layers,
                     "activation": self.model.activation,

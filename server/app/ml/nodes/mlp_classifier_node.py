@@ -44,16 +44,16 @@ class MLPClassifierInput(NodeInput):
     activation: str = Field("relu", description="Activation function: relu, tanh, logistic")
 
     # Training
-    solver: str = Field("adam", description="Optimizer: adam, sgd, lbfgs")
-    max_iter: int = Field(200, description="Maximum training iterations")
-    learning_rate_init: float = Field(0.001, description="Initial learning rate")
-    alpha: float = Field(0.0001, description="L2 regularization strength")
-    batch_size: str = Field("auto", description="Mini-batch size ('auto' or integer)")
+    solver: Optional[str] = Field("adam", description="Optimizer: adam, sgd, lbfgs")
+    max_iter: Optional[int] = Field(200, description="Maximum training iterations")
+    learning_rate_init: Optional[float] = Field(0.001, description="Initial learning rate")
+    alpha: Optional[float] = Field(0.0001, description="L2 regularization strength")
+    batch_size: Optional[str] = Field("auto", description="Mini-batch size ('auto' or integer)")
 
     # Early stopping
-    early_stopping: bool = Field(True, description="Stop training when validation score plateaus")
+    early_stopping: Optional[bool] = Field(True, description="Stop training when validation score plateaus")
 
-    random_state: int = Field(42, description="Random seed for reproducibility")
+    random_state: Optional[int] = Field(42, description="Random seed for reproducibility")
 
 
 class MLPClassifierOutput(NodeOutput):
@@ -98,6 +98,9 @@ class MLPClassifierOutput(NodeOutput):
     )
     loss_curve_analysis: Optional[Dict[str, Any]] = Field(
         None, description="Loss curve analysis for learning"
+    )
+    metric_explainer: Optional[Dict[str, Any]] = Field(
+        None, description="Metric explanation cards with analogies"
     )
     quiz_questions: Optional[List[Dict[str, Any]]] = Field(
         None, description="Auto-generated quiz questions about neural networks"
@@ -273,9 +276,57 @@ class MLPClassifierNode(BaseNode):
                     f"Please encode categorical variables before training."
                 )
 
-            # Parse architecture config
-            hidden_layer_sizes = self._parse_hidden_layers(input_data.hidden_layer_sizes)
-            batch_size = self._parse_batch_size(input_data.batch_size)
+            # Handle NaN/None values — MLP requires clean numeric data
+            nan_count = int(X_train.isna().sum().sum())
+            if nan_count > 0:
+                logger.warning(
+                    f"Found {nan_count} NaN values in features. Dropping rows with NaN."
+                )
+                combined = pd.concat([X_train, y_train], axis=1)
+                combined = combined.dropna()
+                X_train = combined.drop(columns=[input_data.target_column])
+                y_train = combined[input_data.target_column]
+                logger.info(f"After dropping NaN: {len(X_train)} samples remain")
+
+                if len(X_train) < 10:
+                    raise ValueError(
+                        f"Only {len(X_train)} samples remain after removing NaN values. "
+                        f"Need at least 10. Please handle missing values before training."
+                    )
+
+            # Ensure numeric dtype (convert nullable Int64/Float64 to standard numpy types)
+            X_train = X_train.apply(pd.to_numeric, errors="coerce").astype(np.float64)
+
+            # Re-check for NaN after numeric conversion (to_numeric can introduce new NaN)
+            new_nan_count = int(X_train.isna().sum().sum())
+            if new_nan_count > 0:
+                logger.warning(
+                    f"Found {new_nan_count} new NaN values after numeric conversion. Dropping rows."
+                )
+                combined = pd.concat([X_train, y_train], axis=1)
+                combined = combined.dropna()
+                X_train = combined.drop(columns=[input_data.target_column])
+                y_train = combined[input_data.target_column]
+                logger.info(f"After post-conversion cleanup: {len(X_train)} samples remain")
+
+                if len(X_train) < 10:
+                    raise ValueError(
+                        f"Only {len(X_train)} samples remain after cleaning. Need at least 10."
+                    )
+
+            # Ensure y_train has no None/NaN values
+            y_train = y_train.dropna()
+
+            # Parse architecture config with None-safe defaults
+            hidden_layer_sizes = self._parse_hidden_layers(input_data.hidden_layer_sizes or "100")
+            batch_size = self._parse_batch_size(input_data.batch_size or "auto")
+            activation = input_data.activation or "relu"
+            solver = input_data.solver or "adam"
+            max_iter = input_data.max_iter if input_data.max_iter is not None else 200
+            learning_rate_init = input_data.learning_rate_init if input_data.learning_rate_init is not None else 0.001
+            alpha = input_data.alpha if input_data.alpha is not None else 0.0001
+            early_stopping = input_data.early_stopping if input_data.early_stopping is not None else True
+            random_state = input_data.random_state if input_data.random_state is not None else 42
 
             logger.info(
                 f"MLP Architecture: input={X_train.shape[1]} → "
@@ -285,18 +336,18 @@ class MLPClassifierNode(BaseNode):
             # Initialize and train model
             model = MLPClassifier(
                 hidden_layer_sizes=hidden_layer_sizes,
-                activation=input_data.activation,
-                solver=input_data.solver,
-                max_iter=input_data.max_iter,
-                learning_rate_init=input_data.learning_rate_init,
-                alpha=input_data.alpha,
+                activation=activation,
+                solver=solver,
+                max_iter=max_iter,
+                learning_rate_init=learning_rate_init,
+                alpha=alpha,
                 batch_size=batch_size,
-                early_stopping=input_data.early_stopping,
-                random_state=input_data.random_state,
+                early_stopping=early_stopping,
+                random_state=random_state,
             )
 
             training_start = datetime.utcnow()
-            training_metadata = model.train(X_train, y_train, validate=True)
+            training_metadata = model.train(X_train, y_train, validate=False)
             training_time = (datetime.utcnow() - training_start).total_seconds()
 
             # Generate model ID
@@ -337,6 +388,14 @@ class MLPClassifierNode(BaseNode):
             except Exception as e:
                 logger.warning(f"Loss curve analysis generation failed: {e}")
 
+            metric_explainer = None
+            try:
+                metric_explainer = self._generate_metric_explainer(
+                    metrics, "classification", len(X_train), input_data.target_column
+                )
+            except Exception as e:
+                logger.warning(f"Metric explainer generation failed: {e}")
+
             quiz_questions = None
             try:
                 quiz_questions = self._generate_mlp_quiz(
@@ -367,6 +426,7 @@ class MLPClassifierNode(BaseNode):
                 n_iterations=training_metadata.get("n_iter", 0),
                 class_distribution=class_distribution,
                 loss_curve_analysis=loss_curve_analysis,
+                metric_explainer=metric_explainer,
                 quiz_questions=quiz_questions,
             )
 
@@ -377,6 +437,62 @@ class MLPClassifierNode(BaseNode):
             )
 
     # --- Learning Activity Helpers ---
+
+    def _generate_metric_explainer(
+        self, metrics: Dict, task_type: str, n_samples: int, target_column: str
+    ) -> Dict[str, Any]:
+        """Metric explanation cards with real values and analogies."""
+        explanations = []
+
+        acc = metrics.get("accuracy")
+        if acc is not None:
+            correct = int(acc * n_samples)
+            wrong = n_samples - correct
+            explanations.append({
+                "metric": "Accuracy",
+                "value": round(float(acc), 4),
+                "value_pct": round(float(acc) * 100, 1),
+                "color": "green" if acc >= 0.8 else "yellow" if acc >= 0.6 else "red",
+                "analogy": f"Out of {n_samples} predictions, {correct} were correct and {wrong} were wrong.",
+                "when_useful": "Good for balanced datasets where all classes are equally important.",
+            })
+        prec = metrics.get("precision")
+        if prec is not None:
+            explanations.append({
+                "metric": "Precision",
+                "value": round(float(prec), 4),
+                "value_pct": round(float(prec) * 100, 1),
+                "color": "blue",
+                "analogy": f"When the neural network says 'positive', it's right {round(float(prec) * 100, 1)}% of the time.",
+                "when_useful": "Important when false positives are costly (e.g., spam detection).",
+            })
+        rec = metrics.get("recall")
+        if rec is not None:
+            explanations.append({
+                "metric": "Recall",
+                "value": round(float(rec), 4),
+                "value_pct": round(float(rec) * 100, 1),
+                "color": "orange",
+                "analogy": f"Of all actual positives, the neural network catches {round(float(rec) * 100, 1)}%.",
+                "when_useful": "Critical when missing positives is dangerous (e.g., disease detection).",
+            })
+        f1 = metrics.get("f1")
+        if f1 is not None:
+            explanations.append({
+                "metric": "F1 Score",
+                "value": round(float(f1), 4),
+                "value_pct": round(float(f1) * 100, 1),
+                "color": "purple",
+                "analogy": "The harmonic mean of precision and recall — a single balanced score.",
+                "when_useful": "Best when you need a balance between precision and recall.",
+            })
+
+        return {
+            "metrics": explanations,
+            "task_type": task_type,
+            "n_samples": n_samples,
+            "target_column": target_column,
+        }
 
     def _generate_class_distribution(
         self, y_train: pd.Series, class_names: list, target_column: str

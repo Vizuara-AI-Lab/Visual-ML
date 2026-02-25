@@ -11,9 +11,6 @@ import time
 from app.ml.nodes.genai import (
     LLMNode,
     SystemPromptNode,
-    FewShotNode,
-    MemoryNode,
-    OutputParserNode,
     ChatbotNode,
     ExampleNode,
 )
@@ -50,9 +47,6 @@ class GenAIPipelineEngine:
     NODE_REGISTRY: Dict[str, type[GenAIBaseNode]] = {
         "llm": LLMNode,
         "system_prompt": SystemPromptNode,
-        "few_shot": FewShotNode,
-        "memory": MemoryNode,
-        "output_parser": OutputParserNode,
         "chatbot": ChatbotNode,
         "example": ExampleNode,
     }
@@ -98,7 +92,7 @@ class GenAIPipelineEngine:
 
         # Reset context
         self.execution_context = {}
-        self.execution_stats = {"totalTokens": 0, "totalCost": 0.0, "nodeExecutions": []}
+        self.execution_stats = {"nodeExecutions": []}
 
         try:
             # Build DAG
@@ -128,8 +122,6 @@ class GenAIPipelineEngine:
                 "success": True,
                 "finalOutput": final_output,
                 "nodeExecutions": self.execution_stats["nodeExecutions"],
-                "totalTokens": self.execution_stats["totalTokens"],
-                "totalCost": self.execution_stats["totalCost"],
                 "executionTimeMs": execution_time,
             }
 
@@ -141,8 +133,6 @@ class GenAIPipelineEngine:
                 "success": False,
                 "error": str(e),
                 "nodeExecutions": self.execution_stats["nodeExecutions"],
-                "totalTokens": self.execution_stats["totalTokens"],
-                "totalCost": self.execution_stats["totalCost"],
                 "executionTimeMs": execution_time,
             }
 
@@ -288,17 +278,10 @@ class GenAIPipelineEngine:
                     "nodeId": node_id,
                     "nodeType": node_config["nodeType"],
                     "status": "COMPLETED" if result.success else "FAILED",
-                    "tokensUsed": result.tokensUsed,
-                    "costUSD": result.costUSD,
-                    "executionTimeMs": result.executionTimeMs,
+                    "executionTimeMs": result.execution_time_ms,
                     "error": result.error,
                 }
             )
-
-            if result.tokensUsed:
-                self.execution_stats["totalTokens"] += result.tokensUsed
-            if result.costUSD:
-                self.execution_stats["totalCost"] += result.costUSD
 
             # Stop on error
             if not result.success:

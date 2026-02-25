@@ -11,6 +11,7 @@ from collections import defaultdict, deque
 from app.core.logging import logger, log_ml_operation
 from app.core.exceptions import NodeExecutionError
 from app.ml.nodes.base import BaseNode
+from app.ml.error_formatter import format_error
 
 
 class DAGValidationError(Exception):
@@ -59,7 +60,6 @@ class MLPipelineEngine:
         from app.ml.nodes.clean import PreprocessNode
         from app.ml.nodes.missing_value_handler import MissingValueHandlerNode
         from app.ml.nodes.encoding import EncodingNode
-        from app.ml.nodes.transformation import TransformationNode
         from app.ml.nodes.scaling import ScalingNode
         from app.ml.nodes.feature_selection import FeatureSelectionNode
         from app.ml.nodes.split import SplitNode
@@ -82,11 +82,11 @@ class MLPipelineEngine:
             ChartViewNode,
         )
         from app.ml.nodes.image_dataset_node import ImageDatasetNode
-        from app.ml.nodes.camera_capture_node import CameraCaptureNode
         from app.ml.nodes.image_preprocessing_node import ImagePreprocessingNode
-        from app.ml.nodes.image_augmentation_node import ImageAugmentationNode
         from app.ml.nodes.image_split_node import ImageSplitNode
         from app.ml.nodes.cnn_classifier_node import CNNClassifierNode
+        from app.ml.nodes.mlp_classifier_node import MLPClassifierNode
+        from app.ml.nodes.mlp_regressor_node import MLPRegressorNode
         from app.ml.nodes.image_predictions_node import ImagePredictionsNode
 
         # Register all nodes
@@ -97,7 +97,6 @@ class MLPipelineEngine:
             "preprocess": PreprocessNode,
             "missing_value_handler": MissingValueHandlerNode,
             "encoding": EncodingNode,
-            "transformation": TransformationNode,
             "scaling": ScalingNode,
             "feature_selection": FeatureSelectionNode,
             "split": SplitNode,
@@ -106,6 +105,8 @@ class MLPipelineEngine:
             "logistic_regression": LogisticRegressionNode,
             "decision_tree": DecisionTreeNode,
             "random_forest": RandomForestNode,
+            "mlp_classifier": MLPClassifierNode,
+            "mlp_regressor": MLPRegressorNode,
             "r2_score": R2ScoreNode,
             "mse_score": MSEScoreNode,
             "rmse_score": RMSEScoreNode,
@@ -117,9 +118,7 @@ class MLPipelineEngine:
             "chart_view": ChartViewNode,
             # Image pipeline nodes
             "image_dataset": ImageDatasetNode,
-            "camera_capture": CameraCaptureNode,
             "image_preprocessing": ImagePreprocessingNode,
-            "image_augmentation": ImageAugmentationNode,
             "image_split": ImageSplitNode,
             "cnn_classifier": CNNClassifierNode,
             "image_predictions": ImagePredictionsNode,
@@ -524,11 +523,12 @@ class MLPipelineEngine:
 
             except Exception as e:
                 logger.error(f"Node {node_id} ({node_type}) execution failed: {str(e)}")
+                formatted = format_error(e, node_type=node_type, node_label=node_label)
 
                 # Store error in context
                 self.execution_context[node_id] = {
                     "success": False,
-                    "error": str(e),
+                    "error": formatted,
                     "node_type": node_type,
                     "node_id": node_id,
                 }
@@ -541,7 +541,7 @@ class MLPipelineEngine:
                             "node_id": node_id,
                             "node_type": node_type,
                             "label": node_label,
-                            "error": str(e),
+                            "error": formatted,
                         }
                     )
                     # Yield to event loop so SSE generator can send the event
@@ -640,7 +640,7 @@ class MLPipelineEngine:
 
             return {
                 "success": False,
-                "error": str(e),
+                "error": format_error(e),
                 "execution_time_ms": execution_time,
                 "nodes_executed": len(self.execution_context),
             }
@@ -652,7 +652,7 @@ class MLPipelineEngine:
 
             return {
                 "success": False,
-                "error": f"Unexpected error: {str(e)}",
+                "error": format_error(e),
                 "execution_time_ms": execution_time,
                 "nodes_executed": len(self.execution_context),
             }

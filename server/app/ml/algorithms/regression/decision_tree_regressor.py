@@ -101,6 +101,14 @@ class DecisionTreeRegressor:
                     "criterion": self.model.criterion,
                 },
                 "training_metrics": metrics,
+                "tree_structure": self._extract_tree_structure(),
+                "feature_importances": [
+                    {"feature": f, "importance": round(float(imp), 4)}
+                    for f, imp in zip(
+                        self.feature_names,
+                        self.model.feature_importances_,
+                    )
+                ],
             }
 
             self.is_trained = True
@@ -165,6 +173,42 @@ class DecisionTreeRegressor:
         """Evaluate model on test data."""
         predictions = self.predict(X)
         return self._calculate_metrics(y.values, predictions)
+
+    def _extract_tree_structure(self, max_depth: int = 4) -> list:
+        """Extract tree structure for frontend visualization (capped at max_depth)."""
+        tree = self.model.tree_
+        feature_names = self.feature_names or []
+        nodes = []
+
+        def traverse(node_id: int, depth: int):
+            if depth > max_depth:
+                return
+            is_leaf = tree.children_left[node_id] == tree.children_right[node_id]
+            node_info: Dict[str, Any] = {
+                "id": int(node_id),
+                "depth": depth,
+                "n_samples": int(tree.n_node_samples[node_id]),
+                "impurity": round(float(tree.impurity[node_id]), 3),
+            }
+            if is_leaf:
+                node_info["type"] = "leaf"
+                node_info["value"] = round(float(tree.value[node_id][0][0]), 2)
+            else:
+                node_info["type"] = "internal"
+                feat_idx = tree.feature[node_id]
+                node_info["feature"] = (
+                    feature_names[feat_idx] if feat_idx < len(feature_names) else f"Feature {feat_idx}"
+                )
+                node_info["threshold"] = round(float(tree.threshold[node_id]), 2)
+                node_info["left_child"] = int(tree.children_left[node_id])
+                node_info["right_child"] = int(tree.children_right[node_id])
+            nodes.append(node_info)
+            if not is_leaf:
+                traverse(tree.children_left[node_id], depth + 1)
+                traverse(tree.children_right[node_id], depth + 1)
+
+        traverse(0, 0)
+        return nodes
 
     def _calculate_metrics(self, y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
         """Calculate regression metrics."""

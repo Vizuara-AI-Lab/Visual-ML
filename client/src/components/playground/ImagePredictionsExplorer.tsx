@@ -1,9 +1,10 @@
 /**
  * ImagePredictionsExplorer - Interactive learning for Image Predictions node.
  * Tabs: Results | Prediction Gallery | Confusion Analysis | Confidence | Quiz
+ *       | Live Camera | Draw | Upload Test
  */
 
-import { useState, type ReactNode } from "react";
+import { useState, useCallback, type ReactNode } from "react";
 import {
   ClipboardList,
   Image,
@@ -13,8 +14,15 @@ import {
   Info,
   CheckCircle,
   XCircle,
+  Video,
+  PenTool,
+  Upload,
 } from "lucide-react";
 import { QuizTab } from "./ImageDatasetExplorer";
+import { apiClient } from "../../lib/axios";
+import { LiveCameraTestPanel } from "./LiveCameraTestPanel";
+import { DrawingCanvas } from "./DrawingCanvas";
+import { ImageUploadTest } from "./ImageUploadTest";
 
 // --- Shared image renderer ---
 function PixelImage({
@@ -80,13 +88,49 @@ interface ImagePredictionsExplorerProps {
   renderResults: () => ReactNode;
 }
 
-type Tab = "results" | "gallery" | "confusion" | "confidence" | "quiz";
+type Tab = "results" | "gallery" | "confusion" | "confidence" | "quiz" | "live_camera" | "draw" | "upload_test";
 
 export const ImagePredictionsExplorer = ({
   result,
   renderResults,
 }: ImagePredictionsExplorerProps) => {
   const [activeTab, setActiveTab] = useState<Tab>("results");
+
+  // Extract model info for testing tabs
+  const modelPath: string = result.model_path || "";
+  const imageWidth: number = result.image_width || result.prediction_gallery?.[0]?.width || 28;
+  const imageHeight: number = result.image_height || result.prediction_gallery?.[0]?.height || 28;
+  const classNames: string[] = result.class_names || [];
+  const hasModel = !!modelPath;
+
+  // Shared predict callback for all testing tabs
+  const predictPixels = useCallback(
+    async (pixels: number[]) => {
+      const response = await apiClient.post("/ml/camera/predict", {
+        model_path: modelPath,
+        pixels,
+      });
+      const data = response.data as {
+        class_name: string;
+        confidence: number;
+        all_scores: { class_name: string; score: number }[];
+      };
+      // Map numeric class indices to human-readable names
+      const mapIdx = (raw: string) => {
+        const idx = parseInt(raw);
+        return !isNaN(idx) && classNames[idx] ? classNames[idx] : raw;
+      };
+      return {
+        class_name: mapIdx(data.class_name),
+        confidence: data.confidence,
+        all_scores: data.all_scores.map((s) => ({
+          class_name: mapIdx(s.class_name),
+          score: s.score,
+        })),
+      };
+    },
+    [modelPath, classNames],
+  );
 
   const tabs: { id: Tab; label: string; icon: any; available: boolean }[] = [
     { id: "results", label: "Results", icon: ClipboardList, available: true },
@@ -113,6 +157,25 @@ export const ImagePredictionsExplorer = ({
       label: "Quiz",
       icon: HelpCircle,
       available: !!result.quiz_questions && result.quiz_questions.length > 0,
+    },
+    // --- Testing tabs (only when model is available) ---
+    {
+      id: "live_camera",
+      label: "Live Camera",
+      icon: Video,
+      available: hasModel,
+    },
+    {
+      id: "draw",
+      label: "Draw",
+      icon: PenTool,
+      available: hasModel,
+    },
+    {
+      id: "upload_test",
+      label: "Test Image",
+      icon: Upload,
+      available: hasModel,
     },
   ];
 
@@ -155,6 +218,34 @@ export const ImagePredictionsExplorer = ({
       )}
       {activeTab === "quiz" && result.quiz_questions && (
         <QuizTab questions={result.quiz_questions} />
+      )}
+
+      {/* --- Testing tabs --- */}
+      {activeTab === "live_camera" && hasModel && (
+        <LiveCameraTestPanel
+          modelId={result.model_id || ""}
+          modelPath={modelPath}
+          classNames={classNames}
+          imageWidth={imageWidth}
+          imageHeight={imageHeight}
+          onPredict={predictPixels}
+        />
+      )}
+      {activeTab === "draw" && hasModel && (
+        <DrawingCanvas
+          imageWidth={imageWidth}
+          imageHeight={imageHeight}
+          classNames={classNames}
+          onPredict={predictPixels}
+        />
+      )}
+      {activeTab === "upload_test" && hasModel && (
+        <ImageUploadTest
+          imageWidth={imageWidth}
+          imageHeight={imageHeight}
+          classNames={classNames}
+          onPredict={predictPixels}
+        />
       )}
     </div>
   );

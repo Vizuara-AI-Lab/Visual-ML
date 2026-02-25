@@ -99,6 +99,25 @@ class RandomForestClassifier:
             y_pred = self.model.predict(X_array)
             metrics = self._calculate_metrics(y_array, y_pred)
 
+            # Extract feature importances
+            feature_importances = [
+                {"feature": f, "importance": round(float(imp), 4)}
+                for f, imp in sorted(
+                    zip(self.feature_names, self.model.feature_importances_),
+                    key=lambda x: x[1],
+                    reverse=True,
+                )
+            ]
+
+            # Extract individual tree info (first 10 trees)
+            individual_trees = []
+            for i, tree in enumerate(self.model.estimators_[:10]):
+                individual_trees.append({
+                    "tree_index": i,
+                    "depth": int(tree.get_depth()),
+                    "n_leaves": int(tree.get_n_leaves()),
+                })
+
             self.training_metadata = {
                 "algorithm": "random_forest_classifier",
                 "n_samples": len(X),
@@ -118,6 +137,8 @@ class RandomForestClassifier:
                     "criterion": self.model.criterion,
                 },
                 "training_metrics": metrics,
+                "feature_importances": feature_importances,
+                "individual_trees": individual_trees,
             }
 
             self.is_trained = True

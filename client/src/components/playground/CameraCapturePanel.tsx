@@ -14,10 +14,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Play,
+  Zap,
 } from "lucide-react";
 
 interface CapturedImage {
-  dataUrl: string;   // full-res preview
+  dataUrl: string;   // high-res preview
   pixels: number[];  // flattened grayscale pixels at target size
 }
 
@@ -43,50 +44,56 @@ function parseSize(sizeStr: string): [number, number] {
   return [w, h];
 }
 
-// Render a video frame to a small canvas → return grayscale pixel array
+const PREVIEW_SIZE = 112;
+
+// Render a video frame → ML-resolution pixel array + high-res preview
 function frameToGrayscalePixels(
   video: HTMLVideoElement,
   width: number,
   height: number,
 ): { pixels: number[]; dataUrl: string } {
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d")!;
-
-  // Fill black first (letterbox if aspect differs)
-  ctx.fillStyle = "#000";
-  ctx.fillRect(0, 0, width, height);
-
-  // Draw video frame centered + cropped square
+  // Common crop region from video
   const vw = video.videoWidth;
   const vh = video.videoHeight;
   const side = Math.min(vw, vh);
   const sx = (vw - side) / 2;
   const sy = (vh - side) / 2;
-  ctx.drawImage(video, sx, sy, side, side, 0, 0, width, height);
 
-  // Convert to grayscale
-  const imageData = ctx.getImageData(0, 0, width, height);
+  // 1. ML-resolution canvas for pixel array
+  const mlCanvas = document.createElement("canvas");
+  mlCanvas.width = width;
+  mlCanvas.height = height;
+  const mlCtx = mlCanvas.getContext("2d")!;
+  mlCtx.fillStyle = "#000";
+  mlCtx.fillRect(0, 0, width, height);
+  mlCtx.drawImage(video, sx, sy, side, side, 0, 0, width, height);
+
+  const imageData = mlCtx.getImageData(0, 0, width, height);
   const data = imageData.data;
   const pixels: number[] = [];
   for (let i = 0; i < data.length; i += 4) {
-    // Weighted luminance
     const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
     pixels.push(gray);
-    data[i] = gray;
-    data[i + 1] = gray;
-    data[i + 2] = gray;
   }
-  ctx.putImageData(imageData, 0, 0);
 
-  // Preview canvas (larger, for display)
+  // 2. High-res preview from ORIGINAL video (not from tiny ML canvas)
   const previewCanvas = document.createElement("canvas");
-  previewCanvas.width = 112;
-  previewCanvas.height = 112;
+  previewCanvas.width = PREVIEW_SIZE;
+  previewCanvas.height = PREVIEW_SIZE;
   const pctx = previewCanvas.getContext("2d")!;
-  pctx.imageSmoothingEnabled = false;
-  pctx.drawImage(canvas, 0, 0, 112, 112);
+  pctx.imageSmoothingEnabled = true;
+  pctx.imageSmoothingQuality = "high";
+  pctx.drawImage(video, sx, sy, side, side, 0, 0, PREVIEW_SIZE, PREVIEW_SIZE);
+  // Convert preview to grayscale for visual consistency
+  const previewData = pctx.getImageData(0, 0, PREVIEW_SIZE, PREVIEW_SIZE);
+  const pd = previewData.data;
+  for (let i = 0; i < pd.length; i += 4) {
+    const gray = Math.round(0.299 * pd[i] + 0.587 * pd[i + 1] + 0.114 * pd[i + 2]);
+    pd[i] = gray;
+    pd[i + 1] = gray;
+    pd[i + 2] = gray;
+  }
+  pctx.putImageData(previewData, 0, 0);
 
   return { pixels, dataUrl: previewCanvas.toDataURL("image/png") };
 }
@@ -104,6 +111,8 @@ export const CameraCapturePanel = ({
   const [classImages, setClassImages] = useState<ClassImages>({});
   const [activeClass, setActiveClass] = useState<string>("");
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [burstActive, setBurstActive] = useState(false);
+  const burstRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const classNamesRaw = (config.class_names as string) || "";
   const classNames = classNamesRaw
@@ -113,6 +122,7 @@ export const CameraCapturePanel = ({
   const targetSize = (config.target_size as string) || "28x28";
   const [tw, th] = parseSize(targetSize);
   const imagesPerClass = Number(config.images_per_class) || 20;
+  const minRequired = Math.min(5, imagesPerClass);
 
   // Keep classImages in sync when class list changes
   useEffect(() => {
@@ -181,6 +191,29 @@ export const CameraCapturePanel = ({
     }, 1000);
   }, [capturePhoto]);
 
+  // Burst capture — one photo every 500ms
+  const stopBurst = useCallback(() => {
+    if (burstRef.current) {
+      clearInterval(burstRef.current);
+      burstRef.current = null;
+    }
+    setBurstActive(false);
+  }, []);
+
+  const startBurst = useCallback(() => {
+    if (!cameraActive || !activeClass) return;
+    setBurstActive(true);
+    capturePhoto();
+    burstRef.current = setInterval(() => {
+      capturePhoto();
+    }, 500);
+  }, [cameraActive, activeClass, capturePhoto]);
+
+  // Auto-stop burst when class/camera changes or component unmounts
+  useEffect(() => {
+    return () => stopBurst();
+  }, [activeClass, cameraActive, stopBurst]);
+
   const deleteImage = (cls: string, idx: number) => {
     setClassImages((prev) => ({
       ...prev,
@@ -189,9 +222,10 @@ export const CameraCapturePanel = ({
   };
 
   const totalImages = Object.values(classImages).reduce((s, arr) => s + arr.length, 0);
-  const allClassesMeetMinimum = classNames.every(
-    (cls) => (classImages[cls]?.length || 0) >= Math.min(5, imagesPerClass),
+  const deficientClasses = classNames.filter(
+    (cls) => (classImages[cls]?.length || 0) < minRequired,
   );
+  const allClassesMeetMinimum = deficientClasses.length === 0;
 
   const handleBuildDataset = () => {
     const payload: Record<string, number[][]> = {};
@@ -247,6 +281,14 @@ export const CameraCapturePanel = ({
             </div>
           )}
 
+          {/* Burst indicator */}
+          {burstActive && (
+            <div className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1 bg-orange-500 rounded-full animate-pulse">
+              <Zap className="w-3 h-3 text-white" />
+              <span className="text-xs font-bold text-white">BURST</span>
+            </div>
+          )}
+
           {/* Square crop guide */}
           {cameraActive && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -270,7 +312,7 @@ export const CameraCapturePanel = ({
             <>
               <button
                 onClick={capturePhoto}
-                disabled={!activeClass || countdown !== null}
+                disabled={!activeClass || countdown !== null || burstActive}
                 className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-slate-100 text-slate-900 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
               >
                 <Camera className="w-4 h-4" />
@@ -278,13 +320,25 @@ export const CameraCapturePanel = ({
               </button>
               <button
                 onClick={startCountdown}
-                disabled={!activeClass || countdown !== null}
+                disabled={!activeClass || countdown !== null || burstActive}
                 className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
               >
                 3-2-1
               </button>
               <button
-                onClick={stopCamera}
+                onClick={burstActive ? stopBurst : startBurst}
+                disabled={!activeClass || countdown !== null}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                  burstActive
+                    ? "bg-orange-500 hover:bg-orange-600 text-white"
+                    : "bg-slate-700 hover:bg-slate-600 text-white"
+                }`}
+              >
+                <Zap className="w-4 h-4" />
+                {burstActive ? "Stop" : "Burst"}
+              </button>
+              <button
+                onClick={() => { stopBurst(); stopCamera(); }}
                 className="ml-auto flex items-center gap-2 px-3 py-2 bg-red-900/60 hover:bg-red-900 text-red-300 rounded-lg text-sm transition-colors"
               >
                 <VideoOff className="w-4 h-4" />
@@ -301,21 +355,24 @@ export const CameraCapturePanel = ({
       <div className="flex gap-1 overflow-x-auto pb-1">
         {classNames.map((cls) => {
           const count = classImages[cls]?.length || 0;
+          const meetsMin = count >= minRequired;
           const isFull = count >= imagesPerClass;
           return (
             <button
               key={cls}
-              onClick={() => setActiveClass(cls)}
+              onClick={() => { stopBurst(); setActiveClass(cls); }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                 activeClass === cls
                   ? "bg-violet-600 text-white shadow"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  : meetsMin
+                    ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    : "bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200"
               }`}
             >
               {isFull && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
               {cls}
               <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                activeClass === cls ? "bg-white/20" : "bg-slate-200"
+                activeClass === cls ? "bg-white/20" : meetsMin ? "bg-slate-200" : "bg-amber-200 text-amber-800"
               }`}>
                 {count}/{imagesPerClass}
               </span>
@@ -329,12 +386,12 @@ export const CameraCapturePanel = ({
         <div>
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-semibold text-slate-700">
-              "{activeClass}" — {classImages[activeClass]?.length || 0} photos
+              &ldquo;{activeClass}&rdquo; — {classImages[activeClass]?.length || 0} photos
             </p>
             <div className="flex gap-1">
               {classNames.indexOf(activeClass) > 0 && (
                 <button
-                  onClick={() => setActiveClass(classNames[classNames.indexOf(activeClass) - 1])}
+                  onClick={() => { stopBurst(); setActiveClass(classNames[classNames.indexOf(activeClass) - 1]); }}
                   className="p-1 hover:bg-slate-100 rounded"
                 >
                   <ChevronLeft className="w-4 h-4 text-slate-400" />
@@ -342,7 +399,7 @@ export const CameraCapturePanel = ({
               )}
               {classNames.indexOf(activeClass) < classNames.length - 1 && (
                 <button
-                  onClick={() => setActiveClass(classNames[classNames.indexOf(activeClass) + 1])}
+                  onClick={() => { stopBurst(); setActiveClass(classNames[classNames.indexOf(activeClass) + 1]); }}
                   className="p-1 hover:bg-slate-100 rounded"
                 >
                   <ChevronRight className="w-4 h-4 text-slate-400" />
@@ -355,7 +412,7 @@ export const CameraCapturePanel = ({
             <div className="rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 py-8 text-center">
               <Camera className="w-8 h-8 text-slate-300 mx-auto mb-2" />
               <p className="text-xs text-slate-400">
-                No photos yet — point camera & press Snap
+                No photos yet — point camera & press Snap or Burst
               </p>
             </div>
           ) : (
@@ -366,7 +423,6 @@ export const CameraCapturePanel = ({
                     src={img.dataUrl}
                     alt={`${activeClass} ${i}`}
                     className="w-full h-full object-cover"
-                    style={{ imageRendering: "pixelated" }}
                   />
                   <button
                     onClick={() => deleteImage(activeClass, i)}
@@ -399,10 +455,19 @@ export const CameraCapturePanel = ({
         </div>
 
         {!allClassesMeetMinimum && (
-          <p className="text-xs text-amber-600 flex items-center gap-1.5">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-            Capture at least 5 images per class to build the dataset
-          </p>
+          <div className="text-xs text-amber-600 flex items-start gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Need at least {minRequired} photos per class:</p>
+              <ul className="mt-0.5 space-y-0.5">
+                {deficientClasses.map((cls) => (
+                  <li key={cls}>
+                    <strong>{cls}</strong> — {classImages[cls]?.length || 0}/{minRequired} photos
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         )}
 
         <button

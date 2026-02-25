@@ -2,6 +2,7 @@
  * View Node Modal - Display data from view nodes
  */
 
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePlaygroundStore } from "../../store/playgroundStore";
 import { getNodeByType } from "../../config/nodeDefinitions";
@@ -14,33 +15,118 @@ import { FeatureSelectionExplorer } from "./FeatureSelectionExplorer";
 import { SplitExplorer } from "./SplitExplorer";
 import { LinearRegressionExplorer } from "./LinearRegressionExplorer";
 import { LogisticRegressionExplorer } from "./LogisticRegressionExplorer";
-import { TransformationResults } from "./TransformationResults";
 import { ImageDatasetExplorer } from "./ImageDatasetExplorer";
 import { ImagePreprocessingExplorer } from "./ImagePreprocessingExplorer";
-import { ImageAugmentationExplorer } from "./ImageAugmentationExplorer";
 import { ImageSplitExplorer } from "./ImageSplitExplorer";
 import { CNNClassifierExplorer } from "./CNNClassifierExplorer";
 import { ImagePredictionsExplorer } from "./ImagePredictionsExplorer";
 import { ScalingResults } from "./ScalingResults";
 import { FeatureEngineeringResults } from "./FeatureEngineeringResults";
-import { lazy, Suspense } from "react";
 import {
   X,
   Table2,
   Eye,
   BarChart3,
   Columns3,
+  Maximize2,
+  Minimize2,
+  AlertTriangle,
+  Lightbulb,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
-
-const DecisionTreeAnimation = lazy(() => import("./animations/DecisionTreeAnimation"));
-const RandomForestAnimation = lazy(() => import("./animations/RandomForestAnimation"));
 import {
-  R2ScoreResult,
-  MSEScoreResult,
-  RMSEScoreResult,
-  MAEScoreResult,
-  ConfusionMatrixResult,
+  getFriendlyMessage,
+  getErrorSuggestion,
+  getTechnicalDetail,
+  isStructuredError,
+} from "../../utils/errorFormatter";
+
+import { DecisionTreeExplorer } from "./DecisionTreeExplorer";
+import { RandomForestExplorer } from "./RandomForestExplorer";
+import { MLPClassifierExplorer } from "./MLPClassifierExplorer";
+import { MLPRegressorExplorer } from "./MLPRegressorExplorer";
+import {
+  R2ScoreExplorer,
+  MSEScoreExplorer,
+  RMSEScoreExplorer,
+  MAEScoreExplorer,
+  ConfusionMatrixExplorer,
 } from "./results_and_metrics";
+
+/** Structured error display for node execution errors */
+function NodeErrorDisplay({ error }: { error: unknown }) {
+  const [showDetail, setShowDetail] = useState(false);
+  const friendly = getFriendlyMessage(error);
+  const suggestion = getErrorSuggestion(error);
+  const technical = getTechnicalDetail(error);
+  const structured = isStructuredError(error);
+  const errorCode = structured ? error.error_code : null;
+
+  return (
+    <div className="space-y-3">
+      {/* Main error */}
+      <div className="rounded-xl border border-red-200 bg-red-50/80 p-5">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-red-100 shrink-0">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            {errorCode && (
+              <span className="inline-block px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold uppercase tracking-wider rounded mb-2">
+                {errorCode.replace(/_/g, " ")}
+              </span>
+            )}
+            <p className="text-red-800 font-semibold text-sm leading-relaxed">
+              {friendly}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Suggestion */}
+      {suggestion && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4">
+          <div className="flex items-start gap-3">
+            <Lightbulb className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-amber-800 uppercase tracking-wider mb-1">
+                How to fix
+              </p>
+              <p className="text-sm text-amber-700 leading-relaxed">
+                {suggestion}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Technical detail (collapsible) */}
+      {technical && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/80 overflow-hidden">
+          <button
+            onClick={() => setShowDetail((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-slate-500 hover:bg-slate-100 transition-colors"
+          >
+            <span>Technical Details</span>
+            {showDetail ? (
+              <ChevronUp className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5" />
+            )}
+          </button>
+          {showDetail && (
+            <div className="px-4 pb-3 border-t border-slate-200">
+              <pre className="text-xs text-slate-600 whitespace-pre-wrap break-words mt-2 font-mono leading-relaxed">
+                {technical}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface ViewNodeModalProps {
   nodeId: string | null;
@@ -48,6 +134,7 @@ interface ViewNodeModalProps {
 }
 
 export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const { nodes, executionResult } = usePlaygroundStore();
 
   const node = nodeId ? nodes.find((n) => n.id === nodeId) : null;
@@ -138,7 +225,6 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
     "chart_view",
     "missing_value_handler",
     "encoding",
-    "transformation",
     "scaling",
     "feature_selection",
     // Result/Metrics Nodes
@@ -153,6 +239,8 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
     "logistic_regression",
     "decision_tree",
     "random_forest",
+    "mlp_classifier",
+    "mlp_regressor",
     // Image pipeline nodes
     "image_dataset",
     "image_preprocessing",
@@ -183,7 +271,11 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 20 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
-          className="relative bg-white border border-slate-200 rounded-xl shadow-2xl w-11/12 h-5/6 flex flex-col overflow-hidden z-10"
+          className={`relative bg-white border border-slate-200 shadow-2xl flex flex-col overflow-hidden z-10 transition-all duration-300 ${
+            isFullscreen
+              ? "w-full h-full rounded-none"
+              : "w-11/12 h-5/6 rounded-xl"
+          }`}
         >
           {/* Header */}
           <div
@@ -209,25 +301,31 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5 text-slate-500" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setIsFullscreen((f) => !f)}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="w-5 h-5 text-slate-500" />
+                ) : (
+                  <Maximize2 className="w-5 h-5 text-slate-500" />
+                )}
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
           </div>
 
           {/* Content */}
           <div className="flex-1 overflow-auto p-6">
             {nodeResult.error ? (
-              <div className="p-5 bg-red-50 border border-red-200 rounded-xl">
-                <p className="text-red-800 font-semibold text-sm">Error</p>
-                <p className="text-red-600 text-sm mt-2 leading-relaxed">
-                  {typeof nodeResult.error === "string"
-                    ? nodeResult.error
-                    : nodeResult.error?.message || "Unknown error"}
-                </p>
-              </div>
+              <NodeErrorDisplay error={nodeResult.error} />
             ) : (
               <div>
                 {nodeType === "table_view" && renderTableView(nodeResult)}
@@ -239,36 +337,35 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
                 {nodeType === "missing_value_handler" &&
                   renderMissingValueHandler(nodeResult)}
                 {nodeType === "encoding" && renderEncoding(nodeResult)}
-                {nodeType === "transformation" && (
-                  <TransformationResults result={nodeResult} />
-                )}
                 {nodeType === "scaling" && renderScaling(nodeResult)}
                 {nodeType === "feature_selection" && renderFeatureSelection(nodeResult)}
-                {nodeType === "r2_score" && <R2ScoreResult result={nodeResult} />}
+                {nodeType === "r2_score" && <R2ScoreExplorer result={nodeResult} />}
                 {nodeType === "mse_score" && (
-                  <MSEScoreResult result={nodeResult} />
+                  <MSEScoreExplorer result={nodeResult} />
                 )}
                 {nodeType === "rmse_score" && (
-                  <RMSEScoreResult result={nodeResult} />
+                  <RMSEScoreExplorer result={nodeResult} />
                 )}
                 {nodeType === "mae_score" && (
-                  <MAEScoreResult result={nodeResult} />
+                  <MAEScoreExplorer result={nodeResult} />
                 )}
                 {nodeType === "confusion_matrix" && (
-                  <ConfusionMatrixResult result={nodeResult} />
+                  <ConfusionMatrixExplorer result={nodeResult} />
                 )}
                 {nodeType === "split" && renderSplit(nodeResult)}
                 {nodeType === "linear_regression" && renderLinearRegression(nodeResult)}
                 {nodeType === "logistic_regression" && renderLogisticRegression(nodeResult)}
                 {nodeType === "decision_tree" && (
-                  <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" /></div>}>
-                    <DecisionTreeAnimation />
-                  </Suspense>
+                  <DecisionTreeExplorer result={nodeResult} />
                 )}
                 {nodeType === "random_forest" && (
-                  <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
-                    <RandomForestAnimation />
-                  </Suspense>
+                  <RandomForestExplorer result={nodeResult} />
+                )}
+                {nodeType === "mlp_classifier" && (
+                  <MLPClassifierExplorer result={nodeResult} />
+                )}
+                {nodeType === "mlp_regressor" && (
+                  <MLPRegressorExplorer result={nodeResult} />
                 )}
                 {nodeType === "image_dataset" && (
                   <ImageDatasetExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
@@ -276,10 +373,7 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
                 {nodeType === "image_preprocessing" && (
                   <ImagePreprocessingExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
                 )}
-                {nodeType === "image_augmentation" && (
-                  <ImageAugmentationExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
-                )}
-                {nodeType === "image_split" && (
+{nodeType === "image_split" && (
                   <ImageSplitExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
                 )}
                 {nodeType === "cnn_classifier" && (
@@ -787,7 +881,7 @@ function SplitResults({ result }: { result: any }) {
 
 function MLModelResults({ result, modelType }: { result: any; modelType: string }) {
   const metrics = result.training_metrics || {};
-  const isClassification = modelType === "Logistic Regression";
+  const isClassification = modelType === "Logistic Regression" || modelType === "MLP Classifier";
 
   return (
     <div className="space-y-6">
