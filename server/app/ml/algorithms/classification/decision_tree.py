@@ -106,11 +106,23 @@ class DecisionTreeClassifier:
             self.model.fit(X_array, y_array)
             training_time = (datetime.utcnow() - start_time).total_seconds()
 
-            # Calculate training metrics
-            y_pred = self.model.predict(X_array)
-            metrics = self._calculate_metrics(y_array, y_pred)
+            # Training metrics (evaluated on training data)
+            y_pred_train = self.model.predict(X_array)
+            metrics = self._calculate_metrics(y_array, y_pred_train)
 
             # Store metadata
+            # Compute feature statistics for interactive prediction UI
+            feature_stats = []
+            for col in X.columns:
+                vals = X[col].dropna()
+                feature_stats.append({
+                    "name": col,
+                    "min": round(float(vals.min()), 4),
+                    "max": round(float(vals.max()), 4),
+                    "mean": round(float(vals.mean()), 4),
+                    "median": round(float(vals.median()), 4),
+                })
+
             self.training_metadata = {
                 "algorithm": "decision_tree_classifier",
                 "n_samples": len(X),
@@ -138,6 +150,7 @@ class DecisionTreeClassifier:
                         self.model.feature_importances_,
                     )
                 ],
+                "feature_stats": feature_stats,
             }
 
             self.is_trained = True

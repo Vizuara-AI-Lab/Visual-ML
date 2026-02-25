@@ -24,8 +24,8 @@ import {
   Leaf,
 } from "lucide-react";
 
-const RandomForestAnimation = lazy(
-  () => import("./animations/RandomForestAnimation")
+const PredictionPlayground = lazy(
+  () => import("./PredictionPlayground")
 );
 
 interface RandomForestExplorerProps {
@@ -55,7 +55,7 @@ export const RandomForestExplorer = ({
     { id: "results", label: "Results", icon: ClipboardList, available: true },
     {
       id: "ensemble_voting",
-      label: "Ensemble Voting",
+      label: "Try Prediction",
       icon: Trees,
       available: true,
     },
@@ -132,7 +132,7 @@ export const RandomForestExplorer = ({
               </div>
             }
           >
-            <RandomForestAnimation result={result} />
+            <PredictionPlayground result={result} variant="random_forest" />
           </Suspense>
         )}
         {activeTab === "feature_importance" && (
@@ -250,7 +250,16 @@ function ResultsTab({
 
       {/* All Metrics */}
       <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <h4 className="text-sm font-semibold text-gray-900 mb-4">Training Metrics</h4>
+        <div className="flex items-center gap-2 mb-4">
+          <h4 className="text-sm font-semibold text-gray-900">
+            {result.metadata?.evaluated_on === "test" ? "Test Metrics" : "Training Metrics"}
+          </h4>
+          {result.metadata?.evaluated_on === "test" ? (
+            <span className="text-[10px] font-medium bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full">on unseen data</span>
+          ) : (
+            <span className="text-[10px] font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">on training data</span>
+          )}
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Object.entries(metrics)
             .filter(([key, value]) => typeof value === "number" && key !== "confusion_matrix")
@@ -477,10 +486,19 @@ function MetricExplainerTab({ data }: { data: any }) {
     <div className="space-y-4">
       <div className="flex items-start gap-3 rounded-lg border border-purple-200 bg-purple-50 px-4 py-3">
         <Gauge className="mt-0.5 h-5 w-5 shrink-0 text-purple-600" />
-        <p className="text-sm text-purple-800">
-          <span className="font-semibold">Understanding your metrics</span> — Each metric
-          tells a different part of the story about your ensemble model's performance.
-        </p>
+        <div className="text-sm text-purple-800">
+          <p>
+            <span className="font-semibold">Understanding your metrics</span> — Each metric
+            tells a different part of the story about your ensemble model's performance.
+          </p>
+          {data?.evaluated_on && (
+            <p className="mt-1 text-xs font-medium">
+              {data.evaluated_on === "test"
+                ? "Evaluated on test data (unseen by the model during training)"
+                : "Evaluated on training data — these may look inflated since the model has seen this data before"}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -710,12 +728,12 @@ function HowItWorksTab({ nEstimators }: { nEstimators?: number }) {
         <Cog className="mt-0.5 h-5 w-5 shrink-0 text-teal-600" />
         <div className="text-sm text-teal-800 space-y-2">
           <p className="font-semibold">How Random Forest Works</p>
-          <ol className="list-decimal list-inside space-y-1">
-            <li><strong>Bootstrap sampling:</strong> Create {nEstimators || "N"} random subsets of the training data (with replacement)</li>
-            <li><strong>Train trees:</strong> Train one decision tree on each bootstrap sample</li>
-            <li><strong>Random feature selection:</strong> At each split, only consider a random subset of features</li>
-            <li><strong>Independent predictions:</strong> Each tree makes its own prediction independently</li>
-            <li><strong>Aggregate:</strong> Combine predictions via majority voting (classification) or averaging (regression)</li>
+          <p className="text-teal-700">Think of it like asking {nEstimators || "many"} different experts, each looking at different parts of the data, and then going with what most of them agree on.</p>
+          <ol className="list-decimal list-inside space-y-2 mt-2">
+            <li><strong>Give each tree different data:</strong> Each of the {nEstimators || "N"} trees gets its own random bag of training rows — some rows repeat, some are left out. This way every tree sees a slightly different version of the data.</li>
+            <li><strong>Each tree learns on its own:</strong> Every tree builds its own set of if/else rules. When deciding how to split, it only looks at a few random columns (not all of them), so each tree learns different patterns.</li>
+            <li><strong>Each tree makes a guess:</strong> Given new data, every tree independently predicts an answer — without knowing what the other trees guessed.</li>
+            <li><strong>Combine all the guesses:</strong> For categories: the trees vote, and the most popular answer wins. For numbers: we take the average of all guesses.</li>
           </ol>
         </div>
       </div>
@@ -724,56 +742,56 @@ function HowItWorksTab({ nEstimators }: { nEstimators?: number }) {
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
             <Trees className="w-4 h-4 text-teal-600" />
-            Ensemble Power
+            Strength in Numbers
           </h4>
           <p className="text-sm text-gray-600">
-            By combining many diverse trees, individual errors cancel out.
-            The ensemble is more accurate and stable than any single tree.
-            This is called the "wisdom of the crowd" effect.
+            One tree might make mistakes, but when you ask {nEstimators || "many"} trees
+            and go with the majority, the wrong answers get outvoted.
+            It's like asking a whole classroom instead of one student.
           </p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
             <Layers className="w-4 h-4 text-blue-600" />
-            Diversity
+            Each Tree is Different
           </h4>
           <p className="text-sm text-gray-600">
-            Two sources of randomness ensure diverse trees: bootstrap sampling
-            (different data) and random feature selection at each split
-            (different perspectives).
+            Every tree sees different rows and different columns, so they
+            each learn different things. This variety is what makes the
+            forest smarter than any single tree.
           </p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
             <Target className="w-4 h-4 text-orange-600" />
-            Robustness
+            Hard to Fool
           </h4>
           <p className="text-sm text-gray-600">
-            Random Forests resist overfitting better than single trees, handle
-            missing values and outliers well, and provide reliable feature
-            importance estimates.
+            A single tree can memorize noise in the data and get confused by
+            outliers. A forest is much more stable — messy data points only
+            trick a few trees, not the whole group.
           </p>
         </div>
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h4 className="font-semibold text-gray-900 mb-2">Key Hyperparameters</h4>
+        <h4 className="font-semibold text-gray-900 mb-2">Settings You Can Tune</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
           <div className="flex gap-2">
             <span className="font-semibold text-teal-700 shrink-0">n_estimators:</span>
-            <span className="text-gray-600">Number of trees in the forest. More trees = better but slower.</span>
+            <span className="text-gray-600">How many trees to build. More trees = usually better results, but takes longer to train.</span>
           </div>
           <div className="flex gap-2">
             <span className="font-semibold text-teal-700 shrink-0">max_depth:</span>
-            <span className="text-gray-600">Maximum depth of each tree. Limits individual tree complexity.</span>
+            <span className="text-gray-600">How many levels deep each tree can go. Limiting this prevents trees from memorizing the data.</span>
           </div>
           <div className="flex gap-2">
             <span className="font-semibold text-teal-700 shrink-0">min_samples_split:</span>
-            <span className="text-gray-600">Minimum samples required to split a node.</span>
+            <span className="text-gray-600">A group needs at least this many rows before it can be split further. Higher = simpler trees.</span>
           </div>
           <div className="flex gap-2">
             <span className="font-semibold text-teal-700 shrink-0">max_features:</span>
-            <span className="text-gray-600">Number of features considered at each split (source of randomness).</span>
+            <span className="text-gray-600">How many columns each tree looks at per split. Fewer = more variety between trees.</span>
           </div>
         </div>
       </div>

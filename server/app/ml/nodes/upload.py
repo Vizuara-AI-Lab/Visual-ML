@@ -227,8 +227,8 @@ class UploadFileNode(BaseNode):
                 df=df,
             )
 
-            # Calculate memory usage
-            memory_usage_mb = df.memory_usage(deep=True).sum() / (1024 * 1024)
+            # Calculate memory usage (convert to native float to avoid np.float64 in SQL)
+            memory_usage_mb = float(df.memory_usage(deep=True).sum() / (1024 * 1024))
 
             # Get data types
             dtypes = {col: str(dtype) for col, dtype in df.dtypes.items()}
@@ -261,7 +261,7 @@ class UploadFileNode(BaseNode):
         except InvalidDatasetError:
             raise
         except Exception as e:
-            logger.error(f"File upload failed: {str(e)}", exc_info=True)
+            logger.error("File upload failed: {}", str(e), exc_info=True)
             raise FileUploadError(reason=str(e), filename=input_data.filename or "unknown")
 
     def _parse_csv(self, file_content: bytes, filename: str) -> pd.DataFrame:
@@ -424,7 +424,7 @@ class UploadFileNode(BaseNode):
                 # Dataset validation errors should be raised immediately
                 raise
             except Exception as e:
-                logger.error(f"❌ S3 upload or DB save failed: {str(e)}", exc_info=True)
+                logger.error("❌ S3 upload or DB save failed: {}", str(e), exc_info=True)
                 # Don't fallback to local storage - fail fast
                 raise FileUploadError(
                     reason=f"Failed to upload to S3 or save metadata: {str(e)}", filename=filename
@@ -491,8 +491,8 @@ class UploadFileNode(BaseNode):
                 f"💾 Saving dataset metadata - ID: {dataset_id}, Project: {project_id}, User: {user_id}"
             )
 
-            # Calculate metadata
-            memory_usage_mb = df.memory_usage(deep=True).sum() / (1024 * 1024)
+            # Calculate metadata (convert to native float to avoid np.float64 in SQL)
+            memory_usage_mb = float(df.memory_usage(deep=True).sum() / (1024 * 1024))
             dtypes = {col: str(dtype) for col, dtype in df.dtypes.items()}
 
             # Create database record
@@ -531,7 +531,7 @@ class UploadFileNode(BaseNode):
             except KeyError as ke:
                 db.rollback()
                 logger.error(f"❌ KeyError during commit - missing key: {ke}", exc_info=True)
-                logger.error(f"Dataset attributes: {vars(dataset)}")
+                logger.error("Dataset attributes: {}", vars(dataset))
                 raise
             except Exception as db_error:
                 db.rollback()
@@ -539,14 +539,14 @@ class UploadFileNode(BaseNode):
                     f"❌ Database commit failed - Error type: {type(db_error).__name__}",
                     exc_info=True,
                 )
-                logger.error(f"❌ Error message: {str(db_error)}")
+                logger.error("❌ Error message: {}", str(db_error))
                 raise
             finally:
                 db.close()
 
         except KeyError as ke:
-            logger.error(f"❌ KeyError in dataset save: {ke}", exc_info=True)
+            logger.error("❌ KeyError in dataset save: {}", ke, exc_info=True)
             raise ValueError(f"Missing required field during dataset save: {ke}")
         except Exception as e:
-            logger.error(f"❌ Failed to save dataset metadata: {str(e)}", exc_info=True)
+            logger.error("❌ Failed to save dataset metadata: {}", str(e), exc_info=True)
             raise ValueError(f"Database save failed: {str(e)}")
