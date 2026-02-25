@@ -19,6 +19,10 @@ import {
   Upload,
   Play,
   Square,
+  Shield,
+  Calendar,
+  Sparkles,
+  Settings,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import axiosInstance from "../../lib/axios";
@@ -84,6 +88,10 @@ const Profile: React.FC = () => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
+  // Password state
+  const [passwordData, setPasswordData] = useState({ oldPassword: "", newPassword: "", confirmPassword: "" });
+  const [changingPassword, setChangingPassword] = useState(false);
+
   // Voice state
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
   const [cloneVoiceName, setCloneVoiceName] = useState("");
@@ -98,6 +106,9 @@ const Profile: React.FC = () => {
       return [];
     }
   });
+
+  // Active section for sidebar nav
+  const [activeSection, setActiveSection] = useState<string>("details");
 
   useEffect(() => {
     loadProfile();
@@ -235,6 +246,37 @@ const Profile: React.FC = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (passwordData.newPassword.length < 6) {
+      setError("New password must be at least 6 characters");
+      return;
+    }
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setError("New passwords do not match");
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await axiosInstance.post("/auth/student/change-password", {
+        oldPassword: passwordData.oldPassword,
+        newPassword: passwordData.newPassword,
+      });
+      setPasswordData({ oldPassword: "", newPassword: "", confirmPassword: "" });
+      setSuccess("Password changed successfully! Please log in again.");
+      // Backend clears cookies, so redirect to login after a moment
+      setTimeout(() => navigate("/login"), 2000);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Failed to change password");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   // ── Voice handlers ────────────────────────────────────────────
 
   const handleVoiceSelect = (voiceId: string) => {
@@ -329,27 +371,27 @@ const Profile: React.FC = () => {
       <button
         key={voiceId}
         onClick={() => handleVoiceSelect(voiceId)}
-        className={`flex items-center gap-3 p-3.5 rounded-lg border transition-all text-left ${
+        className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left w-full ${
           isSelected
-            ? "border-amber-400 bg-amber-50 ring-1 ring-amber-200"
-            : "border-slate-200 bg-white hover:border-amber-200 hover:bg-amber-50/30"
+            ? "border-emerald-400 bg-emerald-50 shadow-sm"
+            : "border-transparent bg-white hover:border-slate-200 hover:shadow-sm"
         }`}
       >
         <div
-          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
             isSelected
-              ? "bg-amber-500 text-white"
+              ? "bg-emerald-500 text-white"
               : "bg-slate-100 text-slate-500"
           }`}
         >
           {icon}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-slate-900">{name}</p>
+          <p className="text-sm font-semibold text-slate-800">{name}</p>
           <p className="text-xs text-slate-500">{description}</p>
         </div>
         {isSelected && (
-          <span className="text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200 shrink-0">
+          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full shrink-0">
             Active
           </span>
         )}
@@ -358,10 +400,10 @@ const Profile: React.FC = () => {
             e.stopPropagation();
             handlePreviewVoice(voiceId);
           }}
-          className={`p-1.5 rounded-md transition-colors shrink-0 ${
+          className={`p-2 rounded-lg transition-colors shrink-0 ${
             previewingVoice === voiceId
-              ? "text-amber-600 bg-amber-100"
-              : "text-slate-400 hover:text-amber-600 hover:bg-amber-50"
+              ? "text-emerald-600 bg-emerald-100"
+              : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
           }`}
           title="Preview voice"
         >
@@ -378,38 +420,51 @@ const Profile: React.FC = () => {
   if (!profile) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex items-center gap-3">
-          <Loader2 className="w-6 h-6 animate-spin text-slate-600" />
-          <span className="text-slate-600">Loading profile...</span>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex flex-col items-center gap-4"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center">
+            <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+          </div>
+          <p className="text-sm font-medium text-slate-500">Loading profile...</p>
+        </motion.div>
       </div>
     );
   }
 
   const selectedVoiceId = preferences.voice_id || DEFAULT_VOICE_ID;
 
+  const sidebarSections = [
+    { id: "details", label: "Profile", icon: User },
+    { id: "security", label: "Security", icon: Shield },
+    { id: "voice", label: "Voice", icon: Volume2 },
+    { id: "badges", label: "Badges", icon: Award },
+  ];
+
   return (
-    <div className="min-h-screen bg-white pt-20">
+    <div className="min-h-screen bg-slate-50 pt-20">
       <Navbar variant="profile" />
 
-      {/* ── Alerts (floating on top) ────────────────────────────── */}
+      {/* ── Alerts ──────────────────────────────────── */}
       <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 w-full max-w-lg px-4">
         <AnimatePresence>
           {error && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="mb-3 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 shadow-lg"
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              className="mb-3 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 shadow-lg"
             >
               <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-red-900">Error</p>
+                <p className="text-sm font-semibold text-red-900">Error</p>
                 <p className="text-sm text-red-700">{error}</p>
               </div>
               <button
                 onClick={() => setError("")}
-                className="text-red-400 hover:text-red-600"
+                className="text-red-400 hover:text-red-600 p-0.5"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -418,19 +473,19 @@ const Profile: React.FC = () => {
 
           {success && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="mb-3 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3 shadow-lg"
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              className="mb-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-3 shadow-lg"
             >
-              <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-green-900">Success</p>
-                <p className="text-sm text-green-700">{success}</p>
+                <p className="text-sm font-semibold text-emerald-900">Success</p>
+                <p className="text-sm text-emerald-700">{success}</p>
               </div>
               <button
                 onClick={() => setSuccess("")}
-                className="text-green-400 hover:text-green-600"
+                className="text-emerald-400 hover:text-emerald-600 p-0.5"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -439,85 +494,72 @@ const Profile: React.FC = () => {
         </AnimatePresence>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════
-          SECTION 1 — Profile Hero (amber band)
-          ═══════════════════════════════════════════════════════════ */}
-      <div className="bg-amber-50 border-b border-amber-100">
-        <div className="max-w-6xl mx-auto px-6 sm:px-8 pt-6 pb-10 lg:pt-8 lg:pb-14">
-          {/* Back */}
-          <button
-            onClick={() => navigate("/dashboard")}
-            className="flex items-center gap-2 text-amber-800/60 hover:text-amber-900 transition-colors mb-8 group"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            <span className="text-sm font-medium">Back to Dashboard</span>
-          </button>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Back button */}
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors mb-6 group"
+        >
+          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+          <span className="text-sm font-medium">Back to Dashboard</span>
+        </button>
 
-          <div className="flex flex-col sm:flex-row items-start gap-6 lg:gap-8">
-            {/* Avatar */}
-            <div className="relative shrink-0 self-center sm:self-start">
-              <div className="w-24 h-24 lg:w-28 lg:h-28 rounded-2xl overflow-hidden bg-amber-100 border-2 border-amber-200/80">
-                {previewImage ? (
-                  <img
-                    src={previewImage}
-                    alt="Profile"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-slate-800">
-                    <User className="w-12 h-12 text-white" />
+        {/* ═══════════════════════════════════════════════════════════
+            HERO CARD
+            ═══════════════════════════════════════════════════════════ */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-6"
+        >
+          {/* Gradient banner */}
+          <div className="h-32 bg-linear-to-r from-emerald-500 to-emerald-600 relative">
+            <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDE4YzMuMzEzIDAgNiAyLjY4NyA2IDZzLTIuNjg3IDYtNiA2LTYtMi42ODctNi02IDIuNjg3LTYgNi02ek0xOCAzNmMzLjMxMyAwIDYgMi42ODcgNiA2cy0yLjY4NyA2LTYgNi02LTIuNjg3LTYtNiAyLjY4Ny02IDYtNnoiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-30" />
+            {profile.isPremium && (
+              <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-xs font-semibold">
+                <Crown className="w-3.5 h-3.5" />
+                Premium
+              </div>
+            )}
+          </div>
+
+          <div className="px-6 sm:px-8 pb-6 -mt-14 relative">
+            <div className="flex flex-col sm:flex-row items-center sm:items-end gap-5">
+              {/* Avatar */}
+              <div className="relative shrink-0">
+                <div className="w-28 h-28 rounded-2xl overflow-hidden border-4 border-white shadow-lg bg-slate-800">
+                  {previewImage ? (
+                    <img
+                      src={previewImage}
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <User className="w-12 h-12 text-white/60" />
+                    </div>
+                  )}
+                </div>
+
+                {previewImage && !uploadingImage && (
+                  <button
+                    onClick={handleRemoveImage}
+                    className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors shadow-md"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+
+                {uploadingImage && (
+                  <div className="absolute inset-0 bg-slate-900/60 rounded-2xl flex flex-col items-center justify-center border-4 border-white">
+                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                    <span className="text-[10px] text-white font-bold mt-1">
+                      {uploadProgress}%
+                    </span>
                   </div>
                 )}
-              </div>
 
-              {previewImage && !uploadingImage && (
-                <button
-                  onClick={handleRemoveImage}
-                  className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors shadow-sm"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-
-              {uploadingImage && (
-                <div className="absolute inset-0 bg-slate-900/50 rounded-2xl flex flex-col items-center justify-center">
-                  <Loader2 className="w-6 h-6 text-white animate-spin" />
-                  <span className="text-[10px] text-white font-medium mt-1">
-                    {uploadProgress}%
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Info */}
-            <div className="flex-1 text-center sm:text-left min-w-0">
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mb-1">
-                <h1 className="text-2xl lg:text-3xl font-bold text-slate-900">
-                  {profile.fullName || profile.emailId.split("@")[0]}
-                </h1>
-                {profile.isPremium && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-200/60 text-amber-800 rounded-full text-xs font-semibold border border-amber-300/50">
-                    <Crown className="w-3 h-3" />
-                    Premium
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center justify-center sm:justify-start gap-2 text-sm text-amber-800/60 mb-5">
-                <Mail className="w-3.5 h-3.5" />
-                <span>{profile.emailId}</span>
-              </div>
-
-              {/* Level + XP */}
-              <div className="flex items-center justify-center sm:justify-start gap-3 mb-6">
-                <LevelBadge size="md" />
-                <div className="flex-1 max-w-xs">
-                  <XPBar />
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -529,280 +571,469 @@ const Profile: React.FC = () => {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploadingImage}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-50"
+                  className="absolute -bottom-1 -right-1 w-8 h-8 bg-emerald-500 text-white rounded-xl flex items-center justify-center hover:bg-emerald-600 transition-colors shadow-md border-2 border-white"
                 >
-                  {uploadingImage ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Uploading...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Camera className="w-4 h-4" />
-                      <span>
-                        {previewImage ? "Change Photo" : "Upload Photo"}
-                      </span>
-                    </>
+                  <Camera className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Name + meta */}
+              <div className="flex-1 text-center sm:text-left sm:pb-1 min-w-0">
+                <h1 className="text-2xl font-bold text-slate-900">
+                  {profile.fullName || profile.emailId.split("@")[0]}
+                </h1>
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1 mt-1.5">
+                  <span className="flex items-center gap-1.5 text-sm text-slate-500">
+                    <Mail className="w-3.5 h-3.5" />
+                    {profile.emailId}
+                  </span>
+                  {formData.collegeOrSchool && (
+                    <span className="flex items-center gap-1.5 text-sm text-slate-500">
+                      <School className="w-3.5 h-3.5" />
+                      {formData.collegeOrSchool}
+                    </span>
                   )}
-                </button>
+                </div>
+              </div>
 
-                <button
-                  onClick={() => navigate("/auth/change-password")}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-white text-slate-700 rounded-lg text-sm font-medium border border-amber-200 hover:bg-amber-50 transition-colors"
-                >
-                  Change Password
-                </button>
+              {/* Level + XP */}
+              <div className="flex items-center gap-4 sm:pb-1">
+                <LevelBadge size="lg" />
+                <div className="w-40">
+                  <XPBar />
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </motion.div>
 
-      {/* ═══════════════════════════════════════════════════════════
-          SECTION 2 — Profile Details (white band)
-          ═══════════════════════════════════════════════════════════ */}
-      <div className="bg-white border-b border-slate-100">
-        <div className="max-w-6xl mx-auto px-6 sm:px-8 py-10 lg:py-14">
-          <h2 className="text-xl font-bold text-slate-900 mb-6">
-            Profile Details
-          </h2>
+        {/* ═══════════════════════════════════════════════════════════
+            CONTENT — sidebar + main area
+            ═══════════════════════════════════════════════════════════ */}
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Sidebar nav */}
+          <motion.div
+            initial={{ opacity: 0, x: -12 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+            className="lg:w-56 shrink-0"
+          >
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-2 lg:sticky lg:top-28">
+              <nav className="flex lg:flex-col gap-1">
+                {sidebarSections.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setActiveSection(s.id)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all w-full text-left ${
+                      activeSection === s.id
+                        ? "bg-emerald-50 text-emerald-700 shadow-sm"
+                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+                    }`}
+                  >
+                    <s.icon className={`w-4 h-4 ${activeSection === s.id ? "text-emerald-500" : "text-slate-400"}`} />
+                    {s.label}
+                  </button>
+                ))}
 
-          <form onSubmit={handleSubmit}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-              <div>
-                <label
-                  htmlFor="collegeOrSchool"
-                  className="block text-sm font-medium text-slate-700 mb-1.5"
+              </nav>
+            </div>
+          </motion.div>
+
+          {/* Main content */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.15 }}
+            className="flex-1 min-w-0"
+          >
+            <AnimatePresence mode="wait">
+              {/* ── DETAILS SECTION ──────────────────── */}
+              {activeSection === "details" && (
+                <motion.div
+                  key="details"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
                 >
-                  College / School
-                </label>
-                <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
-                    <School className="h-4 w-4 text-slate-400" />
+                  <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+                      <Settings className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900">Profile Details</h2>
+                      <p className="text-xs text-slate-500">Update your personal information</p>
+                    </div>
                   </div>
-                  <input
-                    id="collegeOrSchool"
-                    name="collegeOrSchool"
-                    type="text"
-                    value={formData.collegeOrSchool}
-                    onChange={handleChange}
-                    className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm transition-all focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white"
-                    placeholder="Enter your institution name"
-                    disabled={loading}
-                  />
-                </div>
-              </div>
 
-              <div>
-                <label
-                  htmlFor="contactNo"
-                  className="block text-sm font-medium text-slate-700 mb-1.5"
+                  <form onSubmit={handleSubmit} className="p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                      <div>
+                        <label
+                          htmlFor="collegeOrSchool"
+                          className="block text-sm font-medium text-slate-700 mb-2"
+                        >
+                          College / School
+                        </label>
+                        <div className="relative">
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
+                            <School className="h-4 w-4 text-slate-400" />
+                          </div>
+                          <input
+                            id="collegeOrSchool"
+                            name="collegeOrSchool"
+                            type="text"
+                            value={formData.collegeOrSchool}
+                            onChange={handleChange}
+                            className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 focus:bg-white"
+                            placeholder="Enter your institution name"
+                            disabled={loading}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="contactNo"
+                          className="block text-sm font-medium text-slate-700 mb-2"
+                        >
+                          Contact Number
+                        </label>
+                        <div className="relative">
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
+                            <Phone className="h-4 w-4 text-slate-400" />
+                          </div>
+                          <input
+                            id="contactNo"
+                            name="contactNo"
+                            type="tel"
+                            value={formData.contactNo}
+                            onChange={handleChange}
+                            className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 focus:bg-white"
+                            placeholder="+1 (555) 000-0000"
+                            disabled={loading}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mb-6">
+                      <label
+                        htmlFor="recentProject"
+                        className="block text-sm font-medium text-slate-700 mb-2"
+                      >
+                        Bio
+                      </label>
+                      <div className="relative">
+                        <div className="absolute left-3.5 top-3">
+                          <FileText className="h-4 w-4 text-slate-400" />
+                        </div>
+                        <textarea
+                          id="recentProject"
+                          name="recentProject"
+                          value={formData.recentProject}
+                          onChange={handleChange}
+                          rows={3}
+                          className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 focus:bg-white resize-none"
+                          placeholder="Describe about yourself, your interests, or your recent projects"
+                          disabled={loading}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 bg-linear-to-r from-emerald-500 to-emerald-600 text-white rounded-xl text-sm font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" />
+                          Save Changes
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </motion.div>
+              )}
+
+              {/* ── SECURITY SECTION ──────────────────── */}
+              {activeSection === "security" && (
+                <motion.div
+                  key="security"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
                 >
-                  Contact Number
-                </label>
-                <div className="relative">
-                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
-                    <Phone className="h-4 w-4 text-slate-400" />
+                  <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+                      <Shield className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900">Change Password</h2>
+                      <p className="text-xs text-slate-500">Update your account password</p>
+                    </div>
                   </div>
-                  <input
-                    id="contactNo"
-                    name="contactNo"
-                    type="tel"
-                    value={formData.contactNo}
-                    onChange={handleChange}
-                    className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm transition-all focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white"
-                    placeholder="+1 (555) 000-0000"
-                    disabled={loading}
-                  />
-                </div>
-              </div>
-            </div>
 
-            <div className="mb-5">
-              <label
-                htmlFor="recentProject"
-                className="block text-sm font-medium text-slate-700 mb-1.5"
-              >
-                Bio
-              </label>
-              <div className="relative">
-                <div className="absolute left-3.5 top-3">
-                  <FileText className="h-4 w-4 text-slate-400" />
-                </div>
-                <textarea
-                  id="recentProject"
-                  name="recentProject"
-                  value={formData.recentProject}
-                  onChange={handleChange}
-                  rows={3}
-                  className="block w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm transition-all focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:bg-white resize-none"
-                  placeholder="Describe about yourself, your interests, or your recent projects"
-                  disabled={loading}
-                />
-              </div>
-            </div>
+                  <form onSubmit={handlePasswordChange} className="p-6 space-y-5">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Current Password
+                      </label>
+                      <input
+                        type="password"
+                        value={passwordData.oldPassword}
+                        onChange={(e) => setPasswordData((p) => ({ ...p, oldPassword: e.target.value }))}
+                        className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 focus:bg-white"
+                        placeholder="Enter current password"
+                        required
+                        disabled={changingPassword}
+                      />
+                    </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Updating...</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Save Changes</span>
-                </>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          New Password
+                        </label>
+                        <input
+                          type="password"
+                          value={passwordData.newPassword}
+                          onChange={(e) => setPasswordData((p) => ({ ...p, newPassword: e.target.value }))}
+                          className="block w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 focus:bg-white"
+                          placeholder="At least 6 characters"
+                          required
+                          minLength={6}
+                          disabled={changingPassword}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Confirm New Password
+                        </label>
+                        <input
+                          type="password"
+                          value={passwordData.confirmPassword}
+                          onChange={(e) => setPasswordData((p) => ({ ...p, confirmPassword: e.target.value }))}
+                          className={`block w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 focus:bg-white ${
+                            passwordData.confirmPassword && passwordData.confirmPassword !== passwordData.newPassword
+                              ? "border-red-300"
+                              : "border-slate-200"
+                          }`}
+                          placeholder="Re-enter new password"
+                          required
+                          minLength={6}
+                          disabled={changingPassword}
+                        />
+                        {passwordData.confirmPassword && passwordData.confirmPassword !== passwordData.newPassword && (
+                          <p className="text-xs text-red-500 mt-1.5">Passwords do not match</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={changingPassword || !passwordData.oldPassword || !passwordData.newPassword || !passwordData.confirmPassword}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 bg-linear-to-r from-emerald-500 to-emerald-600 text-white rounded-xl text-sm font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    >
+                      {changingPassword ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Changing...
+                        </>
+                      ) : (
+                        <>
+                          <Shield className="w-4 h-4" />
+                          Change Password
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </motion.div>
               )}
-            </button>
-          </form>
-        </div>
-      </div>
 
-      {/* ═══════════════════════════════════════════════════════════
-          SECTION 3 — Mentor Voice (slate band)
-          ═══════════════════════════════════════════════════════════ */}
-      <div className="bg-slate-50 border-b border-slate-100">
-        <div className="max-w-6xl mx-auto px-6 sm:px-8 py-10 lg:py-14">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center">
-              <Volume2 className="w-5 h-5 text-amber-600" />
-            </div>
-            <h2 className="text-xl font-bold text-slate-900">Mentor Voice</h2>
-          </div>
-          <p className="text-sm text-slate-500 mb-8 ml-12">
-            Choose a voice for your AI mentor. Click play to preview, then
-            select the one you like.
-          </p>
+              {/* ── VOICE SECTION ──────────────────── */}
+              {activeSection === "voice" && (
+                <motion.div
+                  key="voice"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-6"
+                >
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+                        <Volume2 className="w-4 h-4 text-emerald-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-slate-900">Mentor Voice</h2>
+                        <p className="text-xs text-slate-500">
+                          Choose a voice for your AI mentor
+                        </p>
+                      </div>
+                    </div>
 
-          {/* Default voice */}
-          <div className="mb-6">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-              Default
-            </p>
-            <div className="max-w-xl">
-              {renderVoiceItem(
-                DEFAULT_VOICE_ID,
-                "Rajat Sir",
-                "Original cloned voice",
-                <Volume2 className="w-4 h-4" />,
+                    <div className="p-6 space-y-6">
+                      {/* Default voice */}
+                      <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                          Default
+                        </p>
+                        <div className="max-w-xl">
+                          {renderVoiceItem(
+                            DEFAULT_VOICE_ID,
+                            "Rajat Sir",
+                            "Original cloned voice",
+                            <Volume2 className="w-4 h-4" />,
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Preset voices */}
+                      <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                          Preset Voices
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {PRESET_VOICES.map((voice) =>
+                            renderVoiceItem(
+                              voice.id,
+                              voice.name,
+                              voice.description,
+                              <Volume2 className="w-4 h-4" />,
+                            ),
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Cloned voices */}
+                      {clonedVoices.length > 0 && (
+                        <div>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                            Your Cloned Voices
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {clonedVoices.map((voice) =>
+                              renderVoiceItem(
+                                voice.id,
+                                voice.name,
+                                "Custom clone",
+                                <Mic className="w-4 h-4" />,
+                              ),
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Clone your voice card */}
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center">
+                        <Mic className="w-4 h-4 text-amber-600" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-bold text-slate-900">Clone Your Voice</h2>
+                        <p className="text-xs text-slate-500">
+                          Upload a clear recording (WAV or MP3, max 10MB, at least 10 seconds)
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-6">
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <input
+                          type="text"
+                          value={cloneVoiceName}
+                          onChange={(e) => setCloneVoiceName(e.target.value)}
+                          placeholder="Voice name (e.g., My Voice)"
+                          className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 focus:bg-white"
+                          disabled={cloningVoice}
+                        />
+
+                        <input
+                          ref={voiceFileRef}
+                          type="file"
+                          accept="audio/*"
+                          className="hidden"
+                          disabled={cloningVoice}
+                        />
+                        <button
+                          onClick={() => voiceFileRef.current?.click()}
+                          disabled={cloningVoice}
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-slate-700 rounded-xl text-sm font-medium border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                        >
+                          <Upload className="w-4 h-4" />
+                          <span>
+                            {voiceFileRef.current?.files?.[0]?.name ||
+                              "Choose Audio File"}
+                          </span>
+                        </button>
+
+                        <button
+                          onClick={handleCloneVoice}
+                          disabled={cloningVoice || !cloneVoiceName.trim()}
+                          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-linear-to-r from-emerald-500 to-emerald-600 text-white rounded-xl text-sm font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                        >
+                          {cloningVoice ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Cloning...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4" />
+                              Clone Voice
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
               )}
-            </div>
-          </div>
 
-          {/* Preset voices */}
-          <div className="mb-6">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-              Preset Voices
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {PRESET_VOICES.map((voice) =>
-                renderVoiceItem(
-                  voice.id,
-                  voice.name,
-                  voice.description,
-                  <Volume2 className="w-4 h-4" />,
-                ),
+              {/* ── BADGES SECTION ──────────────────── */}
+              {activeSection === "badges" && (
+                <motion.div
+                  key="badges"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
+                >
+                  <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center">
+                      <Award className="w-4 h-4 text-amber-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900">Badges</h2>
+                      <p className="text-xs text-slate-500">
+                        Your achievements and milestones
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-6">
+                    <BadgeGrid badges={badges} />
+                  </div>
+                </motion.div>
               )}
-            </div>
-          </div>
-
-          {/* Cloned voices */}
-          {clonedVoices.length > 0 && (
-            <div className="mb-6">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                Your Cloned Voices
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {clonedVoices.map((voice) =>
-                  renderVoiceItem(
-                    voice.id,
-                    voice.name,
-                    "Custom clone",
-                    <Mic className="w-4 h-4" />,
-                  ),
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Clone your voice */}
-          <div className="mt-8 border border-dashed border-amber-300 bg-amber-50/50 rounded-xl p-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Mic className="w-4 h-4 text-amber-600" />
-              <p className="text-sm font-semibold text-slate-900">
-                Clone Your Voice
-              </p>
-            </div>
-            <p className="text-xs text-slate-500 mb-5">
-              Upload a clear audio recording of your voice (WAV or MP3, max
-              10MB). Speak naturally for at least 10 seconds.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="text"
-                value={cloneVoiceName}
-                onChange={(e) => setCloneVoiceName(e.target.value)}
-                placeholder="Voice name (e.g., My Voice)"
-                className="flex-1 px-4 py-2.5 bg-white border border-amber-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
-                disabled={cloningVoice}
-              />
-
-              <input
-                ref={voiceFileRef}
-                type="file"
-                accept="audio/*"
-                className="hidden"
-                disabled={cloningVoice}
-              />
-              <button
-                onClick={() => voiceFileRef.current?.click()}
-                disabled={cloningVoice}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-slate-700 rounded-lg text-sm font-medium border border-amber-200 hover:bg-amber-50 transition-colors disabled:opacity-50"
-              >
-                <Upload className="w-4 h-4" />
-                <span>
-                  {voiceFileRef.current?.files?.[0]?.name ||
-                    "Choose Audio File"}
-                </span>
-              </button>
-
-              <button
-                onClick={handleCloneVoice}
-                disabled={cloningVoice || !cloneVoiceName.trim()}
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {cloningVoice ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Cloning...</span>
-                  </>
-                ) : (
-                  <span>Clone Voice</span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════
-          SECTION 4 — Badges (white band)
-          ═══════════════════════════════════════════════════════════ */}
-      <div className="bg-white">
-        <div className="max-w-6xl mx-auto px-6 sm:px-8 py-10 lg:py-14">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center">
-              <Award className="w-5 h-5 text-amber-600" />
-            </div>
-            <h2 className="text-xl font-bold text-slate-900">Badges</h2>
-          </div>
-          <BadgeGrid badges={badges} />
+            </AnimatePresence>
+          </motion.div>
         </div>
       </div>
     </div>

@@ -581,10 +581,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
       "residual_plot",
       "prediction_table",
       // Image pipeline nodes
-      "image_preprocessing",
-      "image_augmentation",
       "image_split",
-      "cnn_classifier",
       "image_predictions",
     ].includes(node?.type || "");
 
@@ -639,23 +636,14 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
             "random_forest",
           ].includes(node?.type || "");
 
-          // CNN classifier gets train_dataset_id from image_split
-          if (node?.type === "cnn_classifier" && sourceNode?.type === "image_split") {
+          // image_predictions gets train_dataset_id + test_dataset_id from image_split
+          if (node?.type === "image_predictions" && sourceNode?.type === "image_split") {
             const trainDatasetId = sourceResult?.train_dataset_id;
+            const testDatasetId = sourceResult?.test_dataset_id;
             setConfig((prev) => ({
               ...prev,
               train_dataset_id: trainDatasetId || prev.train_dataset_id,
-            }));
-          } else if (node?.type === "image_predictions" && sourceNode?.type === "cnn_classifier") {
-            // image_predictions gets test_dataset_id + model_path from cnn_classifier
-            const testDatasetId = sourceResult?.test_dataset_id;
-            const modelPath = sourceResult?.model_path;
-            const modelId = sourceResult?.model_id;
-            setConfig((prev) => ({
-              ...prev,
               test_dataset_id: testDatasetId || prev.test_dataset_id,
-              model_path: modelPath || prev.model_path,
-              model_id: modelId || prev.model_id,
             }));
           } else if (isMLNode && sourceNode?.type === "split") {
             // ML nodes get train_dataset_id and target_column from split node
@@ -1045,20 +1033,14 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
       }
     }
 
-    // Image pipeline: auto-fill train_dataset_id for cnn_classifier from image_split
+    // Image pipeline: auto-fill train_dataset_id + test_dataset_id for image_predictions from image_split
     if (fieldName === "train_dataset_id" && connectedSourceNode?.type === "image_split") {
       const sourceResult = connectedSourceNode.data.result as Record<string, unknown> | undefined;
       if (sourceResult?.train_dataset_id) return sourceResult.train_dataset_id;
     }
-
-    // Image pipeline: auto-fill test_dataset_id + model_path for image_predictions from cnn_classifier
-    if (fieldName === "test_dataset_id" && connectedSourceNode?.type === "cnn_classifier") {
+    if (fieldName === "test_dataset_id" && connectedSourceNode?.type === "image_split") {
       const sourceResult = connectedSourceNode.data.result as Record<string, unknown> | undefined;
       if (sourceResult?.test_dataset_id) return sourceResult.test_dataset_id;
-    }
-    if (fieldName === "model_path" && connectedSourceNode?.type === "cnn_classifier") {
-      const sourceResult = connectedSourceNode.data.result as Record<string, unknown> | undefined;
-      if (sourceResult?.model_path) return sourceResult.model_path;
     }
 
     if (!datasetMetadata) return undefined;
@@ -2151,8 +2133,6 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                       "feature_selection",
                       "split",
                       // Image pipeline nodes — inherit from connected node
-                      "image_preprocessing",
-                      "image_augmentation",
                       "image_split",
                     ].includes(node.type);
 
@@ -2164,10 +2144,10 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                       "logistic_regression",
                       "decision_tree",
                       "random_forest",
-                      "cnn_classifier",
+                      "image_predictions",
                     ].includes(node.type)) ||
                     // Also treat image_predictions source fields as read-only
-                    (["test_dataset_id", "model_path"].includes(field.name) &&
+                    (["test_dataset_id"].includes(field.name) &&
                       node.type === "image_predictions");
 
                   // Check if this is a model_output_id field for result nodes (should be read-only)

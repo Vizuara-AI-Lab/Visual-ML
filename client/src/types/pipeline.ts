@@ -36,9 +36,7 @@ export type NodeType =
   | "example_node"
   // Image pipeline nodes
   | "image_dataset"
-  | "image_preprocessing"
   | "image_split"
-  | "cnn_classifier"
   | "image_predictions"
   // Activity nodes (standalone interactive learning)
   | "activity_loss_functions"

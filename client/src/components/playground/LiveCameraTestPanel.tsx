@@ -166,13 +166,13 @@ export const LiveCameraTestPanel = ({
     <div className="space-y-4">
       {/* Camera preview */}
       <div className="rounded-xl border border-slate-200 bg-slate-900 overflow-hidden">
-        <div className="relative aspect-video flex items-center justify-center">
+        <div className="relative flex items-center justify-center" style={{ height: 240 }}>
           <video
             ref={videoRef}
             autoPlay
             playsInline
             muted
-            className={`w-full h-full object-cover ${cameraActive ? "opacity-100" : "opacity-0"}`}
+            className={`h-full object-cover ${cameraActive ? "opacity-100" : "opacity-0"}`}
           />
           {!cameraActive && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
