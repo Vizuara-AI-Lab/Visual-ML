@@ -3,7 +3,7 @@
  * Tabs: Results | Sample Gallery | Class Distribution | Pixel Stats | Quiz
  */
 
-import { useState, type ReactNode, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Image,
   BarChart3,
@@ -87,16 +87,14 @@ function PixelImage({
 
 interface ImageDatasetExplorerProps {
   result: any;
-  renderResults: () => ReactNode;
 }
 
-type ExplorerTab = "results" | "gallery" | "distribution" | "pixels" | "quiz";
+type ExplorerTab = "gallery" | "distribution" | "pixels" | "quiz";
 
 export const ImageDatasetExplorer = ({
   result,
-  renderResults,
 }: ImageDatasetExplorerProps) => {
-  const [activeTab, setActiveTab] = useState<ExplorerTab>("results");
+  const [activeTab, setActiveTab] = useState<ExplorerTab>("gallery");
 
   const tabs: {
     id: ExplorerTab;
@@ -104,7 +102,6 @@ export const ImageDatasetExplorer = ({
     icon: any;
     available: boolean;
   }[] = [
-    { id: "results", label: "Results", icon: ClipboardList, available: true },
     {
       id: "gallery",
       label: "Sample Gallery",
@@ -157,9 +154,10 @@ export const ImageDatasetExplorer = ({
       </div>
 
       {/* Tab content */}
-      {activeTab === "results" && renderResults()}
       {activeTab === "gallery" && result.sample_images && (
-        <GalleryTab data={result.sample_images} />
+        result.sample_images[0]?.data_type === "pose"
+          ? <PoseGalleryTab data={result.sample_images} />
+          : <GalleryTab data={result.sample_images} />
       )}
       {activeTab === "distribution" && result.class_distribution && (
         <DistributionTab data={result.class_distribution} />
@@ -299,6 +297,119 @@ function GalleryTab({ data }: { data: any[] }) {
             <strong>{classData.width}×{classData.height}</strong> image has{" "}
             <strong>{classData.width * classData.height}</strong> pixel features.
             Click any image to see its pixel statistics.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Pose Gallery Tab (skeleton mini-diagrams instead of pixel images) ---
+
+function PoseGalleryTab({ data }: { data: any[] }) {
+  const [selectedClass, setSelectedClass] = useState<number>(0);
+  const classData = data[selectedClass];
+  if (!classData) return null;
+
+  // Rough 2D positions for MediaPipe 33 landmarks
+  const LANDMARK_POS: [number, number][] = [
+    [0.5, 0.08], [0.47, 0.06], [0.45, 0.06], [0.43, 0.06],
+    [0.53, 0.06], [0.55, 0.06], [0.57, 0.06], [0.38, 0.08],
+    [0.62, 0.08], [0.48, 0.11], [0.52, 0.11], [0.35, 0.22],
+    [0.65, 0.22], [0.28, 0.35], [0.72, 0.35], [0.22, 0.48],
+    [0.78, 0.48], [0.20, 0.50], [0.80, 0.50], [0.21, 0.49],
+    [0.79, 0.49], [0.23, 0.48], [0.77, 0.48], [0.40, 0.52],
+    [0.60, 0.52], [0.38, 0.70], [0.62, 0.70], [0.37, 0.88],
+    [0.63, 0.88], [0.35, 0.92], [0.65, 0.92], [0.37, 0.95],
+    [0.63, 0.95],
+  ];
+
+  const CONNECTIONS = [
+    [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
+    [11, 23], [12, 24], [23, 24],
+    [23, 25], [25, 27], [24, 26], [26, 28],
+    [27, 29], [27, 31], [28, 30], [28, 32],
+    [0, 1], [1, 2], [2, 3], [0, 4], [4, 5], [5, 6],
+  ];
+
+  const renderMiniSkeleton = (sample: any, size: number = 80) => {
+    // Use actual landmark positions if available, otherwise fall back to default
+    const landmarks = sample.landmarks || [];
+    const useActual = landmarks.length === 33;
+
+    return (
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="bg-slate-50 rounded border border-gray-200">
+        {CONNECTIONS.map(([a, b], i) => {
+          const ax = useActual ? landmarks[a].x * size : LANDMARK_POS[a][0] * size;
+          const ay = useActual ? landmarks[a].y * size : LANDMARK_POS[a][1] * size;
+          const bx = useActual ? landmarks[b].x * size : LANDMARK_POS[b][0] * size;
+          const by = useActual ? landmarks[b].y * size : LANDMARK_POS[b][1] * size;
+          return (
+            <line key={i} x1={ax} y1={ay} x2={bx} y2={by} stroke="#94a3b8" strokeWidth={1.5} />
+          );
+        })}
+        {(useActual ? landmarks : LANDMARK_POS.map(([x, y]: [number, number]) => ({ x, y }))).map((lm: any, i: number) => (
+          <circle
+            key={i}
+            cx={lm.x * (useActual ? size : 1)}
+            cy={lm.y * (useActual ? size : 1)}
+            r={2}
+            fill="#0ea5e9"
+          />
+        ))}
+      </svg>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-sky-50 border border-sky-200 rounded-lg p-3">
+        <h3 className="text-sm font-semibold text-sky-900">Pose Gallery</h3>
+        <p className="text-xs text-sky-700 mt-1">
+          Sample skeleton poses from each class. Each pose has {classData.n_landmarks || 33} body landmarks.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {data.map((cls: any, i: number) => (
+          <button
+            key={i}
+            onClick={() => setSelectedClass(i)}
+            className={`px-3 py-1.5 text-sm rounded-lg border transition-all ${
+              selectedClass === i
+                ? "bg-sky-600 text-white border-sky-600 shadow-md"
+                : "bg-white text-gray-700 border-gray-300 hover:border-sky-400"
+            }`}
+          >
+            {cls.class_name}
+            <span className="ml-1 text-xs opacity-75">({cls.count})</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-semibold text-gray-800">{classData.class_name}</h4>
+          <span className="text-xs text-gray-500">
+            {classData.count} samples total — showing {classData.samples.length}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {classData.samples.map((sample: any, i: number) => (
+            <div key={i} className="flex flex-col items-center gap-1">
+              {renderMiniSkeleton(sample)}
+              <span className="text-[10px] text-gray-500">Sample {i + 1}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+        <div className="flex items-start gap-2">
+          <Info className="w-4 h-4 text-blue-600 mt-0.5" />
+          <p className="text-xs text-blue-700">
+            Each pose is stored as <strong>132 numbers</strong> (33 landmarks × 4 values: x, y, z, visibility).
+            Unlike pixel images, pose data captures body geometry directly, making it invariant to background and lighting.
           </p>
         </div>
       </div>

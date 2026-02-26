@@ -113,11 +113,18 @@ class ImageSplitNode(BaseNode):
             raise ValueError(f"Dataset {input_data.dataset_id} not found or empty")
 
         label_col = "label" if "label" in df.columns else df.columns[-1]
-        pixel_cols = [c for c in df.columns if c != label_col]
+        feature_cols = [c for c in df.columns if c != label_col]
         y = df[label_col].values
 
-        width = input_data.image_width or int(np.sqrt(len(pixel_cols)))
-        height = input_data.image_height or int(np.sqrt(len(pixel_cols)))
+        # Detect pose data by checking for lm_* columns
+        is_pose = any(c.startswith("lm_") for c in feature_cols)
+
+        if is_pose:
+            width = len(feature_cols)  # 132 features
+            height = 1
+        else:
+            width = input_data.image_width or int(np.sqrt(len(feature_cols)))
+            height = input_data.image_height or int(np.sqrt(len(feature_cols)))
         channels = input_data.n_channels or 1
         n_classes = input_data.n_classes or len(np.unique(y))
         class_names = input_data.class_names or [str(i) for i in range(n_classes)]

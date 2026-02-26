@@ -21,10 +21,12 @@ import {
   ImagePlus,
   Trash2,
   Loader2,
+  PersonStanding,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { apiClient } from "../../lib/axios";
 import { CameraCapturePanel } from "./CameraCapturePanel";
+import { PoseCapturePanel } from "./PoseCapturePanel";
 import { LiveCameraTestPanel } from "./LiveCameraTestPanel";
 import { getNodeByType } from "../../config/nodeDefinitions";
 import { usePlaygroundStore } from "../../store/playgroundStore";
@@ -102,9 +104,12 @@ function ImageClassConfig({
             onChange={(e) => onFieldChange("target_size", e.target.value)}
             className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
           >
-            <option value="8x8">8x8</option>
-            <option value="28x28">28x28</option>
-            <option value="32x32">32x32</option>
+            <option value="8x8">8×8</option>
+            <option value="28x28">28×28</option>
+            <option value="32x32">32×32</option>
+            <option value="64x64">64×64</option>
+            <option value="128x128">128×128 (High Quality)</option>
+            <option value="256x256">256×256 (Original Quality)</option>
           </select>
         </div>
         <div className="space-y-1">
@@ -410,11 +415,12 @@ function ImageUploadPanel({
   );
 }
 
-// --- Merged Image Dataset config block (built-in dataset, camera, or upload) ---
+// --- Merged Image Dataset config block (built-in dataset, camera, upload, or pose) ---
 function ImageDatasetConfigBlock({
   config,
   onFieldChange,
   onDatasetReady,
+  onPoseDatasetReady,
   isSubmitting,
 }: {
   config: Record<string, unknown>;
@@ -424,13 +430,17 @@ function ImageDatasetConfigBlock({
     target_size: string;
     images_per_class: Record<string, number[][]>;
   }) => void;
+  onPoseDatasetReady: (payload: {
+    class_names: string[];
+    landmarks_per_class: Record<string, number[][]>;
+  }) => void;
   isSubmitting: boolean;
 }) {
   const source = (config.source as string) || "builtin";
 
   return (
     <div className="space-y-4">
-      {/* Source toggle — 3 buttons */}
+      {/* Source toggle — 4 buttons */}
       <div className="flex rounded-lg border border-gray-200 overflow-hidden">
         <button
           onClick={() => onFieldChange("source", "builtin")}
@@ -453,6 +463,17 @@ function ImageDatasetConfigBlock({
         >
           <Camera className="w-3.5 h-3.5" />
           Camera
+        </button>
+        <button
+          onClick={() => onFieldChange("source", "pose")}
+          className={`flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 border-l border-gray-200 ${
+            source === "pose"
+              ? "bg-sky-600 text-white"
+              : "bg-white text-gray-600 hover:bg-gray-50"
+          }`}
+        >
+          <PersonStanding className="w-3.5 h-3.5" />
+          Pose
         </button>
         <button
           onClick={() => onFieldChange("source", "upload")}
@@ -489,6 +510,15 @@ function ImageDatasetConfigBlock({
             isSubmitting={isSubmitting}
           />
         </div>
+      ) : source === "pose" ? (
+        <div className="space-y-3">
+          <PoseClassConfig config={config} onFieldChange={onFieldChange} />
+          <PoseCapturePanel
+            config={config}
+            onDatasetReady={onPoseDatasetReady}
+            isSubmitting={isSubmitting}
+          />
+        </div>
       ) : (
         <div className="space-y-3">
           <ImageClassConfig config={config} onFieldChange={onFieldChange} />
@@ -499,6 +529,50 @@ function ImageDatasetConfigBlock({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+/** Simple config for pose class names + samples per class */
+function PoseClassConfig({
+  config,
+  onFieldChange,
+}: {
+  config: Record<string, unknown>;
+  onFieldChange: (name: string, value: unknown) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">
+          Pose Labels
+        </label>
+        <input
+          type="text"
+          value={(config.class_names as string) || ""}
+          onChange={(e) => onFieldChange("class_names", e.target.value)}
+          placeholder="standing, sitting, waving"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+        />
+        <p className="text-[10px] text-gray-400 mt-1">
+          Comma-separated pose names
+        </p>
+      </div>
+      <div>
+        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">
+          Samples Per Pose
+        </label>
+        <input
+          type="number"
+          value={Number(config.samples_per_class) || 30}
+          onChange={(e) =>
+            onFieldChange("samples_per_class", parseInt(e.target.value) || 30)
+          }
+          min={5}
+          max={200}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+        />
+      </div>
     </div>
   );
 }
@@ -524,6 +598,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
   const [userDatasets, setUserDatasets] = useState<DatasetMetadata[]>([]);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
   const [buildingDataset, setBuildingDataset] = useState(false);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
 
   // Reset config when nodeId changes to prevent config sharing between nodes
   // ALWAYS load the latest config from the store (no caching)
@@ -569,6 +644,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
       "logistic_regression",
       "decision_tree",
       "random_forest",
+      "kmeans",
       "r2_score",
       "mse_score",
       "rmse_score",
@@ -634,6 +710,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
             "logistic_regression",
             "decision_tree",
             "random_forest",
+            "kmeans",
           ].includes(node?.type || "");
 
           // image_predictions gets train_dataset_id + test_dataset_id from image_split
@@ -731,6 +808,48 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
         });
       } catch (err) {
         console.error("❌ Camera dataset build failed:", err);
+      } finally {
+        setBuildingDataset(false);
+      }
+    },
+    [nodeId, updateNodeConfig],
+  );
+
+  // Build a pose dataset — calls /ml/pose/dataset with landmark arrays
+  const buildPoseDataset = useCallback(
+    async (payload: {
+      class_names: string[];
+      landmarks_per_class: Record<string, number[][]>;
+    }) => {
+      if (!nodeId) return;
+      setBuildingDataset(true);
+      try {
+        const response = await apiClient.post("/ml/pose/dataset", {
+          class_names: payload.class_names,
+          landmarks_per_class: payload.landmarks_per_class,
+        });
+        const data = response.data as {
+          dataset_id: string;
+          n_rows: number;
+          n_columns: number;
+          n_classes: number;
+          class_names: string[];
+        };
+        setConfig((prev) => {
+          const updated = {
+            ...prev,
+            source: "pose",
+            dataset_id: data.dataset_id,
+            n_rows: data.n_rows,
+            n_columns: data.n_columns,
+            class_names: payload.class_names.join(","),
+            data_type: "pose",
+          };
+          updateNodeConfig(nodeId, updated);
+          return updated;
+        });
+      } catch (err) {
+        console.error("Pose dataset build failed:", err);
       } finally {
         setBuildingDataset(false);
       }
@@ -967,6 +1086,17 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
   const availableColumns = getAvailableColumns();
 
   const handleSave = () => {
+    // Warn if camera/pose source is selected but no dataset has been built
+    if (node.type === "image_dataset") {
+      const source = config.source as string;
+      if ((source === "camera" || source === "pose") && !config.dataset_id) {
+        setSaveWarning(
+          `You haven't built a dataset yet! Please capture ${source === "pose" ? "poses" : "images"} and click "Build Dataset" before saving.`
+        );
+        return;
+      }
+    }
+    setSaveWarning(null);
     updateNodeConfig(node.id, config);
     onClose();
   };
@@ -2087,6 +2217,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                 config={config}
                 onFieldChange={handleFieldChange}
                 onDatasetReady={buildCameraDataset}
+                onPoseDatasetReady={buildPoseDataset}
                 isSubmitting={buildingDataset}
               />
             ) : nodeDef.configFields && nodeDef.configFields.length > 0 ? (
@@ -2683,20 +2814,28 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-slate-500 hover:text-slate-800 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
-            >
-              <Save className="w-4 h-4" />
-              Save Configuration
-            </button>
+          <div className="px-6 py-4 border-t border-slate-200">
+            {saveWarning && (
+              <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-300 rounded-lg flex items-center gap-2">
+                <span className="text-amber-600 text-sm font-medium">⚠</span>
+                <span className="text-xs text-amber-700">{saveWarning}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-slate-500 hover:text-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+              >
+                <Save className="w-4 h-4" />
+                Save Configuration
+              </button>
+            </div>
           </div>
         </motion.div>
       </div>

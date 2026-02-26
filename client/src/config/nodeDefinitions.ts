@@ -799,11 +799,18 @@ export const nodeCategories: NodeCategory[] = [
         defaultConfig: {
           train_dataset_id: "",
           test_dataset_id: "",
+          algorithm: "mlp",
+          // MLP defaults
           hidden_layers: "64,32",
           activation: "relu",
           max_iter: 300,
           learning_rate_init: 0.001,
           early_stopping: true,
+          // CNN defaults
+          epochs: 20,
+          batch_size: 32,
+          cnn_learning_rate: 0.001,
+          use_data_augmentation: true,
         },
         configFields: [
           {
@@ -823,11 +830,25 @@ export const nodeCategories: NodeCategory[] = [
             description: "Connect to an Image Split node",
           },
           {
+            name: "algorithm",
+            label: "Algorithm",
+            type: "select",
+            options: [
+              { value: "mlp", label: "MLP (Fast)" },
+              { value: "cnn", label: "CNN (Better for Images)" },
+            ],
+            defaultValue: "mlp",
+            description:
+              "MLP flattens pixels into a vector. CNN preserves spatial structure with convolutional filters.",
+          },
+          // MLP-specific fields
+          {
             name: "hidden_layers",
             label: "Hidden Layers",
             type: "text",
             defaultValue: "64,32",
             description: "Comma-separated layer sizes, e.g. 64,32",
+            conditionalDisplay: { field: "algorithm", equals: "mlp" },
           },
           {
             name: "activation",
@@ -839,6 +860,7 @@ export const nodeCategories: NodeCategory[] = [
               { value: "logistic", label: "Sigmoid" },
             ],
             defaultValue: "relu",
+            conditionalDisplay: { field: "algorithm", equals: "mlp" },
           },
           {
             name: "max_iter",
@@ -847,6 +869,7 @@ export const nodeCategories: NodeCategory[] = [
             min: 50,
             max: 2000,
             defaultValue: 300,
+            conditionalDisplay: { field: "algorithm", equals: "mlp" },
           },
           {
             name: "learning_rate_init",
@@ -856,6 +879,7 @@ export const nodeCategories: NodeCategory[] = [
             max: 0.1,
             step: 0.0001,
             defaultValue: 0.001,
+            conditionalDisplay: { field: "algorithm", equals: "mlp" },
           },
           {
             name: "early_stopping",
@@ -863,6 +887,49 @@ export const nodeCategories: NodeCategory[] = [
             type: "checkbox",
             defaultValue: true,
             description: "Stop training when validation score stops improving",
+            conditionalDisplay: { field: "algorithm", equals: "mlp" },
+          },
+          // CNN-specific fields
+          {
+            name: "epochs",
+            label: "Epochs",
+            type: "number",
+            min: 1,
+            max: 100,
+            defaultValue: 20,
+            description: "Number of complete passes through the training data",
+            conditionalDisplay: { field: "algorithm", equals: "cnn" },
+          },
+          {
+            name: "batch_size",
+            label: "Batch Size",
+            type: "number",
+            min: 8,
+            max: 256,
+            step: 8,
+            defaultValue: 32,
+            description: "Images processed per training step",
+            conditionalDisplay: { field: "algorithm", equals: "cnn" },
+          },
+          {
+            name: "cnn_learning_rate",
+            label: "Learning Rate",
+            type: "number",
+            min: 0.00001,
+            max: 0.01,
+            step: 0.00001,
+            defaultValue: 0.001,
+            description: "Adam optimizer learning rate",
+            conditionalDisplay: { field: "algorithm", equals: "cnn" },
+          },
+          {
+            name: "use_data_augmentation",
+            label: "Data Augmentation",
+            type: "checkbox",
+            defaultValue: true,
+            description:
+              "Apply random rotation, shift, and zoom during training (recommended for small datasets)",
+            conditionalDisplay: { field: "algorithm", equals: "cnn" },
           },
         ],
       },

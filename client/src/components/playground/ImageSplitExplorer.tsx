@@ -1,11 +1,10 @@
 /**
  * ImageSplitExplorer - Interactive learning for Image Split node.
- * Tabs: Results | Split Visualization | Class Balance | Split Ratios | Quiz
+ * Tabs: Split Preview | Class Balance | Split Ratios | Quiz
  */
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import {
-  ClipboardList,
   SplitSquareVertical,
   BarChart3,
   PieChart,
@@ -74,19 +73,16 @@ function PixelImage({
 
 interface ImageSplitExplorerProps {
   result: any;
-  renderResults: () => ReactNode;
 }
 
-type Tab = "results" | "split_viz" | "balance" | "ratios" | "quiz";
+type Tab = "split_viz" | "balance" | "ratios" | "quiz";
 
 export const ImageSplitExplorer = ({
   result,
-  renderResults,
 }: ImageSplitExplorerProps) => {
-  const [activeTab, setActiveTab] = useState<Tab>("results");
+  const [activeTab, setActiveTab] = useState<Tab>("split_viz");
 
   const tabs: { id: Tab; label: string; icon: any; available: boolean }[] = [
-    { id: "results", label: "Results", icon: ClipboardList, available: true },
     {
       id: "split_viz",
       label: "Split Preview",
@@ -137,12 +133,14 @@ export const ImageSplitExplorer = ({
           })}
       </div>
 
-      {activeTab === "results" && renderResults()}
       {activeTab === "split_viz" && result.split_visualization && (
         <SplitVizTab data={result.split_visualization} />
       )}
       {activeTab === "balance" && result.class_balance && (
-        <ClassBalanceTab data={result.class_balance} />
+        <ClassBalanceTab
+          data={result.class_balance}
+          stratified={result.split_ratios?.stratified}
+        />
       )}
       {activeTab === "ratios" && result.split_ratios && (
         <SplitRatiosTab data={result.split_ratios} />
@@ -154,57 +152,111 @@ export const ImageSplitExplorer = ({
   );
 };
 
-// --- Split Visualization Tab ---
+// --- Split Visualization Tab (per-class train vs test) ---
 
 function SplitVizTab({ data }: { data: any }) {
+  const [selectedClass, setSelectedClass] = useState<number>(0);
+  const classes = data.classes || [];
+  const cls = classes[selectedClass];
+
+  const totalTrain = classes.reduce(
+    (sum: number, c: any) => sum + (c.train_count || 0),
+    0
+  );
+  const totalTest = classes.reduce(
+    (sum: number, c: any) => sum + (c.test_count || 0),
+    0
+  );
+
   return (
     <div className="space-y-4">
       <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
         <h3 className="text-sm font-semibold text-purple-900">
-          📂 Split Preview
+          Split Preview
         </h3>
         <p className="text-xs text-purple-700 mt-1">
-          Sample images from train and test sets. No image appears in both!
+          {totalTrain} training + {totalTest} test images across{" "}
+          {classes.length} classes. No image appears in both sets!
         </p>
       </div>
 
-      {/* Train samples */}
-      <div className="bg-white border border-green-200 rounded-lg p-4">
-        <h4 className="text-sm font-semibold text-green-700 mb-3">
-          🎓 Training Set ({data.train_count} images)
-        </h4>
+      {/* Class selector pills */}
+      {classes.length > 1 && (
         <div className="flex flex-wrap gap-2">
-          {data.train_samples?.map((s: any, i: number) => (
-            <PixelImage
+          {classes.map((c: any, i: number) => (
+            <button
               key={i}
-              pixels={s.pixels}
-              width={data.width}
-              height={data.height}
-              size={56}
-              label={s.label}
-            />
+              onClick={() => setSelectedClass(i)}
+              className={`px-3 py-1.5 text-xs rounded-lg border font-medium transition-all ${
+                selectedClass === i
+                  ? "bg-blue-600 text-white border-blue-600 shadow-md"
+                  : "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
+              }`}
+            >
+              {c.class_name}
+              <span className="ml-1 opacity-75">
+                ({c.train_count}+{c.test_count})
+              </span>
+            </button>
           ))}
         </div>
-      </div>
+      )}
 
-      {/* Test samples */}
-      <div className="bg-white border border-blue-200 rounded-lg p-4">
-        <h4 className="text-sm font-semibold text-blue-700 mb-3">
-          🧪 Test Set ({data.test_count} images)
-        </h4>
-        <div className="flex flex-wrap gap-2">
-          {data.test_samples?.map((s: any, i: number) => (
-            <PixelImage
-              key={i}
-              pixels={s.pixels}
-              width={data.width}
-              height={data.height}
-              size={56}
-              label={s.label}
-            />
-          ))}
+      {cls && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Train samples */}
+          <div className="bg-white border border-green-200 rounded-lg p-4">
+            <h4 className="text-sm font-semibold text-green-700 mb-3 flex items-center justify-between">
+              <span>Training Set</span>
+              <span className="text-xs font-normal bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
+                {cls.train_count} images
+              </span>
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {cls.train_samples?.length > 0 ? (
+                cls.train_samples.map((pixels: number[], i: number) => (
+                  <PixelImage
+                    key={i}
+                    pixels={pixels}
+                    width={data.width}
+                    height={data.height}
+                    size={64}
+                    label={cls.class_name}
+                  />
+                ))
+              ) : (
+                <p className="text-xs text-gray-400">No samples available</p>
+              )}
+            </div>
+          </div>
+
+          {/* Test samples */}
+          <div className="bg-white border border-blue-200 rounded-lg p-4">
+            <h4 className="text-sm font-semibold text-blue-700 mb-3 flex items-center justify-between">
+              <span>Test Set</span>
+              <span className="text-xs font-normal bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">
+                {cls.test_count} images
+              </span>
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {cls.test_samples?.length > 0 ? (
+                cls.test_samples.map((pixels: number[], i: number) => (
+                  <PixelImage
+                    key={i}
+                    pixels={pixels}
+                    width={data.width}
+                    height={data.height}
+                    size={64}
+                    label={cls.class_name}
+                  />
+                ))
+              ) : (
+                <p className="text-xs text-gray-400">No samples available</p>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
         <div className="flex items-start gap-2">
@@ -223,17 +275,23 @@ function SplitVizTab({ data }: { data: any }) {
 
 // --- Class Balance Tab ---
 
-function ClassBalanceTab({ data }: { data: any }) {
+function ClassBalanceTab({
+  data,
+  stratified,
+}: {
+  data: any;
+  stratified?: boolean;
+}) {
   return (
     <div className="space-y-4">
       <div className="bg-green-50 border border-green-200 rounded-lg p-3">
         <h3 className="text-sm font-semibold text-green-900">
-          ⚖️ Class Balance: Train vs Test
+          Class Balance: Train vs Test
         </h3>
         <p className="text-xs text-green-700 mt-1">
-          {data.stratified
-            ? "✅ Stratified split — class proportions are preserved in both sets."
-            : "⚠️ Random split — class proportions may differ between sets."}
+          {stratified
+            ? "Stratified split — class proportions are preserved in both sets."
+            : "Random split — class proportions may differ between sets."}
         </p>
       </div>
 
@@ -246,10 +304,10 @@ function ClassBalanceTab({ data }: { data: any }) {
                 Class
               </th>
               <th className="text-center px-3 py-2 text-xs text-green-600">
-                Train (%)
+                Train
               </th>
               <th className="text-center px-3 py-2 text-xs text-blue-600">
-                Test (%)
+                Test
               </th>
               <th className="text-center px-3 py-2 text-xs text-gray-600">
                 Diff
@@ -258,10 +316,14 @@ function ClassBalanceTab({ data }: { data: any }) {
           </thead>
           <tbody>
             {data.classes?.map((cls: any, i: number) => {
-              const diff = Math.abs(cls.train_pct - cls.test_pct).toFixed(1);
+              const diff = Math.abs(
+                cls.train_pct - cls.test_pct
+              ).toFixed(1);
               return (
                 <tr key={i} className="border-t hover:bg-gray-50">
-                  <td className="px-3 py-2 font-medium">{cls.name}</td>
+                  <td className="px-3 py-2 font-medium text-gray-900">
+                    {cls.class_name}
+                  </td>
                   <td className="px-3 py-2 text-center">
                     <div className="flex items-center gap-2 justify-center">
                       <div className="w-16 bg-gray-100 rounded-full h-2">
@@ -270,7 +332,9 @@ function ClassBalanceTab({ data }: { data: any }) {
                           style={{ width: `${cls.train_pct}%` }}
                         />
                       </div>
-                      <span className="text-xs">{cls.train_pct}%</span>
+                      <span className="text-xs">
+                        {cls.train_count} ({cls.train_pct}%)
+                      </span>
                     </div>
                   </td>
                   <td className="px-3 py-2 text-center">
@@ -281,12 +345,16 @@ function ClassBalanceTab({ data }: { data: any }) {
                           style={{ width: `${cls.test_pct}%` }}
                         />
                       </div>
-                      <span className="text-xs">{cls.test_pct}%</span>
+                      <span className="text-xs">
+                        {cls.test_count} ({cls.test_pct}%)
+                      </span>
                     </div>
                   </td>
                   <td
                     className={`px-3 py-2 text-center text-xs font-mono ${
-                      Number(diff) < 1 ? "text-green-600" : "text-orange-600"
+                      Number(diff) < 1
+                        ? "text-green-600"
+                        : "text-orange-600"
                     }`}
                   >
                     ±{diff}%
@@ -295,10 +363,22 @@ function ClassBalanceTab({ data }: { data: any }) {
               );
             })}
           </tbody>
+          <tfoot className="bg-gray-50 border-t">
+            <tr className="font-medium text-xs text-gray-600">
+              <td className="px-3 py-2">Total</td>
+              <td className="px-3 py-2 text-center">
+                {data.total_train} images
+              </td>
+              <td className="px-3 py-2 text-center">
+                {data.total_test} images
+              </td>
+              <td className="px-3 py-2 text-center">—</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
-      {data.stratified && (
+      {stratified && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2">
           <CheckCircle className="w-5 h-5 text-green-600" />
           <p className="text-xs text-green-700">
@@ -323,7 +403,7 @@ function SplitRatiosTab({ data }: { data: any }) {
     <div className="space-y-4">
       <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
         <h3 className="text-sm font-semibold text-orange-900">
-          📊 Split Ratios
+          Split Ratios
         </h3>
         <p className="text-xs text-orange-700 mt-1">
           Your data was split into {trainPct}% training and {testPct}% testing.
@@ -374,8 +454,7 @@ function SplitRatiosTab({ data }: { data: any }) {
             { label: "70/30 (Conservative)", train: 70, test: 30 },
             { label: "90/10 (Data-rich)", train: 90, test: 10 },
           ].map((ratio, i) => {
-            const isCurrent =
-              Math.abs(ratio.train - trainPct) < 3;
+            const isCurrent = Math.abs(ratio.train - trainPct) < 3;
             return (
               <div
                 key={i}

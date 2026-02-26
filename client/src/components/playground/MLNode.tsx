@@ -50,6 +50,7 @@ const MLNode = ({ data, id, selected }: NodeProps<BaseNodeData>) => {
     "random_forest",
     "mlp_classifier",
     "mlp_regressor",
+    "kmeans",
     // Image pipeline nodes
     "image_dataset",
     "image_split",

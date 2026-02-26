@@ -974,6 +974,10 @@ async def build_camera_dataset(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# In-memory cache for CNN models (avoid reloading on every camera frame)
+_cnn_model_cache: Dict[str, Any] = {}
+
+
 @router.post("/camera/predict", response_model=CameraPredictResponse)
 async def camera_live_predict(
     request: CameraPredictRequest,
@@ -982,41 +986,73 @@ async def camera_live_predict(
     """
     Run inference on a single camera frame (flat grayscale pixel array).
 
-    Loads the model at model_path and returns the predicted class + all class scores.
+    Supports both MLP (joblib) and CNN (keras) models by reading .meta.json.
     Designed for low-latency live-camera testing in the Image Predictions node.
     """
-    import joblib
     import numpy as np
     from pathlib import Path
+    import json as _json
 
     try:
         model_path = Path(request.model_path)
         if not model_path.exists():
             raise ValueError(f"Model not found: {model_path}")
 
-        model = joblib.load(model_path)
+        # Read meta.json to determine algorithm
+        meta_path = model_path.with_suffix(".meta.json")
+        algorithm = "mlp"
+        meta: Dict[str, Any] = {}
+        if meta_path.exists():
+            with open(meta_path) as f:
+                meta = _json.load(f)
+            algorithm = meta.get("algorithm", "mlp")
+
         X = np.array(request.pixels, dtype=float).reshape(1, -1)
 
         # Normalize incoming [0-255] camera pixels to [0-1] to match training
-        # (image_predictions_node always normalizes to [0-1] before training)
         if X.max() > 1.0:
             X = X / 255.0
 
-        predicted_idx = int(model.predict(X)[0])
+        if algorithm == "cnn":
+            import tensorflow as tf
 
-        # Build per-class probabilities if available
-        all_scores: List[Dict[str, Any]] = []
-        if hasattr(model, "predict_proba"):
-            proba = model.predict_proba(X)[0]
-            classes = model.classes_ if hasattr(model, "classes_") else list(range(len(proba)))
+            # Load from cache or disk
+            cache_key = str(model_path)
+            if cache_key not in _cnn_model_cache:
+                _cnn_model_cache[cache_key] = tf.keras.models.load_model(str(model_path))
+            cnn_model = _cnn_model_cache[cache_key]
+
+            img_width = meta.get("image_width", 28)
+            img_height = meta.get("image_height", 28)
+            X_cnn = X.reshape(1, img_height, img_width, 1).astype(np.float32)
+
+            proba = cnn_model.predict(X_cnn, verbose=0)[0]
+            predicted_idx = int(np.argmax(proba))
+            confidence = float(proba[predicted_idx])
+
+            class_names = meta.get("class_names", [str(i) for i in range(len(proba))])
             all_scores = [
-                {"class_name": str(cls), "score": round(float(p), 4)}
-                for cls, p in sorted(zip(classes, proba), key=lambda x: -x[1])
+                {"class_name": str(class_names[i] if i < len(class_names) else i), "score": round(float(p), 4)}
+                for i, p in sorted(enumerate(proba), key=lambda x: -x[1])
             ]
-            confidence = float(proba[predicted_idx]) if predicted_idx < len(proba) else 1.0
         else:
-            all_scores = [{"class_name": str(predicted_idx), "score": 1.0}]
-            confidence = 1.0
+            # Existing MLP path
+            import joblib
+            model = joblib.load(model_path)
+            predicted_idx = int(model.predict(X)[0])
+
+            all_scores: List[Dict[str, Any]] = []
+            if hasattr(model, "predict_proba"):
+                proba = model.predict_proba(X)[0]
+                classes = model.classes_ if hasattr(model, "classes_") else list(range(len(proba)))
+                all_scores = [
+                    {"class_name": str(cls), "score": round(float(p), 4)}
+                    for cls, p in sorted(zip(classes, proba), key=lambda x: -x[1])
+                ]
+                confidence = float(proba[predicted_idx]) if predicted_idx < len(proba) else 1.0
+            else:
+                all_scores = [{"class_name": str(predicted_idx), "score": 1.0}]
+                confidence = 1.0
 
         return CameraPredictResponse(
             class_name=str(predicted_idx),
@@ -1193,3 +1229,178 @@ async def execute_node_async(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to start node execution: {str(e)}",
         )
+
+
+# ========== POSE CAPTURE ENDPOINTS ==========
+
+N_POSE_LANDMARKS = 33
+N_POSE_FEATURES = N_POSE_LANDMARKS * 4  # x, y, z, visibility per landmark
+
+
+class PoseDatasetRequest(BaseModel):
+    """Request body for building a pose landmark dataset."""
+    class_names: List[str]
+    landmarks_per_class: Dict[str, List[List[float]]]  # className → list of 132-float arrays
+
+
+class PoseDatasetResponse(BaseModel):
+    dataset_id: str
+    n_rows: int
+    n_columns: int
+    n_classes: int
+    class_names: List[str]
+
+
+class PosePredictRequest(BaseModel):
+    """Request body for live-pose inference."""
+    model_path: str
+    landmarks: List[float]  # flat 132-float array
+
+
+class PosePredictResponse(BaseModel):
+    class_name: str
+    confidence: float
+    all_scores: List[Dict[str, Any]]
+
+
+@router.post("/pose/dataset", response_model=PoseDatasetResponse)
+async def build_pose_dataset(
+    request: PoseDatasetRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Build a CSV dataset from pose landmark arrays captured in the browser.
+
+    The frontend uses MediaPipe PoseLandmarker to extract 33 body landmarks
+    (x, y, z, visibility) per frame. Each capture is a flat 132-float array.
+    We save as CSV with columns: lm_0_x, lm_0_y, lm_0_z, lm_0_vis, ..., lm_32_vis, label
+    """
+    import pandas as pd
+    from pathlib import Path
+    from app.core.config import settings
+
+    if len(request.class_names) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="At least 2 pose classes are required",
+        )
+
+    rows = []
+    for class_idx, class_name in enumerate(request.class_names):
+        landmark_arrays = request.landmarks_per_class.get(class_name, [])
+        for landmarks in landmark_arrays:
+            if len(landmarks) != N_POSE_FEATURES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Expected {N_POSE_FEATURES} values per pose (33 landmarks x 4), "
+                           f"got {len(landmarks)} for class '{class_name}'",
+                )
+            row: Dict[str, Any] = {}
+            for i in range(N_POSE_LANDMARKS):
+                base = i * 4
+                row[f"lm_{i}_x"] = landmarks[base]
+                row[f"lm_{i}_y"] = landmarks[base + 1]
+                row[f"lm_{i}_z"] = landmarks[base + 2]
+                row[f"lm_{i}_vis"] = landmarks[base + 3]
+            row["label"] = class_idx
+            rows.append(row)
+
+    if len(rows) == 0:
+        raise HTTPException(status_code=400, detail="No pose data provided")
+
+    df = pd.DataFrame(rows)
+
+    # Generate dataset ID and save
+    import uuid
+    dataset_id = f"pose_{uuid.uuid4().hex[:12]}"
+    upload_dir = Path(settings.UPLOAD_DIR)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    file_path = upload_dir / f"{dataset_id}.csv"
+    df.to_csv(file_path, index=False)
+
+    # Also save a metadata JSON for the dataset
+    meta = {
+        "data_type": "pose",
+        "n_landmarks": N_POSE_LANDMARKS,
+        "n_features": N_POSE_FEATURES,
+        "n_classes": len(request.class_names),
+        "class_names": request.class_names,
+    }
+    meta_path = upload_dir / f"{dataset_id}.meta.json"
+    with open(meta_path, "w") as f:
+        json.dump(meta, f, indent=2)
+
+    logger.info(
+        f"Built pose dataset: {dataset_id} with {len(df)} samples, "
+        f"{len(request.class_names)} classes"
+    )
+
+    return PoseDatasetResponse(
+        dataset_id=dataset_id,
+        n_rows=len(df),
+        n_columns=len(df.columns),
+        n_classes=len(request.class_names),
+        class_names=request.class_names,
+    )
+
+
+# Cache for pose models
+_pose_model_cache: Dict[str, Any] = {}
+
+
+@router.post("/pose/predict", response_model=PosePredictResponse)
+async def pose_live_predict(
+    request: PosePredictRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Run inference on a single pose (132 landmark values) using a trained model."""
+    import numpy as np
+    import joblib
+    from pathlib import Path
+
+    model_path = Path(request.model_path)
+    if not model_path.exists():
+        raise HTTPException(status_code=404, detail=f"Model not found: {model_path}")
+
+    # Read metadata
+    meta_path = model_path.with_suffix(".meta.json")
+    meta: Dict[str, Any] = {}
+    if meta_path.exists():
+        with open(meta_path) as f:
+            meta = json.load(f)
+
+    class_names = meta.get("class_names", [])
+
+    # Load model (cached)
+    cache_key = str(model_path)
+    if cache_key not in _pose_model_cache:
+        _pose_model_cache[cache_key] = joblib.load(model_path)
+    model = _pose_model_cache[cache_key]
+
+    # Prepare input
+    X = np.array(request.landmarks, dtype=float).reshape(1, -1)
+
+    # Predict
+    predicted_idx = int(model.predict(X)[0])
+
+    if hasattr(model, "predict_proba"):
+        proba = model.predict_proba(X)[0]
+        all_scores = [
+            {
+                "class_name": str(class_names[i] if i < len(class_names) else i),
+                "score": round(float(p), 4),
+            }
+            for i, p in sorted(enumerate(proba), key=lambda x: -x[1])
+        ]
+        confidence = float(proba[predicted_idx]) if predicted_idx < len(proba) else 1.0
+    else:
+        all_scores = [{"class_name": str(predicted_idx), "score": 1.0}]
+        confidence = 1.0
+
+    return PosePredictResponse(
+        class_name=str(
+            class_names[predicted_idx] if predicted_idx < len(class_names) else predicted_idx
+        ),
+        confidence=round(confidence, 4),
+        all_scores=all_scores,
+    )

@@ -44,6 +44,7 @@ import { DecisionTreeExplorer } from "./DecisionTreeExplorer";
 import { RandomForestExplorer } from "./RandomForestExplorer";
 import { MLPClassifierExplorer } from "./MLPClassifierExplorer";
 import { MLPRegressorExplorer } from "./MLPRegressorExplorer";
+import { KMeansExplorer } from "./KMeansExplorer";
 import {
   R2ScoreExplorer,
   MSEScoreExplorer,
@@ -239,6 +240,7 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
     "random_forest",
     "mlp_classifier",
     "mlp_regressor",
+    "kmeans",
     // Image pipeline nodes
     "image_dataset",
     "image_split",
@@ -362,11 +364,14 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
                 {nodeType === "mlp_regressor" && (
                   <MLPRegressorExplorer result={nodeResult} />
                 )}
+                {nodeType === "kmeans" && (
+                  <KMeansExplorer result={nodeResult} />
+                )}
                 {nodeType === "image_dataset" && (
-                  <ImageDatasetExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
+                  <ImageDatasetExplorer result={nodeResult} />
                 )}
                 {nodeType === "image_split" && (
-                  <ImageSplitExplorer result={nodeResult} renderResults={() => renderTableView(nodeResult)} />
+                  <ImageSplitExplorer result={nodeResult} />
                 )}
                 {nodeType === "image_predictions" && (
                   <ImagePredictionsExplorer result={nodeResult} />
