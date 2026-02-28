@@ -986,7 +986,7 @@ async def camera_live_predict(
     """
     Run inference on a single camera frame (flat grayscale pixel array).
 
-    Supports both MLP (joblib) and CNN (keras) models by reading .meta.json.
+    Uses Transfer Learning (MobileNetV2) model. Reads .meta.json for image dimensions.
     Designed for low-latency live-camera testing in the Image Predictions node.
     """
     import numpy as np
@@ -998,14 +998,12 @@ async def camera_live_predict(
         if not model_path.exists():
             raise ValueError(f"Model not found: {model_path}")
 
-        # Read meta.json to determine algorithm
+        # Read meta.json for image dimensions and class names
         meta_path = model_path.with_suffix(".meta.json")
-        algorithm = "mlp"
         meta: Dict[str, Any] = {}
         if meta_path.exists():
             with open(meta_path) as f:
                 meta = _json.load(f)
-            algorithm = meta.get("algorithm", "mlp")
 
         X = np.array(request.pixels, dtype=float).reshape(1, -1)
 
@@ -1013,46 +1011,34 @@ async def camera_live_predict(
         if X.max() > 1.0:
             X = X / 255.0
 
-        if algorithm == "cnn":
-            import tensorflow as tf
+        # Transfer Learning (MobileNetV2) — the only image model type
+        import tensorflow as tf
 
-            # Load from cache or disk
-            cache_key = str(model_path)
-            if cache_key not in _cnn_model_cache:
-                _cnn_model_cache[cache_key] = tf.keras.models.load_model(str(model_path))
-            cnn_model = _cnn_model_cache[cache_key]
+        # Load from cache or disk
+        cache_key = str(model_path)
+        if cache_key not in _cnn_model_cache:
+            _cnn_model_cache[cache_key] = tf.keras.models.load_model(str(model_path))
+        tl_model = _cnn_model_cache[cache_key]
 
-            img_width = meta.get("image_width", 28)
-            img_height = meta.get("image_height", 28)
-            X_cnn = X.reshape(1, img_height, img_width, 1).astype(np.float32)
+        target_size = meta.get("target_size", 96)
+        img_width = meta.get("image_width", 28)
+        img_height = meta.get("image_height", 28)
 
-            proba = cnn_model.predict(X_cnn, verbose=0)[0]
-            predicted_idx = int(np.argmax(proba))
-            confidence = float(proba[predicted_idx])
+        # Reshape flat grayscale -> resize to target_size -> RGB -> preprocess
+        X_img = X.reshape(1, img_height, img_width, 1).astype(np.float32)
+        X_resized = tf.image.resize(X_img, [target_size, target_size]).numpy()
+        X_rgb = np.repeat(X_resized, 3, axis=-1)
+        X_rgb = tf.keras.applications.mobilenet_v2.preprocess_input(X_rgb * 255.0)
 
-            class_names = meta.get("class_names", [str(i) for i in range(len(proba))])
-            all_scores = [
-                {"class_name": str(class_names[i] if i < len(class_names) else i), "score": round(float(p), 4)}
-                for i, p in sorted(enumerate(proba), key=lambda x: -x[1])
-            ]
-        else:
-            # Existing MLP path
-            import joblib
-            model = joblib.load(model_path)
-            predicted_idx = int(model.predict(X)[0])
+        proba = tl_model.predict(X_rgb, verbose=0)[0]
+        predicted_idx = int(np.argmax(proba))
+        confidence = float(proba[predicted_idx])
 
-            all_scores: List[Dict[str, Any]] = []
-            if hasattr(model, "predict_proba"):
-                proba = model.predict_proba(X)[0]
-                classes = model.classes_ if hasattr(model, "classes_") else list(range(len(proba)))
-                all_scores = [
-                    {"class_name": str(cls), "score": round(float(p), 4)}
-                    for cls, p in sorted(zip(classes, proba), key=lambda x: -x[1])
-                ]
-                confidence = float(proba[predicted_idx]) if predicted_idx < len(proba) else 1.0
-            else:
-                all_scores = [{"class_name": str(predicted_idx), "score": 1.0}]
-                confidence = 1.0
+        class_names = meta.get("class_names", [str(i) for i in range(len(proba))])
+        all_scores = [
+            {"class_name": str(class_names[i] if i < len(class_names) else i), "score": round(float(p), 4)}
+            for i, p in sorted(enumerate(proba), key=lambda x: -x[1])
+        ]
 
         return CameraPredictResponse(
             class_name=str(predicted_idx),

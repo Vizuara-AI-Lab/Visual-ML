@@ -539,12 +539,159 @@ async def get_model_guide(model_type: str, student: Student = Depends(get_curren
                     {"step": 5, "node_type": "decision_tree", "description": "Train decision tree"},
                     {
                         "step": 6,
-                        "node_type": "feature_importance",
-                        "description": "View important features",
+                        "node_type": "metrics",
+                        "description": "Evaluate with R² and RMSE (or Confusion Matrix for classification)",
                     },
                 ],
                 explanation="Decision Trees create interpretable rules for predictions. Works for both "
                 "classification and regression.",
+                estimated_time="5-10 minutes",
+            ),
+            "random_forest": PipelineStepGuide(
+                model_type="random_forest",
+                steps=[
+                    {"step": 1, "node_type": "upload_file", "description": "Upload your dataset"},
+                    {
+                        "step": 2,
+                        "node_type": "missing_value_handler",
+                        "description": "Handle missing values",
+                    },
+                    {
+                        "step": 3,
+                        "node_type": "encoding",
+                        "description": "Encode categorical features",
+                    },
+                    {"step": 4, "node_type": "split", "description": "Split into train/test sets"},
+                    {
+                        "step": 5,
+                        "node_type": "random_forest",
+                        "description": "Train Random Forest ensemble",
+                    },
+                    {
+                        "step": 6,
+                        "node_type": "metrics",
+                        "description": "Evaluate with R² and RMSE",
+                    },
+                ],
+                explanation="Random Forest builds many decision trees and combines their votes. "
+                "More robust than a single tree.",
+                estimated_time="5-10 minutes",
+            ),
+            "mlp_classifier": PipelineStepGuide(
+                model_type="mlp_classifier",
+                steps=[
+                    {"step": 1, "node_type": "upload_file", "description": "Upload your dataset"},
+                    {
+                        "step": 2,
+                        "node_type": "missing_value_handler",
+                        "description": "Handle missing values",
+                    },
+                    {
+                        "step": 3,
+                        "node_type": "encoding",
+                        "description": "Encode categorical features",
+                    },
+                    {"step": 4, "node_type": "split", "description": "Split into train/test sets"},
+                    {
+                        "step": 5,
+                        "node_type": "mlp_classifier",
+                        "description": "Train MLP neural network for classification",
+                    },
+                    {
+                        "step": 6,
+                        "node_type": "confusion_matrix",
+                        "description": "Evaluate with confusion matrix",
+                    },
+                ],
+                explanation="MLP Classifier is a neural network with multiple layers. "
+                "It learns complex nonlinear patterns for classification tasks.",
+                estimated_time="5-10 minutes",
+            ),
+            "mlp_regressor": PipelineStepGuide(
+                model_type="mlp_regressor",
+                steps=[
+                    {
+                        "step": 1,
+                        "node_type": "upload_file",
+                        "description": "Upload dataset with numeric target",
+                    },
+                    {
+                        "step": 2,
+                        "node_type": "missing_value_handler",
+                        "description": "Handle missing values",
+                    },
+                    {
+                        "step": 3,
+                        "node_type": "encoding",
+                        "description": "Encode categorical features",
+                    },
+                    {
+                        "step": 4,
+                        "node_type": "scaling",
+                        "description": "Scale features (recommended for neural networks)",
+                    },
+                    {"step": 5, "node_type": "split", "description": "Split into train/test sets"},
+                    {
+                        "step": 6,
+                        "node_type": "mlp_regressor",
+                        "description": "Train MLP neural network for regression",
+                    },
+                    {
+                        "step": 7,
+                        "node_type": "metrics",
+                        "description": "Evaluate with R², RMSE, MAE",
+                    },
+                ],
+                explanation="MLP Regressor uses neural network layers to predict continuous values. "
+                "Scaling features is especially important for neural networks.",
+                estimated_time="5-10 minutes",
+            ),
+            "kmeans": PipelineStepGuide(
+                model_type="kmeans",
+                steps=[
+                    {"step": 1, "node_type": "upload_file", "description": "Upload your dataset"},
+                    {
+                        "step": 2,
+                        "node_type": "missing_value_handler",
+                        "description": "Handle missing values",
+                    },
+                    {
+                        "step": 3,
+                        "node_type": "encoding",
+                        "description": "Encode categorical features",
+                    },
+                    {
+                        "step": 4,
+                        "node_type": "scaling",
+                        "description": "Scale features (important for distance-based clustering)",
+                    },
+                    {"step": 5, "node_type": "kmeans", "description": "Run K-Means clustering"},
+                ],
+                explanation="K-Means groups data into clusters. No target column needed — "
+                "it discovers structure in the data.",
+                estimated_time="5-10 minutes",
+            ),
+            "image_predictions": PipelineStepGuide(
+                model_type="image_predictions",
+                steps=[
+                    {
+                        "step": 1,
+                        "node_type": "image_dataset",
+                        "description": "Load an image dataset (builtin, camera, or pose)",
+                    },
+                    {
+                        "step": 2,
+                        "node_type": "image_split",
+                        "description": "Split images into train/test sets",
+                    },
+                    {
+                        "step": 3,
+                        "node_type": "image_predictions",
+                        "description": "Train and evaluate the image classifier",
+                    },
+                ],
+                explanation="Image Classification uses a different pipeline — image data flows "
+                "through specialized nodes for splitting and training.",
                 estimated_time="5-10 minutes",
             ),
         }

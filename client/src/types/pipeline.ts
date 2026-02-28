@@ -24,6 +24,8 @@ export type NodeType =
   | "mlp_classifier"
   | "mlp_regressor"
   | "kmeans"
+  | "knn"
+  | "svm"
   // Result & Metrics nodes
   | "r2_score"
   | "mse_score"

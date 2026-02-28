@@ -45,6 +45,8 @@ import { RandomForestExplorer } from "./RandomForestExplorer";
 import { MLPClassifierExplorer } from "./MLPClassifierExplorer";
 import { MLPRegressorExplorer } from "./MLPRegressorExplorer";
 import { KMeansExplorer } from "./KMeansExplorer";
+import { KNNExplorer } from "./KNNExplorer";
+import { SVMExplorer } from "./SVMExplorer";
 import {
   R2ScoreExplorer,
   MSEScoreExplorer,
@@ -241,6 +243,8 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
     "mlp_classifier",
     "mlp_regressor",
     "kmeans",
+    "knn",
+    "svm",
     // Image pipeline nodes
     "image_dataset",
     "image_split",
@@ -366,6 +370,12 @@ export const ViewNodeModal = ({ nodeId, onClose }: ViewNodeModalProps) => {
                 )}
                 {nodeType === "kmeans" && (
                   <KMeansExplorer result={nodeResult} />
+                )}
+                {nodeType === "knn" && (
+                  <KNNExplorer result={nodeResult} />
+                )}
+                {nodeType === "svm" && (
+                  <SVMExplorer result={nodeResult} />
                 )}
                 {nodeType === "image_dataset" && (
                   <ImageDatasetExplorer result={nodeResult} />

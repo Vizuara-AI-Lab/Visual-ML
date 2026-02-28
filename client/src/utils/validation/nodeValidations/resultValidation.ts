@@ -10,6 +10,7 @@ const regressionModelSources = [
   "linear_regression",
   "decision_tree", // when task_type = regression
   "random_forest", // when task_type = regression
+  "mlp_regressor",
   "evaluate",
 ];
 
@@ -17,6 +18,9 @@ const classificationModelSources = [
   "logistic_regression",
   "decision_tree", // when task_type = classification
   "random_forest", // when task_type = classification
+  "mlp_classifier",
+  "knn",
+  "svm",
   "evaluate",
 ];
 

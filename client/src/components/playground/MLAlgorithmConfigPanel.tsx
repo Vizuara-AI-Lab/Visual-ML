@@ -91,6 +91,38 @@ const NODE_THEMES: Record<
     accentBorder: "border-amber-500",
     accentSelectedBg: "bg-amber-50",
   },
+  knn: {
+    label: "K-Nearest Neighbors",
+    description: "Instance-based learning using neighbor voting",
+    color: "#0D9488",
+    bgFrom: "from-teal-50",
+    bgTo: "to-cyan-50",
+    borderColor: "border-teal-100",
+    accentBg: "bg-teal-500",
+    accentText: "text-teal-700",
+    accentTextDark: "text-teal-900",
+    accentTextLight: "text-teal-600",
+    accentRing: "focus:ring-teal-500 focus:border-teal-500",
+    accentToggle: "bg-teal-500",
+    accentBorder: "border-teal-500",
+    accentSelectedBg: "bg-teal-50",
+  },
+  svm: {
+    label: "Support Vector Machine",
+    description: "Maximum-margin classification or regression",
+    color: "#6366F1",
+    bgFrom: "from-indigo-50",
+    bgTo: "to-violet-50",
+    borderColor: "border-indigo-100",
+    accentBg: "bg-indigo-500",
+    accentText: "text-indigo-700",
+    accentTextDark: "text-indigo-900",
+    accentTextLight: "text-indigo-600",
+    accentRing: "focus:ring-indigo-500 focus:border-indigo-500",
+    accentToggle: "bg-indigo-500",
+    accentBorder: "border-indigo-500",
+    accentSelectedBg: "bg-indigo-50",
+  },
 };
 
 export function MLAlgorithmConfigPanel({
@@ -109,6 +141,8 @@ export function MLAlgorithmConfigPanel({
     nodeType === "decision_tree" || nodeType === "random_forest";
   const hasFitIntercept =
     nodeType === "linear_regression" || nodeType === "logistic_regression";
+  const hasTargetColumn =
+    hasTreeParams || nodeType === "knn" || nodeType === "svm";
 
   return (
     <div className="space-y-5">
@@ -169,8 +203,8 @@ export function MLAlgorithmConfigPanel({
         )}
       </div>
 
-      {/* Target Column (decision_tree, random_forest) */}
-      {hasTreeParams && (
+      {/* Target Column (decision_tree, random_forest, knn, svm) */}
+      {hasTargetColumn && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-sm font-medium text-slate-700">
@@ -198,8 +232,8 @@ export function MLAlgorithmConfigPanel({
         </div>
       )}
 
-      {/* Task Type (decision_tree, random_forest) */}
-      {hasTreeParams && (
+      {/* Task Type (decision_tree, random_forest, knn, svm) */}
+      {hasTargetColumn && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <p className="text-sm font-medium text-slate-700 mb-3">Task Type</p>
           <div className="grid grid-cols-2 gap-2">
@@ -294,6 +328,304 @@ export function MLAlgorithmConfigPanel({
             More trees = better accuracy but slower training
           </p>
         </div>
+      )}
+
+      {/* KNN Hyperparameters */}
+      {nodeType === "knn" && (
+        <>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-700">
+                Number of Neighbors (K)
+              </span>
+              <span className={`text-sm font-bold ${theme.accentText}`}>
+                {(config.n_neighbors as number) || 5}
+              </span>
+            </div>
+            <input
+              type="range"
+              value={(config.n_neighbors as number) || 5}
+              onChange={(e) =>
+                onFieldChange("n_neighbors", parseInt(e.target.value))
+              }
+              min={1}
+              max={50}
+              step={1}
+              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+              style={{
+                background: `linear-gradient(to right, ${theme.color} 0%, ${theme.color} ${(((config.n_neighbors as number) || 5) - 1) / 49 * 100}%, #E2E8F0 ${(((config.n_neighbors as number) || 5) - 1) / 49 * 100}%, #E2E8F0 100%)`,
+              }}
+            />
+            <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+              <span>1</span>
+              <span>25</span>
+              <span>50</span>
+            </div>
+            <p className="text-xs text-slate-400 mt-1.5">
+              Small K = complex boundary, Large K = smoother boundary
+            </p>
+          </div>
+
+          {/* Advanced KNN Options */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Settings className="w-4 h-4 text-slate-500" />
+                <span className="text-sm font-medium text-slate-700">
+                  Advanced Options
+                </span>
+              </div>
+              <button
+                onClick={() =>
+                  onFieldChange("show_advanced_options", !showAdvanced)
+                }
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${showAdvanced ? theme.accentToggle : "bg-slate-300"}`}
+              >
+                <div
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${showAdvanced ? "translate-x-5" : "translate-x-0"}`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {showAdvanced && (
+            <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 space-y-4">
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-2">
+                  Weight Function
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: "uniform", label: "Uniform", desc: "Equal weight" },
+                    { value: "distance", label: "Distance", desc: "Closer = more weight" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => onFieldChange("weights", opt.value)}
+                      className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-lg border-2 text-xs font-medium transition-all ${
+                        (config.weights || "uniform") === opt.value
+                          ? "border-teal-500 bg-teal-50 text-teal-700"
+                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                      }`}
+                    >
+                      <span>{opt.label}</span>
+                      <span className="text-[10px] text-slate-400">{opt.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-2">
+                  Distance Metric
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: "euclidean", label: "Euclidean" },
+                    { value: "manhattan", label: "Manhattan" },
+                    { value: "minkowski", label: "Minkowski" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => onFieldChange("metric", opt.value)}
+                      className={`py-2 px-3 rounded-lg border-2 text-xs font-medium transition-all ${
+                        (config.metric || "euclidean") === opt.value
+                          ? "border-teal-500 bg-teal-50 text-teal-700"
+                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {config.metric === "minkowski" && (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-medium text-slate-600">
+                      Minkowski Power (p)
+                    </label>
+                    <span className="text-xs font-semibold text-teal-700">
+                      {(config.p as number) ?? 2}
+                    </span>
+                  </div>
+                  <input
+                    type="number"
+                    value={(config.p as number) ?? 2}
+                    onChange={(e) =>
+                      onFieldChange("p", parseInt(e.target.value) || 2)
+                    }
+                    min={1}
+                    max={5}
+                    className="w-full px-3 py-2 bg-white border border-teal-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    p=1 = Manhattan, p=2 = Euclidean
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* SVM Hyperparameters */}
+      {nodeType === "svm" && (
+        <>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <label className="text-xs font-medium text-slate-600 block mb-2">
+              Kernel Function
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { value: "rbf", label: "RBF", desc: "Gaussian kernel" },
+                { value: "linear", label: "Linear", desc: "Straight boundary" },
+                { value: "poly", label: "Polynomial", desc: "Curved boundary" },
+                { value: "sigmoid", label: "Sigmoid", desc: "Neural-like" },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => onFieldChange("kernel", opt.value)}
+                  className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-lg border-2 text-xs font-medium transition-all ${
+                    (config.kernel || "rbf") === opt.value
+                      ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                      : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                  }`}
+                >
+                  <span>{opt.label}</span>
+                  <span className="text-[10px] text-slate-400">{opt.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-700">
+                Regularization (C)
+              </span>
+              <span className={`text-sm font-bold ${theme.accentText}`}>
+                {(config.C as number) ?? 1.0}
+              </span>
+            </div>
+            <input
+              type="range"
+              value={Math.log10((config.C as number) || 1.0) * 25 + 50}
+              onChange={(e) => {
+                const logVal = (parseInt(e.target.value) - 50) / 25;
+                const C = Math.round(Math.pow(10, logVal) * 100) / 100;
+                onFieldChange("C", C);
+              }}
+              min={0}
+              max={100}
+              step={1}
+              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+              style={{
+                background: `linear-gradient(to right, ${theme.color} 0%, ${theme.color} ${Math.log10((config.C as number) || 1.0) * 25 + 50}%, #E2E8F0 ${Math.log10((config.C as number) || 1.0) * 25 + 50}%, #E2E8F0 100%)`,
+              }}
+            />
+            <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+              <span>0.01</span>
+              <span>1.0</span>
+              <span>100</span>
+            </div>
+            <p className="text-xs text-slate-400 mt-1.5">
+              Low C = wider margin, High C = fewer misclassifications
+            </p>
+          </div>
+
+          {/* Advanced SVM Options */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Settings className="w-4 h-4 text-slate-500" />
+                <span className="text-sm font-medium text-slate-700">
+                  Advanced Options
+                </span>
+              </div>
+              <button
+                onClick={() =>
+                  onFieldChange("show_advanced_options", !showAdvanced)
+                }
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${showAdvanced ? theme.accentToggle : "bg-slate-300"}`}
+              >
+                <div
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${showAdvanced ? "translate-x-5" : "translate-x-0"}`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {showAdvanced && (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 space-y-4">
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-2">
+                  Gamma
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: "scale", label: "Scale", desc: "1/(n_features * var)" },
+                    { value: "auto", label: "Auto", desc: "1/n_features" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => onFieldChange("gamma", opt.value)}
+                      className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-lg border-2 text-xs font-medium transition-all ${
+                        (config.gamma || "scale") === opt.value
+                          ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                      }`}
+                    >
+                      <span>{opt.label}</span>
+                      <span className="text-[10px] text-slate-400">{opt.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {config.kernel === "poly" && (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-medium text-slate-600">
+                      Polynomial Degree
+                    </label>
+                    <span className="text-xs font-semibold text-indigo-700">
+                      {(config.degree as number) ?? 3}
+                    </span>
+                  </div>
+                  <input
+                    type="number"
+                    value={(config.degree as number) ?? 3}
+                    onChange={(e) =>
+                      onFieldChange("degree", parseInt(e.target.value) || 3)
+                    }
+                    min={2}
+                    max={5}
+                    className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs font-medium text-slate-600 block mb-1.5">
+                  Random State
+                </label>
+                <input
+                  type="number"
+                  value={(config.random_state as number) ?? 42}
+                  onChange={(e) =>
+                    onFieldChange("random_state", parseInt(e.target.value) || 42)
+                  }
+                  className="w-full px-3 py-2 bg-white border border-indigo-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Seed for reproducible results
+                </p>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Tree Hyperparameters (decision_tree, random_forest) */}

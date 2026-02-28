@@ -69,6 +69,33 @@ export function algorithmSelectedMessage(algorithm: string): FlowMessage {
       `combines their answers by taking a vote. ` +
       `It is like asking 100 experts instead of just one, so the answer is more reliable. ` +
       `Let us build one together, step by step.`,
+
+    mlp_classifier:
+      `Great choice. An MLP Classifier is a neural network made of layers ` +
+      `of interconnected nodes. It can learn complex patterns that simpler models might miss. ` +
+      `Think of it as a team of neurons working together to classify your data. ` +
+      `Let us build one together, step by step.`,
+
+    mlp_regressor:
+      `Great choice. An MLP Regressor is a neural network that predicts numbers ` +
+      `like prices, scores, or temperatures. ` +
+      `Unlike Linear Regression which only finds straight lines, ` +
+      `an MLP can learn curved and complex relationships in your data. ` +
+      `Let us build one together, step by step.`,
+
+    kmeans:
+      `Great choice. K-Means Clustering is different from the other algorithms ` +
+      `because it does not need labels. ` +
+      `It automatically groups similar data points together into clusters. ` +
+      `Think of it like sorting a pile of mixed fruits by similarity ` +
+      `without knowing their names. Let us build one together, step by step.`,
+
+    image_predictions:
+      `Great choice. Image Classification teaches a computer to recognize ` +
+      `what is in a picture, like telling apart cats from dogs, ` +
+      `or handwritten digits from zero to nine. ` +
+      `We will load an image dataset, split it, and train a model. ` +
+      `Let us build one together, step by step.`,
   };
 
   const text = intros[algorithm] ?? `Let us build a ${config.displayName} model together.`;
@@ -324,7 +351,42 @@ export function pipelineExecutedMessage(
   const config = getAlgorithmConfig(algorithm);
   let text: string;
 
-  if (config.isClassification) {
+  if (config.isUnsupervised) {
+    // K-Means clustering results
+    const nClusters = results.n_clusters;
+    const silhouette = results.silhouette_score;
+    if (nClusters !== undefined) {
+      text =
+        `Your K-Means model has grouped the data into ${nClusters} clusters. `;
+      if (silhouette !== undefined) {
+        const quality = silhouette > 0.5 ? "good" : silhouette > 0.25 ? "moderate" : "low, try adjusting the number of clusters";
+        text +=
+          `The silhouette score is ${silhouette.toFixed(3)}, ` +
+          `which measures how well separated the clusters are. ` +
+          `Your score is ${quality}.`;
+      }
+    } else {
+      text =
+        `Your clustering model has finished. ` +
+        `Click on the K-Means node to explore the cluster assignments.`;
+    }
+  } else if (config.isImagePipeline) {
+    // Image classification results
+    const accuracy = results.accuracy;
+    if (accuracy !== undefined) {
+      const pct = (accuracy * 100).toFixed(0);
+      text =
+        `Your image classifier has been trained and tested. ` +
+        `The accuracy is ${pct} percent. ` +
+        `Click on the Image Predictions node to explore the results, ` +
+        `including the confusion matrix and training curves. ` +
+        `You can even try the live camera tab to test the model in real time.`;
+    } else {
+      text =
+        `Your image classifier has been trained. ` +
+        `Click on the Image Predictions node to see the results.`;
+    }
+  } else if (config.isClassification) {
     const accuracy = results.accuracy;
     if (accuracy !== undefined) {
       const pct = (accuracy * 100).toFixed(0);
@@ -440,6 +502,145 @@ export function logisticTargetWarningMessage(uniqueValues: number): FlowMessage 
     `or try Linear Regression instead for predicting numbers.`;
   return {
     title: "Too Many Categories",
+    displayText: text,
+    voiceText: text,
+  };
+}
+
+// ── K-Means Clustering Messages ─────────────────────────────────
+
+export function promptDragDatasetForClusteringMessage(): FlowMessage {
+  const text =
+    `First, we need data to work with. ` +
+    `Look at the left sidebar under Data Source. ` +
+    `Drag a Select Dataset or Upload File node onto the canvas. ` +
+    `K-Means does not need a target column, so any numeric dataset works.`;
+  return { title: "Add a Dataset", displayText: text, voiceText: text };
+}
+
+export function promptClusteringModelMessage(): FlowMessage {
+  const text =
+    `Your dataset is ready. ` +
+    `Now drag a K-Means Clustering node from the ML Algorithms section ` +
+    `and connect it to your dataset node. ` +
+    `K-Means does not need a train test split because it is unsupervised.`;
+  return {
+    title: "Add K-Means Node",
+    displayText: text,
+    voiceText: text,
+  };
+}
+
+export function clusteringModelAddedMessage(): FlowMessage {
+  const text =
+    `K-Means node is connected. ` +
+    `Click on it to set the number of clusters. ` +
+    `Start with 3 clusters and adjust based on your results. ` +
+    `Then click Run Pipeline to see the clusters.`;
+  return {
+    title: "Configure and Run",
+    displayText: text,
+    voiceText: text,
+  };
+}
+
+export function clusteringExecutedMessage(
+  nClusters: number,
+  silhouetteScore?: number,
+): FlowMessage {
+  let text =
+    `Your K-Means model has grouped the data into ${nClusters} clusters. `;
+  if (silhouetteScore !== undefined) {
+    const pct = (silhouetteScore * 100).toFixed(0);
+    text +=
+      `The silhouette score is ${silhouetteScore.toFixed(3)}, ` +
+      `which measures how well separated the clusters are. ` +
+      `A score closer to 1 means the clusters are well defined. ` +
+      `Your score of ${pct} percent is ${silhouetteScore > 0.5 ? "good" : silhouetteScore > 0.25 ? "moderate" : "low"}.`;
+  } else {
+    text +=
+      `Click on the K-Means node to explore the cluster assignments ` +
+      `and see which data points ended up in each group.`;
+  }
+  return {
+    title: "Clustering Results",
+    displayText: text,
+    voiceText: text,
+  };
+}
+
+// ── Image Pipeline Messages ─────────────────────────────────────
+
+export function promptDragImageDatasetMessage(): FlowMessage {
+  const text =
+    `For image classification, we use a different set of nodes. ` +
+    `Look at the left sidebar under Image Pipeline. ` +
+    `Drag an Image Dataset node onto the canvas. ` +
+    `You can choose a built-in dataset like MNIST or capture your own images with the camera.`;
+  return { title: "Add Image Dataset", displayText: text, voiceText: text };
+}
+
+export function imageDatasetConfiguredMessage(
+  datasetName: string,
+  nImages: number,
+  nClasses: number,
+): FlowMessage {
+  const text =
+    `Your image dataset ${datasetName} is loaded with ${nImages} images ` +
+    `across ${nClasses} classes. ` +
+    `Now drag an Image Split node from the Image Pipeline section ` +
+    `and connect it to your Image Dataset node. ` +
+    `This will split the images into training and test sets.`;
+  return {
+    title: "Image Dataset Loaded",
+    displayText: text,
+    voiceText: text,
+  };
+}
+
+export function promptImageSplitMessage(): FlowMessage {
+  const text =
+    `Drag an Image Split node from the Image Pipeline section ` +
+    `and connect it to your Image Dataset. ` +
+    `It will split images into 80 percent training and 20 percent testing ` +
+    `while keeping each class balanced in both sets.`;
+  return { title: "Add Image Split", displayText: text, voiceText: text };
+}
+
+export function imageSplitAddedMessage(): FlowMessage {
+  const text =
+    `Image Split is connected. ` +
+    `Now drag an Image Predictions node from the Image Pipeline section. ` +
+    `This node trains the model and evaluates it all in one step.`;
+  return {
+    title: "Add Image Predictions",
+    displayText: text,
+    voiceText: text,
+  };
+}
+
+export function promptImagePredictionsMessage(): FlowMessage {
+  const text =
+    `Drag an Image Predictions node and connect it to the Image Split node. ` +
+    `Then click Run Pipeline to train and evaluate your image classifier.`;
+  return {
+    title: "Add Image Predictions",
+    displayText: text,
+    voiceText: text,
+  };
+}
+
+export function imageResultsMessage(accuracy: number): FlowMessage {
+  const pct = (accuracy * 100).toFixed(0);
+  const text =
+    `Your image classifier has been trained and tested. ` +
+    `The accuracy is ${pct} percent, which means the model correctly ` +
+    `classified ${pct} out of every 100 test images. ` +
+    `Click on the Image Predictions node to explore the results, ` +
+    `including the confusion matrix, training curves, and feature importance. ` +
+    `You can even try the live camera tab to test the model in real time.`;
+  return {
+    title: "Image Classification Results",
     displayText: text,
     voiceText: text,
   };

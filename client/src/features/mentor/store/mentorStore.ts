@@ -35,7 +35,17 @@ export type LearningStage =
   | "prompt_final_run"
   | "pipeline_executed"
   | "completed"
-  | "error_occurred";
+  | "error_occurred"
+  // K-Means (unsupervised) stages
+  | "prompt_clustering_model"
+  | "clustering_model_added"
+  // Image pipeline stages
+  | "prompt_image_dataset"
+  | "image_dataset_configured"
+  | "prompt_image_split"
+  | "image_split_added"
+  | "prompt_image_predictions"
+  | "image_predictions_added";
 
 export interface LearningFlowState {
   stage: LearningStage;

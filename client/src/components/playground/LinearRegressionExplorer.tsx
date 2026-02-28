@@ -131,7 +131,7 @@ export const LinearRegressionExplorer = ({
             </div>
           }
         >
-          <LinearRegressionAnimation />
+          <LinearRegressionAnimation result={result} />
         </Suspense>
       )}
     </div>

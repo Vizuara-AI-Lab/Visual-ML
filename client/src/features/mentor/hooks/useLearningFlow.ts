@@ -151,9 +151,13 @@ export function useLearningFlow({
       case "algorithm_selected": {
         if (!selectedAlgorithm) break;
         show(toSuggestion(msg.algorithmSelectedMessage(selectedAlgorithm)));
+        const algoConf = getAlgorithmConfig(selectedAlgorithm);
         // Fallback: if TTS doesn't play, advance after 12s (reading time)
+        const nextStage = algoConf.isImagePipeline
+          ? "prompt_image_dataset"
+          : "prompt_drag_dataset";
         autoAdvanceTimerRef.current = setTimeout(
-          () => setStage("prompt_drag_dataset"),
+          () => setStage(nextStage as any),
           12000,
         );
         break;
@@ -179,28 +183,43 @@ export function useLearningFlow({
         break;
       }
 
-      // ── Dataset configured → tell user to add Column Info ────
+      // ── Dataset configured → branch by algorithm type ──────────
       case "dataset_configured": {
-        const info = datasetInfo;
-        if (info) {
-          show(
-            toSuggestion(
-              msg.datasetConfiguredMessage(
-                info.filename,
-                info.nRows,
-                info.nCols,
-              ),
-              [
-                {
-                  label: "Add Column Info",
-                  type: "add_node",
-                  payload: { node_type: "column_info" },
-                },
-              ],
-            ),
-          );
+        if (!selectedAlgorithm) {
+          setStage("prompt_column_info");
+          break;
         }
-        setStage("prompt_column_info");
+        const algoConfig = getAlgorithmConfig(selectedAlgorithm);
+
+        if (algoConfig.isUnsupervised) {
+          // K-Means: skip column_info/split → go straight to model
+          setStage("prompt_clustering_model");
+        } else if (algoConfig.isImagePipeline) {
+          // Image pipeline: should not reach here (uses image_dataset_configured)
+          setStage("prompt_column_info");
+        } else {
+          // Standard tabular flow → column info
+          const info = datasetInfo;
+          if (info) {
+            show(
+              toSuggestion(
+                msg.datasetConfiguredMessage(
+                  info.filename,
+                  info.nRows,
+                  info.nCols,
+                ),
+                [
+                  {
+                    label: "Add Column Info",
+                    type: "add_node",
+                    payload: { node_type: "column_info" },
+                  },
+                ],
+              ),
+            );
+          }
+          setStage("prompt_column_info");
+        }
         break;
       }
 
@@ -458,6 +477,114 @@ export function useLearningFlow({
         break;
       }
 
+      // ── K-Means: prompt to add clustering model ────────────────
+      case "prompt_clustering_model": {
+        show(
+          toSuggestion(msg.promptClusteringModelMessage(), [
+            {
+              label: "Add K-Means",
+              type: "add_node",
+              payload: { node_type: "kmeans" },
+            },
+          ]),
+        );
+        break;
+      }
+
+      // ── K-Means: model added → prompt run ───────────────────────
+      case "clustering_model_added": {
+        show(
+          toSuggestion(msg.clusteringModelAddedMessage(), [
+            { label: "Run Pipeline", type: "execute", payload: {} },
+          ]),
+        );
+        setStage("prompt_final_run");
+        break;
+      }
+
+      // ── Image: prompt to add image dataset ──────────────────────
+      case "prompt_image_dataset": {
+        show(
+          toSuggestion(msg.promptDragImageDatasetMessage(), [
+            {
+              label: "Add Image Dataset",
+              type: "add_node",
+              payload: { node_type: "image_dataset" },
+            },
+          ]),
+        );
+        break;
+      }
+
+      // ── Image: dataset configured → prompt image split ──────────
+      case "image_dataset_configured": {
+        show(
+          toSuggestion(msg.promptImageSplitMessage(), [
+            {
+              label: "Add Image Split",
+              type: "add_node",
+              payload: { node_type: "image_split" },
+            },
+          ]),
+        );
+        setStage("prompt_image_split");
+        break;
+      }
+
+      // ── Image: waiting for image split node ─────────────────────
+      case "prompt_image_split": {
+        show(
+          toSuggestion(msg.promptImageSplitMessage(), [
+            {
+              label: "Add Image Split",
+              type: "add_node",
+              payload: { node_type: "image_split" },
+            },
+          ]),
+        );
+        break;
+      }
+
+      // ── Image: split added → prompt image predictions ───────────
+      case "image_split_added": {
+        show(
+          toSuggestion(msg.imageSplitAddedMessage(), [
+            {
+              label: "Add Image Predictions",
+              type: "add_node",
+              payload: { node_type: "image_predictions" },
+            },
+          ]),
+        );
+        setStage("prompt_image_predictions");
+        break;
+      }
+
+      // ── Image: waiting for image predictions node ───────────────
+      case "prompt_image_predictions": {
+        show(
+          toSuggestion(msg.promptImagePredictionsMessage(), [
+            {
+              label: "Add Image Predictions",
+              type: "add_node",
+              payload: { node_type: "image_predictions" },
+            },
+          ]),
+        );
+        break;
+      }
+
+      // ── Image: predictions added → prompt run ───────────────────
+      case "image_predictions_added": {
+        show(
+          toSuggestion(msg.metricsAddedMessage(), [
+            { label: "Run Pipeline", type: "execute", payload: {} },
+          ]),
+        );
+        setStage("prompt_final_run");
+        break;
+      }
+
       // ── Pipeline executed → show results ──────────────────────
       // Audio-gated: waits for TTS to finish (Effect 4).
       case "pipeline_executed": {
@@ -601,6 +728,55 @@ export function useLearningFlow({
           }
           trackNodeId("dataset", dsNode.id);
           setStage("dataset_node_added");
+        }
+        break;
+      }
+
+      // ── Image pipeline: detect image_dataset node ───────────────
+      case "prompt_image_dataset": {
+        const imgDsNode = nodes.find((n) => n.data.type === "image_dataset");
+        if (imgDsNode) {
+          if (autoAdvanceTimerRef.current) {
+            clearTimeout(autoAdvanceTimerRef.current);
+            autoAdvanceTimerRef.current = null;
+          }
+          trackNodeId("imageDataset", imgDsNode.id);
+          if (imgDsNode.data.isConfigured) {
+            setStage("image_dataset_configured");
+          }
+        }
+        break;
+      }
+
+      // ── Image pipeline: wait for image_dataset config ───────────
+      case "image_dataset_configured":
+      case "prompt_image_split": {
+        const imgSplitNode = nodes.find((n) => n.data.type === "image_split");
+        if (imgSplitNode) {
+          trackNodeId("imageSplit", imgSplitNode.id);
+          setStage("image_split_added");
+        }
+        break;
+      }
+
+      // ── Image pipeline: wait for image_predictions ──────────────
+      case "prompt_image_predictions": {
+        const imgPredNode = nodes.find(
+          (n) => n.data.type === "image_predictions",
+        );
+        if (imgPredNode) {
+          trackNodeId("imagePredictions", imgPredNode.id);
+          setStage("image_predictions_added");
+        }
+        break;
+      }
+
+      // ── K-Means: wait for kmeans node ───────────────────────────
+      case "prompt_clustering_model": {
+        const kmeansNode = nodes.find((n) => n.data.type === "kmeans");
+        if (kmeansNode) {
+          trackNodeId("model", kmeansNode.id);
+          setStage("clustering_model_added");
         }
         break;
       }
@@ -855,9 +1031,17 @@ export function useLearningFlow({
     }
 
     switch (stage) {
-      case "algorithm_selected":
-        setStage("prompt_drag_dataset");
+      case "algorithm_selected": {
+        const algoConf = selectedAlgorithm
+          ? getAlgorithmConfig(selectedAlgorithm)
+          : null;
+        setStage(
+          algoConf?.isImagePipeline
+            ? "prompt_image_dataset"
+            : "prompt_drag_dataset",
+        );
         break;
+      }
       case "pipeline_executed":
         setStage("completed");
         break;

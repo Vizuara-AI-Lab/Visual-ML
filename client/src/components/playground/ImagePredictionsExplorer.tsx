@@ -15,7 +15,6 @@ import {
   CheckCircle,
   XCircle,
   Video,
-  PenTool,
   Upload,
   Layers,
   ChevronRight,
@@ -25,7 +24,6 @@ import { QuizTab } from "./ImageDatasetExplorer";
 import { apiClient } from "../../lib/axios";
 import { LiveCameraTestPanel } from "./LiveCameraTestPanel";
 import { LivePoseTestPanel } from "./LivePoseTestPanel";
-import { DrawingCanvas } from "./DrawingCanvas";
 import { ImageUploadTest } from "./ImageUploadTest";
 
 // --- Shared image renderer ---
@@ -91,7 +89,7 @@ interface ImagePredictionsExplorerProps {
   result: any;
 }
 
-type Tab = "overview" | "architecture" | "gallery" | "confidence" | "landmark_importance" | "quiz" | "live_camera" | "draw" | "upload_test";
+type Tab = "overview" | "architecture" | "gallery" | "confidence" | "landmark_importance" | "quiz" | "live_camera" | "upload_test";
 
 export const ImagePredictionsExplorer = ({
   result,
@@ -203,12 +201,6 @@ export const ImagePredictionsExplorer = ({
       available: hasModel,
     },
     {
-      id: "draw",
-      label: "Draw",
-      icon: PenTool,
-      available: hasModel && !isPose,
-    },
-    {
       id: "upload_test",
       label: "Test Image",
       icon: Upload,
@@ -276,14 +268,6 @@ export const ImagePredictionsExplorer = ({
           classNames={classNames}
           imageWidth={imageWidth}
           imageHeight={imageHeight}
-          onPredict={predictPixels}
-        />
-      )}
-      {activeTab === "draw" && hasModel && !isPose && (
-        <DrawingCanvas
-          imageWidth={imageWidth}
-          imageHeight={imageHeight}
-          classNames={classNames}
           onPredict={predictPixels}
         />
       )}
@@ -631,7 +615,7 @@ function TrainingPipelineAnimation({ result }: { result: any }) {
         </div>
       </motion.div>
 
-      {/* Step 4: MLP Neural Network — Forward Pass */}
+      {/* Step 4: Neural Network — Forward Pass */}
       {layers.length > 0 && (
         <motion.div
           className="flex items-start gap-3"
@@ -644,7 +628,9 @@ function TrainingPipelineAnimation({ result }: { result: any }) {
           </div>
           <div className="flex-1">
             <div className="text-xs font-medium text-gray-700 mb-1">
-              MLP Neural Network — Forward Pass
+              {result.algorithm === "transfer_learning"
+                ? "Transfer Learning — MobileNetV2 + Head"
+                : "Neural Network — Forward Pass"}
             </div>
             <div className="text-[10px] text-gray-500 mb-2">
               {layers.map((l: any) => l.size).join(" → ")} neurons &middot;{" "}
@@ -1169,7 +1155,7 @@ function ConfidenceTab({ data }: { data: any }) {
 // --- Architecture Tab ---
 
 function ArchitectureTab({ data }: { data: any }) {
-  const isCNN = data.model_type === "cnn";
+  const isTransferLearning = data.model_type === "transfer_learning";
 
   const getLayerColor = (layer: any) => {
     switch (layer.type) {
@@ -1177,6 +1163,7 @@ function ArchitectureTab({ data }: { data: any }) {
       case "conv2d": return "bg-gradient-to-b from-indigo-400 to-indigo-600";
       case "pooling": return "bg-gradient-to-b from-cyan-400 to-cyan-600";
       case "flatten": return "bg-gradient-to-b from-amber-400 to-amber-600";
+      case "frozen_block": return "bg-gradient-to-b from-sky-300 to-sky-500";
       case "dense":
       case "hidden": return "bg-gradient-to-b from-purple-400 to-purple-600";
       case "dropout": return "bg-gradient-to-b from-red-300 to-red-500";
@@ -1189,8 +1176,9 @@ function ArchitectureTab({ data }: { data: any }) {
     switch (layer.type) {
       case "input": return "Input";
       case "conv2d": return `Conv2D`;
-      case "pooling": return "MaxPool";
+      case "pooling": return isTransferLearning ? "AvgPool" : "MaxPool";
       case "flatten": return "Flatten";
+      case "frozen_block": return "MobileNetV2";
       case "dense": return "Dense";
       case "hidden": return `Hidden ${layer.index}`;
       case "dropout": return "Dropout";
@@ -1203,11 +1191,11 @@ function ArchitectureTab({ data }: { data: any }) {
     <div className="space-y-4">
       <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
         <h3 className="text-sm font-semibold text-purple-900">
-          {isCNN ? "CNN Architecture" : "Network Architecture"}
+          {isTransferLearning ? "Transfer Learning Architecture" : "Network Architecture"}
         </h3>
         <p className="text-xs text-purple-700 mt-1">
-          {isCNN
-            ? `Convolutional Neural Network with ${data.total_params.toLocaleString()} learnable parameters. Input: ${data.input_shape} → Output: ${data.output_shape}.`
+          {isTransferLearning
+            ? `MobileNetV2 transfer learning with ${data.total_params.toLocaleString()} total parameters (${(data.trainable_params ?? 0).toLocaleString()} trainable). Input: ${data.input_shape} → Output: ${data.output_shape}.`
             : `Your neural network has ${data.layers.length} layers with ${data.total_params.toLocaleString()} learnable parameters.`}
         </p>
       </div>
@@ -1229,7 +1217,7 @@ function ArchitectureTab({ data }: { data: any }) {
                   <div
                     className={`${bgColor} rounded-lg flex items-center justify-center text-white text-[10px] font-bold shadow-md transition-all hover:scale-105`}
                     style={{
-                      width: layer.type === "pooling" || layer.type === "dropout" || layer.type === "flatten" ? 40 : 54,
+                      width: layer.type === "frozen_block" ? 70 : layer.type === "pooling" || layer.type === "dropout" || layer.type === "flatten" ? 40 : 54,
                       height: barHeight,
                       minHeight: 24,
                     }}
@@ -1262,7 +1250,7 @@ function ArchitectureTab({ data }: { data: any }) {
           <thead className="bg-gray-50">
             <tr>
               <th className="text-left px-3 py-2 text-xs text-gray-600">Layer</th>
-              <th className="text-center px-3 py-2 text-xs text-gray-600">{isCNN ? "Size / Filters" : "Neurons"}</th>
+              <th className="text-center px-3 py-2 text-xs text-gray-600">{isTransferLearning ? "Size / Filters" : "Neurons"}</th>
               <th className="text-center px-3 py-2 text-xs text-gray-600">Activation</th>
               <th className="text-center px-3 py-2 text-xs text-gray-600">Parameters</th>
             </tr>
@@ -1287,6 +1275,12 @@ function ArchitectureTab({ data }: { data: any }) {
               <td className="px-3 py-2" colSpan={3}>Total Parameters</td>
               <td className="px-3 py-2 text-center font-mono">{data.total_params.toLocaleString()}</td>
             </tr>
+            {isTransferLearning && data.trainable_params != null && (
+              <tr className="border-t text-sm">
+                <td className="px-3 py-2 text-green-700" colSpan={3}>Trainable Parameters</td>
+                <td className="px-3 py-2 text-center font-mono text-green-700">{data.trainable_params.toLocaleString()}</td>
+              </tr>
+            )}
           </tfoot>
         </table>
       </div>
@@ -1295,8 +1289,8 @@ function ArchitectureTab({ data }: { data: any }) {
         <div className="flex items-start gap-2">
           <Info className="w-4 h-4 text-blue-600 mt-0.5" />
           <p className="text-xs text-blue-700">
-            {isCNN
-              ? <><strong>CNN layers:</strong> Conv2D filters detect local patterns (edges, textures). MaxPooling reduces size while keeping key features. Dense layers combine extracted features for final classification.</>
+            {isTransferLearning
+              ? <><strong>Transfer Learning:</strong> MobileNetV2 was pretrained on 1.4M ImageNet images. The frozen base extracts visual features (edges, textures, shapes). Only the trainable head layers learn your specific classes — dramatically reducing training time and data requirements.</>
               : <><strong>Parameters</strong> are the learnable weights — each connection between neurons has a weight, plus each neuron has a bias. More parameters = more capacity to learn complex patterns, but also more risk of overfitting.</>}
           </p>
         </div>

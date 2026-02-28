@@ -44,6 +44,8 @@ const nodeTypes: Record<string, React.ComponentType<any>> = {
   mlp_classifier: MLNode,
   mlp_regressor: MLNode,
   kmeans: MLNode,
+  knn: MLNode,
+  svm: MLNode,
   // Image Pipeline Nodes
   image_dataset: MLNode,
   image_split: MLNode,

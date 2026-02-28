@@ -26,7 +26,8 @@
       "Bash(ls:*)",
       "Bash(taskkill:*)",
       "Bash(tasklist:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(.venv/Scripts/python.exe:*)"
     ]
   }
 }
