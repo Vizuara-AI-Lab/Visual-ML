@@ -18,13 +18,13 @@ import {
   ScatterChart,
   PieChart,
   Camera,
-  ImagePlus,
-  Trash2,
   Loader2,
+  PersonStanding,
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { apiClient } from "../../lib/axios";
 import { CameraCapturePanel } from "./CameraCapturePanel";
+import { PoseCapturePanel } from "./PoseCapturePanel";
 import { LiveCameraTestPanel } from "./LiveCameraTestPanel";
 import { getNodeByType } from "../../config/nodeDefinitions";
 import { usePlaygroundStore } from "../../store/playgroundStore";
@@ -102,9 +102,12 @@ function ImageClassConfig({
             onChange={(e) => onFieldChange("target_size", e.target.value)}
             className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
           >
-            <option value="8x8">8x8</option>
-            <option value="28x28">28x28</option>
-            <option value="32x32">32x32</option>
+            <option value="8x8">8×8</option>
+            <option value="28x28">28×28</option>
+            <option value="32x32">32×32</option>
+            <option value="64x64">64×64</option>
+            <option value="128x128">128×128 (High Quality)</option>
+            <option value="256x256">256×256 (Original Quality)</option>
           </select>
         </div>
         <div className="space-y-1">
@@ -127,294 +130,12 @@ function ImageClassConfig({
   );
 }
 
-// --- Upload images panel ---
-interface UploadedImage {
-  id: string;
-  file: File;
-  preview: string;
-  className: string;
-  pixels: number[];
-}
-
-function ImageUploadPanel({
-  config,
-  onDatasetReady,
-  isSubmitting,
-}: {
-  config: Record<string, unknown>;
-  onDatasetReady: (payload: {
-    class_names: string[];
-    target_size: string;
-    images_per_class: Record<string, number[][]>;
-  }) => void;
-  isSubmitting: boolean;
-}) {
-  const [images, setImages] = useState<UploadedImage[]>([]);
-  const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const classNamesRaw = (config.class_names as string) || "";
-  const classNames = classNamesRaw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const targetSize = (config.target_size as string) || "28x28";
-  const [tw, th] = targetSize.split("x").map(Number);
-  const targetW = tw || 28;
-  const targetH = th || 28;
-
-  // Convert a File to grayscale pixels at target resolution
-  const processFile = useCallback(
-    (file: File, assignClass: string): Promise<UploadedImage> => {
-      return new Promise((resolve) => {
-        const img = new window.Image();
-        img.onload = () => {
-          // ML pixels at target resolution
-          const canvas = document.createElement("canvas");
-          canvas.width = targetW;
-          canvas.height = targetH;
-          const ctx = canvas.getContext("2d")!;
-          ctx.fillStyle = "#000";
-          ctx.fillRect(0, 0, targetW, targetH);
-          const side = Math.min(img.width, img.height);
-          const sx = (img.width - side) / 2;
-          const sy = (img.height - side) / 2;
-          ctx.drawImage(img, sx, sy, side, side, 0, 0, targetW, targetH);
-          const data = ctx.getImageData(0, 0, targetW, targetH).data;
-          const pxArr: number[] = [];
-          for (let i = 0; i < data.length; i += 4) {
-            pxArr.push(
-              Math.round(
-                0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2],
-              ),
-            );
-          }
-
-          // High-res preview
-          const prevCanvas = document.createElement("canvas");
-          const PREVIEW = 112;
-          prevCanvas.width = PREVIEW;
-          prevCanvas.height = PREVIEW;
-          const pctx = prevCanvas.getContext("2d")!;
-          pctx.imageSmoothingEnabled = true;
-          pctx.imageSmoothingQuality = "high";
-          pctx.drawImage(img, sx, sy, side, side, 0, 0, PREVIEW, PREVIEW);
-
-          URL.revokeObjectURL(img.src);
-          resolve({
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            file,
-            preview: prevCanvas.toDataURL("image/png"),
-            className: assignClass,
-            pixels: pxArr,
-          });
-        };
-        img.src = URL.createObjectURL(file);
-      });
-    },
-    [targetW, targetH],
-  );
-
-  const handleFiles = useCallback(
-    async (files: FileList | null) => {
-      if (!files || files.length === 0 || classNames.length === 0) return;
-      const defaultClass = classNames[0];
-      const newImages: UploadedImage[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (!file.type.startsWith("image/")) continue;
-        const processed = await processFile(file, defaultClass);
-        newImages.push(processed);
-      }
-      setImages((prev) => [...prev, ...newImages]);
-    },
-    [classNames, processFile],
-  );
-
-  const removeImage = useCallback((id: string) => {
-    setImages((prev) => prev.filter((img) => img.id !== id));
-  }, []);
-
-  const changeImageClass = useCallback(
-    (id: string, newClass: string) => {
-      setImages((prev) =>
-        prev.map((img) =>
-          img.id === id ? { ...img, className: newClass } : img,
-        ),
-      );
-    },
-    [],
-  );
-
-  const handleBuildDataset = useCallback(() => {
-    if (classNames.length === 0 || images.length === 0) return;
-    // Group pixels by class
-    const imagesPerClass: Record<string, number[][]> = {};
-    for (const cls of classNames) {
-      imagesPerClass[cls] = images
-        .filter((img) => img.className === cls)
-        .map((img) => img.pixels);
-    }
-    onDatasetReady({
-      class_names: classNames,
-      target_size: targetSize,
-      images_per_class: imagesPerClass,
-    });
-  }, [classNames, images, targetSize, onDatasetReady]);
-
-  // Count per class
-  const classCounts: Record<string, number> = {};
-  for (const cls of classNames) {
-    classCounts[cls] = images.filter((img) => img.className === cls).length;
-  }
-  const minRequired = Number(config.images_per_class) || 5;
-  const allReady =
-    classNames.length > 0 &&
-    classNames.every((cls) => (classCounts[cls] || 0) >= minRequired);
-
-  if (classNames.length === 0) {
-    return (
-      <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-6 text-center">
-        <ImagePlus className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-        <p className="text-sm font-medium text-slate-500">
-          Enter class labels above first
-        </p>
-        <p className="text-xs text-slate-400 mt-1">
-          e.g. rock, paper, scissors
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {/* Class counts summary */}
-      <div className="flex flex-wrap gap-2">
-        {classNames.map((cls) => {
-          const count = classCounts[cls] || 0;
-          const enough = count >= minRequired;
-          return (
-            <div
-              key={cls}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${
-                enough
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                  : "bg-amber-50 border-amber-200 text-amber-700"
-              }`}
-            >
-              {cls}: {count}/{minRequired}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Drop zone */}
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          handleFiles(e.dataTransfer.files);
-        }}
-        onClick={() => fileInputRef.current?.click()}
-        className={`rounded-xl border-2 border-dashed p-5 text-center cursor-pointer transition-colors ${
-          dragOver
-            ? "border-purple-400 bg-purple-50"
-            : "border-slate-300 bg-slate-50 hover:border-purple-300 hover:bg-purple-50/30"
-        }`}
-      >
-        <Upload
-          className={`w-8 h-8 mx-auto mb-2 ${dragOver ? "text-purple-500" : "text-slate-400"}`}
-        />
-        <p className="text-sm font-medium text-slate-600">
-          Drop images here or click to browse
-        </p>
-        <p className="text-xs text-slate-400 mt-0.5">
-          PNG, JPG — multiple files supported
-        </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => handleFiles(e.target.files)}
-        />
-      </div>
-
-      {/* Image grid */}
-      {images.length > 0 && (
-        <div className="grid grid-cols-4 gap-2 max-h-[240px] overflow-y-auto pr-1">
-          {images.map((img) => (
-            <div
-              key={img.id}
-              className="relative group rounded-lg border border-slate-200 overflow-hidden bg-black"
-            >
-              <img
-                src={img.preview}
-                alt={img.file.name}
-                className="w-full aspect-square object-cover"
-              />
-              {/* Class selector overlay */}
-              <select
-                value={img.className}
-                onChange={(e) => changeImageClass(img.id, e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] px-1 py-0.5 border-0 outline-none cursor-pointer"
-              >
-                {classNames.map((cls) => (
-                  <option key={cls} value={cls}>
-                    {cls}
-                  </option>
-                ))}
-              </select>
-              {/* Delete button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeImage(img.id);
-                }}
-                className="absolute top-0.5 right-0.5 p-0.5 bg-red-500 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Trash2 className="w-2.5 h-2.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Build dataset button */}
-      <button
-        onClick={handleBuildDataset}
-        disabled={!allReady || isSubmitting}
-        className="w-full flex items-center justify-center gap-2 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg text-sm font-semibold transition-colors"
-      >
-        {isSubmitting ? (
-          <Loader2 className="w-4 h-4 animate-spin" />
-        ) : (
-          <CheckCircle2 className="w-4 h-4" />
-        )}
-        {isSubmitting ? "Building Dataset…" : "Build Dataset"}
-      </button>
-
-      {!allReady && images.length > 0 && (
-        <p className="text-xs text-amber-600 text-center">
-          Upload at least {minRequired} images per class to build the dataset
-        </p>
-      )}
-    </div>
-  );
-}
-
-// --- Merged Image Dataset config block (built-in dataset, camera, or upload) ---
+// --- Merged Image Dataset config block (built-in dataset, camera, or pose) ---
 function ImageDatasetConfigBlock({
   config,
   onFieldChange,
   onDatasetReady,
+  onPoseDatasetReady,
   isSubmitting,
 }: {
   config: Record<string, unknown>;
@@ -423,6 +144,10 @@ function ImageDatasetConfigBlock({
     class_names: string[];
     target_size: string;
     images_per_class: Record<string, number[][]>;
+  }) => void;
+  onPoseDatasetReady: (payload: {
+    class_names: string[];
+    landmarks_per_class: Record<string, number[][]>;
   }) => void;
   isSubmitting: boolean;
 }) {
@@ -455,15 +180,15 @@ function ImageDatasetConfigBlock({
           Camera
         </button>
         <button
-          onClick={() => onFieldChange("source", "upload")}
+          onClick={() => onFieldChange("source", "pose")}
           className={`flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 border-l border-gray-200 ${
-            source === "upload"
-              ? "bg-purple-600 text-white"
+            source === "pose"
+              ? "bg-sky-600 text-white"
               : "bg-white text-gray-600 hover:bg-gray-50"
           }`}
         >
-          <ImagePlus className="w-3.5 h-3.5" />
-          Upload
+          <PersonStanding className="w-3.5 h-3.5" />
+          Pose
         </button>
       </div>
 
@@ -491,14 +216,58 @@ function ImageDatasetConfigBlock({
         </div>
       ) : (
         <div className="space-y-3">
-          <ImageClassConfig config={config} onFieldChange={onFieldChange} />
-          <ImageUploadPanel
+          <PoseClassConfig config={config} onFieldChange={onFieldChange} />
+          <PoseCapturePanel
             config={config}
-            onDatasetReady={onDatasetReady}
+            onDatasetReady={onPoseDatasetReady}
             isSubmitting={isSubmitting}
           />
         </div>
       )}
+    </div>
+  );
+}
+
+/** Simple config for pose class names + samples per class */
+function PoseClassConfig({
+  config,
+  onFieldChange,
+}: {
+  config: Record<string, unknown>;
+  onFieldChange: (name: string, value: unknown) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">
+          Pose Labels
+        </label>
+        <input
+          type="text"
+          value={(config.class_names as string) || ""}
+          onChange={(e) => onFieldChange("class_names", e.target.value)}
+          placeholder="standing, sitting, waving"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+        />
+        <p className="text-[10px] text-gray-400 mt-1">
+          Comma-separated pose names
+        </p>
+      </div>
+      <div>
+        <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1">
+          Samples Per Pose
+        </label>
+        <input
+          type="number"
+          value={Number(config.samples_per_class) || 30}
+          onChange={(e) =>
+            onFieldChange("samples_per_class", parseInt(e.target.value) || 30)
+          }
+          min={5}
+          max={200}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+        />
+      </div>
     </div>
   );
 }
@@ -524,6 +293,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
   const [userDatasets, setUserDatasets] = useState<DatasetMetadata[]>([]);
   const [loadingDatasets, setLoadingDatasets] = useState(false);
   const [buildingDataset, setBuildingDataset] = useState(false);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
 
   // Reset config when nodeId changes to prevent config sharing between nodes
   // ALWAYS load the latest config from the store (no caching)
@@ -569,6 +339,9 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
       "logistic_regression",
       "decision_tree",
       "random_forest",
+      "kmeans",
+      "knn",
+      "svm",
       "r2_score",
       "mse_score",
       "rmse_score",
@@ -615,6 +388,8 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
           "logistic_regression",
           "decision_tree",
           "random_forest",
+          "knn",
+          "svm",
         ].includes(sourceNode?.type || "");
 
         if (isResultNode && isMLAlgorithmNode) {
@@ -634,6 +409,9 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
             "logistic_regression",
             "decision_tree",
             "random_forest",
+            "kmeans",
+            "knn",
+            "svm",
           ].includes(node?.type || "");
 
           // image_predictions gets train_dataset_id + test_dataset_id from image_split
@@ -731,6 +509,48 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
         });
       } catch (err) {
         console.error("❌ Camera dataset build failed:", err);
+      } finally {
+        setBuildingDataset(false);
+      }
+    },
+    [nodeId, updateNodeConfig],
+  );
+
+  // Build a pose dataset — calls /ml/pose/dataset with landmark arrays
+  const buildPoseDataset = useCallback(
+    async (payload: {
+      class_names: string[];
+      landmarks_per_class: Record<string, number[][]>;
+    }) => {
+      if (!nodeId) return;
+      setBuildingDataset(true);
+      try {
+        const response = await apiClient.post("/ml/pose/dataset", {
+          class_names: payload.class_names,
+          landmarks_per_class: payload.landmarks_per_class,
+        });
+        const data = response.data as {
+          dataset_id: string;
+          n_rows: number;
+          n_columns: number;
+          n_classes: number;
+          class_names: string[];
+        };
+        setConfig((prev) => {
+          const updated = {
+            ...prev,
+            source: "pose",
+            dataset_id: data.dataset_id,
+            n_rows: data.n_rows,
+            n_columns: data.n_columns,
+            class_names: payload.class_names.join(","),
+            data_type: "pose",
+          };
+          updateNodeConfig(nodeId, updated);
+          return updated;
+        });
+      } catch (err) {
+        console.error("Pose dataset build failed:", err);
       } finally {
         setBuildingDataset(false);
       }
@@ -967,6 +787,17 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
   const availableColumns = getAvailableColumns();
 
   const handleSave = () => {
+    // Warn if camera/pose source is selected but no dataset has been built
+    if (node.type === "image_dataset") {
+      const source = config.source as string;
+      if ((source === "camera" || source === "pose") && !config.dataset_id) {
+        setSaveWarning(
+          `You haven't built a dataset yet! Please capture ${source === "pose" ? "poses" : "images"} and click "Build Dataset" before saving.`
+        );
+        return;
+      }
+    }
+    setSaveWarning(null);
     updateNodeConfig(node.id, config);
     onClose();
   };
@@ -1002,6 +833,8 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
         "logistic_regression",
         "decision_tree",
         "random_forest",
+        "knn",
+        "svm",
       ].includes(connectedSourceNode.type);
 
       if (isMLAlgorithmNode && sourceResult?.model_id) {
@@ -2043,6 +1876,8 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
               "logistic_regression",
               "decision_tree",
               "random_forest",
+              "knn",
+              "svm",
             ].includes(node.type) ? (
               <MLAlgorithmConfigPanel
                 nodeType={node.type}
@@ -2087,6 +1922,7 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
                 config={config}
                 onFieldChange={handleFieldChange}
                 onDatasetReady={buildCameraDataset}
+                onPoseDatasetReady={buildPoseDataset}
                 isSubmitting={buildingDataset}
               />
             ) : nodeDef.configFields && nodeDef.configFields.length > 0 ? (
@@ -2683,20 +2519,28 @@ export const ConfigModal = ({ nodeId, onClose }: ConfigModalProps) => {
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-slate-500 hover:text-slate-800 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
-            >
-              <Save className="w-4 h-4" />
-              Save Configuration
-            </button>
+          <div className="px-6 py-4 border-t border-slate-200">
+            {saveWarning && (
+              <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-300 rounded-lg flex items-center gap-2">
+                <span className="text-amber-600 text-sm font-medium">⚠</span>
+                <span className="text-xs text-amber-700">{saveWarning}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-slate-500 hover:text-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+              >
+                <Save className="w-4 h-4" />
+                Save Configuration
+              </button>
+            </div>
           </div>
         </motion.div>
       </div>

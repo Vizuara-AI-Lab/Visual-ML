@@ -14,6 +14,8 @@ export interface AlgorithmConfig {
   metricVoiceText: string;
   isClassification: boolean;
   targetWarningThreshold?: number;
+  isUnsupervised?: boolean;
+  isImagePipeline?: boolean;
 }
 
 export const ALGORITHM_CONFIG: Record<string, AlgorithmConfig> = {
@@ -59,6 +61,50 @@ export const ALGORITHM_CONFIG: Record<string, AlgorithmConfig> = {
     metricDisplayText: "R squared score and Root Mean Squared Error",
     metricVoiceText: "R squared score and Root Mean Squared Error",
     isClassification: false,
+  },
+  mlp_classifier: {
+    displayName: "MLP Classifier",
+    nodeType: "mlp_classifier",
+    description:
+      "A neural network that learns complex patterns for classification.",
+    metricNodes: ["confusion_matrix"],
+    metricDisplayText: "a Confusion Matrix",
+    metricVoiceText: "a Confusion Matrix",
+    isClassification: true,
+  },
+  mlp_regressor: {
+    displayName: "MLP Regressor",
+    nodeType: "mlp_regressor",
+    description:
+      "A neural network that predicts continuous numbers like prices or scores.",
+    metricNodes: ["r2_score", "rmse_score", "mae_score"],
+    metricDisplayText:
+      "R squared score, Root Mean Squared Error, and Mean Absolute Error",
+    metricVoiceText:
+      "R squared score, Root Mean Squared Error, and Mean Absolute Error",
+    isClassification: false,
+  },
+  kmeans: {
+    displayName: "K-Means Clustering",
+    nodeType: "kmeans",
+    description:
+      "Groups similar data points into clusters without labels.",
+    metricNodes: [],
+    metricDisplayText: "",
+    metricVoiceText: "",
+    isClassification: false,
+    isUnsupervised: true,
+  },
+  image_predictions: {
+    displayName: "Image Classification",
+    nodeType: "image_predictions",
+    description:
+      "Trains a model to recognize and classify images.",
+    metricNodes: [],
+    metricDisplayText: "",
+    metricVoiceText: "",
+    isClassification: true,
+    isImagePipeline: true,
   },
 };
 

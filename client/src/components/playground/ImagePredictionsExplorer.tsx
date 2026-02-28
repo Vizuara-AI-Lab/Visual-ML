@@ -15,15 +15,15 @@ import {
   CheckCircle,
   XCircle,
   Video,
-  PenTool,
   Upload,
   Layers,
   ChevronRight,
+  PersonStanding,
 } from "lucide-react";
 import { QuizTab } from "./ImageDatasetExplorer";
 import { apiClient } from "../../lib/axios";
 import { LiveCameraTestPanel } from "./LiveCameraTestPanel";
-import { DrawingCanvas } from "./DrawingCanvas";
+import { LivePoseTestPanel } from "./LivePoseTestPanel";
 import { ImageUploadTest } from "./ImageUploadTest";
 
 // --- Shared image renderer ---
@@ -89,7 +89,7 @@ interface ImagePredictionsExplorerProps {
   result: any;
 }
 
-type Tab = "overview" | "architecture" | "gallery" | "confidence" | "quiz" | "live_camera" | "draw" | "upload_test";
+type Tab = "overview" | "architecture" | "gallery" | "confidence" | "landmark_importance" | "quiz" | "live_camera" | "upload_test";
 
 export const ImagePredictionsExplorer = ({
   result,
@@ -102,8 +102,9 @@ export const ImagePredictionsExplorer = ({
   const imageHeight: number = result.image_height || result.prediction_gallery?.[0]?.height || 28;
   const classNames: string[] = result.class_names || [];
   const hasModel = !!modelPath;
+  const isPose = result.algorithm === "pose_mlp";
 
-  // Shared predict callback for all testing tabs
+  // Shared predict callback for pixel-based testing tabs
   const predictPixels = useCallback(
     async (pixels: number[]) => {
       const response = await apiClient.post("/ml/camera/predict", {
@@ -132,6 +133,34 @@ export const ImagePredictionsExplorer = ({
     [modelPath, classNames],
   );
 
+  // Pose predict callback — sends 132 landmarks to /ml/pose/predict
+  const predictLandmarks = useCallback(
+    async (landmarks: number[]) => {
+      const response = await apiClient.post("/ml/pose/predict", {
+        model_path: modelPath,
+        landmarks,
+      });
+      const data = response.data as {
+        class_name: string;
+        confidence: number;
+        all_scores: { class_name: string; score: number }[];
+      };
+      const mapIdx = (raw: string) => {
+        const idx = parseInt(raw);
+        return !isNaN(idx) && classNames[idx] ? classNames[idx] : raw;
+      };
+      return {
+        class_name: mapIdx(data.class_name),
+        confidence: data.confidence,
+        all_scores: data.all_scores.map((s) => ({
+          class_name: mapIdx(s.class_name),
+          score: s.score,
+        })),
+      };
+    },
+    [modelPath, classNames],
+  );
+
   const tabs: { id: Tab; label: string; icon: any; available: boolean }[] = [
     { id: "overview", label: "Detection Overview", icon: Activity, available: true },
     {
@@ -144,7 +173,13 @@ export const ImagePredictionsExplorer = ({
       id: "gallery",
       label: "Prediction Gallery",
       icon: ImageIcon,
-      available: !!result.prediction_gallery && result.prediction_gallery.length > 0,
+      available: !isPose && !!result.prediction_gallery && result.prediction_gallery.length > 0,
+    },
+    {
+      id: "landmark_importance",
+      label: "Body Landmarks",
+      icon: PersonStanding,
+      available: isPose && !!result.feature_importance?.landmarks?.length,
     },
     {
       id: "confidence",
@@ -158,24 +193,18 @@ export const ImagePredictionsExplorer = ({
       icon: HelpCircle,
       available: !!result.quiz_questions && result.quiz_questions.length > 0,
     },
-    // --- Testing tabs (only when model is available) ---
+    // --- Testing tabs ---
     {
       id: "live_camera",
-      label: "Live Camera",
-      icon: Video,
-      available: hasModel,
-    },
-    {
-      id: "draw",
-      label: "Draw",
-      icon: PenTool,
+      label: isPose ? "Live Pose" : "Live Camera",
+      icon: isPose ? PersonStanding : Video,
       available: hasModel,
     },
     {
       id: "upload_test",
       label: "Test Image",
       icon: Upload,
-      available: hasModel,
+      available: hasModel && !isPose,
     },
   ];
 
@@ -207,11 +236,14 @@ export const ImagePredictionsExplorer = ({
       {activeTab === "architecture" && result.architecture_diagram && (
         <ArchitectureTab data={result.architecture_diagram} />
       )}
-      {activeTab === "gallery" && result.prediction_gallery && (
+      {activeTab === "gallery" && result.prediction_gallery && !isPose && (
         <PredictionGalleryTab
           data={result.prediction_gallery}
           metrics={result.metrics_summary}
         />
+      )}
+      {activeTab === "landmark_importance" && isPose && result.feature_importance && (
+        <LandmarkImportanceTab data={result.feature_importance} />
       )}
       {activeTab === "confidence" && result.confidence_distribution && (
         <ConfidenceTab data={result.confidence_distribution} />
@@ -221,7 +253,15 @@ export const ImagePredictionsExplorer = ({
       )}
 
       {/* --- Testing tabs --- */}
-      {activeTab === "live_camera" && hasModel && (
+      {activeTab === "live_camera" && hasModel && isPose && (
+        <LivePoseTestPanel
+          modelId={result.model_id || ""}
+          modelPath={modelPath}
+          classNames={classNames}
+          onPredict={predictLandmarks}
+        />
+      )}
+      {activeTab === "live_camera" && hasModel && !isPose && (
         <LiveCameraTestPanel
           modelId={result.model_id || ""}
           modelPath={modelPath}
@@ -231,15 +271,7 @@ export const ImagePredictionsExplorer = ({
           onPredict={predictPixels}
         />
       )}
-      {activeTab === "draw" && hasModel && (
-        <DrawingCanvas
-          imageWidth={imageWidth}
-          imageHeight={imageHeight}
-          classNames={classNames}
-          onPredict={predictPixels}
-        />
-      )}
-      {activeTab === "upload_test" && hasModel && (
+      {activeTab === "upload_test" && hasModel && !isPose && (
         <ImageUploadTest
           imageWidth={imageWidth}
           imageHeight={imageHeight}
@@ -583,7 +615,7 @@ function TrainingPipelineAnimation({ result }: { result: any }) {
         </div>
       </motion.div>
 
-      {/* Step 4: MLP Neural Network — Forward Pass */}
+      {/* Step 4: Neural Network — Forward Pass */}
       {layers.length > 0 && (
         <motion.div
           className="flex items-start gap-3"
@@ -596,7 +628,9 @@ function TrainingPipelineAnimation({ result }: { result: any }) {
           </div>
           <div className="flex-1">
             <div className="text-xs font-medium text-gray-700 mb-1">
-              MLP Neural Network — Forward Pass
+              {result.algorithm === "transfer_learning"
+                ? "Transfer Learning — MobileNetV2 + Head"
+                : "Neural Network — Forward Pass"}
             </div>
             <div className="text-[10px] text-gray-500 mb-2">
               {layers.map((l: any) => l.size).join(" → ")} neurons &middot;{" "}
@@ -1121,58 +1155,89 @@ function ConfidenceTab({ data }: { data: any }) {
 // --- Architecture Tab ---
 
 function ArchitectureTab({ data }: { data: any }) {
+  const isTransferLearning = data.model_type === "transfer_learning";
+
+  const getLayerColor = (layer: any) => {
+    switch (layer.type) {
+      case "input": return "bg-gradient-to-b from-blue-400 to-blue-600";
+      case "conv2d": return "bg-gradient-to-b from-indigo-400 to-indigo-600";
+      case "pooling": return "bg-gradient-to-b from-cyan-400 to-cyan-600";
+      case "flatten": return "bg-gradient-to-b from-amber-400 to-amber-600";
+      case "frozen_block": return "bg-gradient-to-b from-sky-300 to-sky-500";
+      case "dense":
+      case "hidden": return "bg-gradient-to-b from-purple-400 to-purple-600";
+      case "dropout": return "bg-gradient-to-b from-red-300 to-red-500";
+      case "output": return "bg-gradient-to-b from-green-400 to-green-600";
+      default: return "bg-gradient-to-b from-gray-400 to-gray-600";
+    }
+  };
+
+  const getLayerLabel = (layer: any) => {
+    switch (layer.type) {
+      case "input": return "Input";
+      case "conv2d": return `Conv2D`;
+      case "pooling": return isTransferLearning ? "AvgPool" : "MaxPool";
+      case "flatten": return "Flatten";
+      case "frozen_block": return "MobileNetV2";
+      case "dense": return "Dense";
+      case "hidden": return `Hidden ${layer.index}`;
+      case "dropout": return "Dropout";
+      case "output": return "Output";
+      default: return layer.name;
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
         <h3 className="text-sm font-semibold text-purple-900">
-          Network Architecture
+          {isTransferLearning ? "Transfer Learning Architecture" : "Network Architecture"}
         </h3>
         <p className="text-xs text-purple-700 mt-1">
-          Your neural network has {data.layers.length} layers with{" "}
-          {data.total_params.toLocaleString()} learnable parameters.
+          {isTransferLearning
+            ? `MobileNetV2 transfer learning with ${data.total_params.toLocaleString()} total parameters (${(data.trainable_params ?? 0).toLocaleString()} trainable). Input: ${data.input_shape} → Output: ${data.output_shape}.`
+            : `Your neural network has ${data.layers.length} layers with ${data.total_params.toLocaleString()} learnable parameters.`}
         </p>
       </div>
 
       {/* Visual architecture diagram */}
       <div className="bg-white border border-gray-200 rounded-lg p-4 overflow-x-auto">
-        <div className="flex items-center gap-3 min-w-max justify-center">
+        <div className="flex items-center gap-2 min-w-max justify-center">
           {data.layers.map((layer: any, i: number) => {
-            const maxNeurons = Math.max(...data.layers.map((l: any) => l.size));
-            const barHeight = Math.max(20, Math.min(120, (layer.size / maxNeurons) * 120));
-            const bgColor =
-              layer.type === "input"
-                ? "bg-gradient-to-b from-blue-400 to-blue-600"
-                : layer.type === "output"
-                  ? "bg-gradient-to-b from-green-400 to-green-600"
-                  : "bg-gradient-to-b from-purple-400 to-purple-600";
+            const sizeLayers = data.layers.filter((l: any) => l.size > 0);
+            const maxNeurons = Math.max(...sizeLayers.map((l: any) => l.size), 1);
+            const barHeight = layer.size > 0
+              ? Math.max(20, Math.min(120, (layer.size / maxNeurons) * 120))
+              : 20;
+            const bgColor = getLayerColor(layer);
 
             return (
-              <div key={i} className="flex items-center gap-3">
+              <div key={i} className="flex items-center gap-2">
                 <div className="flex flex-col items-center">
                   <div
-                    className={`${bgColor} rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-md transition-all hover:scale-105`}
+                    className={`${bgColor} rounded-lg flex items-center justify-center text-white text-[10px] font-bold shadow-md transition-all hover:scale-105`}
                     style={{
-                      width: layer.type === "input" || layer.type === "output" ? 60 : 50,
+                      width: layer.type === "frozen_block" ? 70 : layer.type === "pooling" || layer.type === "dropout" || layer.type === "flatten" ? 40 : 54,
                       height: barHeight,
-                      minHeight: 30,
+                      minHeight: 24,
                     }}
                     title={layer.description}
                   >
-                    {layer.size}
+                    {layer.size > 0 ? layer.size : ""}
                   </div>
-                  <div className="mt-2 text-center">
-                    <div className="text-[10px] font-semibold text-gray-700">
-                      {layer.type === "input" ? "Input" : layer.type === "output" ? "Output" : `Hidden ${i}`}
+                  <div className="mt-1.5 text-center max-w-[60px]">
+                    <div className="text-[9px] font-semibold text-gray-700 leading-tight">
+                      {getLayerLabel(layer)}
                     </div>
                     {layer.activation && (
-                      <div className="text-[9px] text-gray-400">{layer.activation}</div>
+                      <div className="text-[8px] text-gray-400">{layer.activation}</div>
                     )}
-                    {layer.params && (
-                      <div className="text-[9px] text-gray-400">{layer.params.toLocaleString()} params</div>
+                    {layer.params > 0 && (
+                      <div className="text-[8px] text-gray-400">{layer.params.toLocaleString()}p</div>
                     )}
                   </div>
                 </div>
-                {i < data.layers.length - 1 && <div className="text-gray-300 text-lg">→</div>}
+                {i < data.layers.length - 1 && <div className="text-gray-300 text-sm">→</div>}
               </div>
             );
           })}
@@ -1185,7 +1250,7 @@ function ArchitectureTab({ data }: { data: any }) {
           <thead className="bg-gray-50">
             <tr>
               <th className="text-left px-3 py-2 text-xs text-gray-600">Layer</th>
-              <th className="text-center px-3 py-2 text-xs text-gray-600">Neurons</th>
+              <th className="text-center px-3 py-2 text-xs text-gray-600">{isTransferLearning ? "Size / Filters" : "Neurons"}</th>
               <th className="text-center px-3 py-2 text-xs text-gray-600">Activation</th>
               <th className="text-center px-3 py-2 text-xs text-gray-600">Parameters</th>
             </tr>
@@ -1193,8 +1258,13 @@ function ArchitectureTab({ data }: { data: any }) {
           <tbody>
             {data.layers.map((layer: any, i: number) => (
               <tr key={i} className="border-t hover:bg-gray-50">
-                <td className="px-3 py-2"><span className="font-medium">{layer.name}</span></td>
-                <td className="px-3 py-2 text-center font-mono">{layer.size}</td>
+                <td className="px-3 py-2">
+                  <span className="font-medium">{layer.name}</span>
+                  {layer.description && (
+                    <div className="text-[10px] text-gray-400 mt-0.5">{layer.description}</div>
+                  )}
+                </td>
+                <td className="px-3 py-2 text-center font-mono">{layer.size > 0 ? layer.size : "—"}</td>
                 <td className="px-3 py-2 text-center text-xs">{layer.activation || "—"}</td>
                 <td className="px-3 py-2 text-center font-mono text-xs">{layer.params ? layer.params.toLocaleString() : "—"}</td>
               </tr>
@@ -1205,6 +1275,12 @@ function ArchitectureTab({ data }: { data: any }) {
               <td className="px-3 py-2" colSpan={3}>Total Parameters</td>
               <td className="px-3 py-2 text-center font-mono">{data.total_params.toLocaleString()}</td>
             </tr>
+            {isTransferLearning && data.trainable_params != null && (
+              <tr className="border-t text-sm">
+                <td className="px-3 py-2 text-green-700" colSpan={3}>Trainable Parameters</td>
+                <td className="px-3 py-2 text-center font-mono text-green-700">{data.trainable_params.toLocaleString()}</td>
+              </tr>
+            )}
           </tfoot>
         </table>
       </div>
@@ -1213,7 +1289,191 @@ function ArchitectureTab({ data }: { data: any }) {
         <div className="flex items-start gap-2">
           <Info className="w-4 h-4 text-blue-600 mt-0.5" />
           <p className="text-xs text-blue-700">
-            <strong>Parameters</strong> are the learnable weights — each connection between neurons has a weight, plus each neuron has a bias. More parameters = more capacity to learn complex patterns, but also more risk of overfitting.
+            {isTransferLearning
+              ? <><strong>Transfer Learning:</strong> MobileNetV2 was pretrained on 1.4M ImageNet images. The frozen base extracts visual features (edges, textures, shapes). Only the trainable head layers learn your specific classes — dramatically reducing training time and data requirements.</>
+              : <><strong>Parameters</strong> are the learnable weights — each connection between neurons has a weight, plus each neuron has a bias. More parameters = more capacity to learn complex patterns, but also more risk of overfitting.</>}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Landmark Importance Tab (pose models) ---
+
+function LandmarkImportanceTab({ data }: { data: any }) {
+  const landmarks: { index: number; name: string; importance: number }[] =
+    data.landmarks || [];
+  const maxImp = Math.max(...landmarks.map((l) => l.importance), 0.01);
+
+  // MediaPipe pose connections for skeleton visualization
+  const CONNECTIONS = [
+    [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], // shoulders, elbows, wrists
+    [11, 23], [12, 24], [23, 24], // torso
+    [23, 25], [25, 27], [24, 26], [26, 28], // legs
+    [27, 29], [27, 31], [28, 30], [28, 32], // feet
+    [0, 1], [1, 2], [2, 3], [0, 4], [4, 5], [5, 6], // face
+    [9, 10], // mouth
+    [15, 17], [15, 19], [15, 21], [16, 18], [16, 20], [16, 22], // hands
+  ];
+
+  // Rough 2D positions for the 33 MediaPipe landmarks (for visualization)
+  const LANDMARK_POS: [number, number][] = [
+    [0.5, 0.08], // 0: Nose
+    [0.47, 0.06], // 1: Left Eye Inner
+    [0.45, 0.06], // 2: Left Eye
+    [0.43, 0.06], // 3: Left Eye Outer
+    [0.53, 0.06], // 4: Right Eye Inner
+    [0.55, 0.06], // 5: Right Eye
+    [0.57, 0.06], // 6: Right Eye Outer
+    [0.38, 0.08], // 7: Left Ear
+    [0.62, 0.08], // 8: Right Ear
+    [0.48, 0.11], // 9: Mouth Left
+    [0.52, 0.11], // 10: Mouth Right
+    [0.35, 0.22], // 11: Left Shoulder
+    [0.65, 0.22], // 12: Right Shoulder
+    [0.28, 0.35], // 13: Left Elbow
+    [0.72, 0.35], // 14: Right Elbow
+    [0.22, 0.48], // 15: Left Wrist
+    [0.78, 0.48], // 16: Right Wrist
+    [0.20, 0.50], // 17: Left Pinky
+    [0.80, 0.50], // 18: Right Pinky
+    [0.21, 0.49], // 19: Left Index
+    [0.79, 0.49], // 20: Right Index
+    [0.23, 0.48], // 21: Left Thumb
+    [0.77, 0.48], // 22: Right Thumb
+    [0.40, 0.52], // 23: Left Hip
+    [0.60, 0.52], // 24: Right Hip
+    [0.38, 0.70], // 25: Left Knee
+    [0.62, 0.70], // 26: Right Knee
+    [0.37, 0.88], // 27: Left Ankle
+    [0.63, 0.88], // 28: Right Ankle
+    [0.35, 0.92], // 29: Left Heel
+    [0.65, 0.92], // 30: Right Heel
+    [0.37, 0.95], // 31: Left Foot Index
+    [0.63, 0.95], // 32: Right Foot Index
+  ];
+
+  const importanceByIndex = new Map(landmarks.map((l) => [l.index, l.importance]));
+
+  const getColor = (importance: number) => {
+    const t = importance / maxImp;
+    // Blue (low) → Yellow (mid) → Red (high)
+    if (t < 0.5) {
+      const s = t * 2;
+      return `rgb(${Math.round(s * 255)}, ${Math.round(s * 200)}, ${Math.round(255 - s * 200)})`;
+    }
+    const s = (t - 0.5) * 2;
+    return `rgb(255, ${Math.round(200 - s * 200)}, ${Math.round(55 - s * 55)})`;
+  };
+
+  const SVG_W = 280;
+  const SVG_H = 340;
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-sky-50 border border-sky-200 rounded-lg p-3">
+        <h3 className="text-sm font-semibold text-sky-900">Body Landmark Importance</h3>
+        <p className="text-xs text-sky-700 mt-1">{data.description}</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Skeleton Heatmap */}
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-gray-800 mb-3">Skeleton Heatmap</h4>
+          <svg width={SVG_W} height={SVG_H} viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="block mx-auto">
+            {/* Background */}
+            <rect width={SVG_W} height={SVG_H} fill="#f8fafc" rx={8} />
+
+            {/* Connections */}
+            {CONNECTIONS.map(([a, b], i) => {
+              if (a >= LANDMARK_POS.length || b >= LANDMARK_POS.length) return null;
+              const [ax, ay] = LANDMARK_POS[a];
+              const [bx, by] = LANDMARK_POS[b];
+              const impA = importanceByIndex.get(a) || 0;
+              const impB = importanceByIndex.get(b) || 0;
+              const avgImp = (impA + impB) / 2;
+              return (
+                <line
+                  key={i}
+                  x1={ax * SVG_W}
+                  y1={ay * SVG_H}
+                  x2={bx * SVG_W}
+                  y2={by * SVG_H}
+                  stroke={getColor(avgImp)}
+                  strokeWidth={2}
+                  strokeOpacity={0.6}
+                />
+              );
+            })}
+
+            {/* Landmark dots */}
+            {LANDMARK_POS.map(([x, y], i) => {
+              const imp = importanceByIndex.get(i) || 0;
+              const r = 3 + (imp / maxImp) * 5;
+              return (
+                <circle
+                  key={i}
+                  cx={x * SVG_W}
+                  cy={y * SVG_H}
+                  r={r}
+                  fill={getColor(imp)}
+                  stroke="white"
+                  strokeWidth={1}
+                >
+                  <title>{landmarks.find((l) => l.index === i)?.name}: {(imp * 100).toFixed(0)}%</title>
+                </circle>
+              );
+            })}
+
+            {/* Color scale legend */}
+            <defs>
+              <linearGradient id="impGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="rgb(0,0,255)" />
+                <stop offset="50%" stopColor="rgb(255,200,55)" />
+                <stop offset="100%" stopColor="rgb(255,0,0)" />
+              </linearGradient>
+            </defs>
+            <rect x={60} y={SVG_H - 20} width={160} height={8} rx={4} fill="url(#impGrad)" />
+            <text x={55} y={SVG_H - 10} fontSize={8} fill="#6b7280" textAnchor="end">Low</text>
+            <text x={225} y={SVG_H - 10} fontSize={8} fill="#6b7280">High</text>
+          </svg>
+        </div>
+
+        {/* Ranked List */}
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h4 className="text-sm font-semibold text-gray-800 mb-3">Importance Ranking</h4>
+          <div className="space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
+            {landmarks.slice(0, 20).map((lm, i) => (
+              <div key={lm.index} className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-400 w-4 text-right">{i + 1}</span>
+                <span className="text-xs text-gray-700 w-28 truncate font-medium">{lm.name}</span>
+                <div className="flex-1 bg-gray-100 rounded-full h-2.5">
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ backgroundColor: getColor(lm.importance) }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${(lm.importance / maxImp) * 100}%` }}
+                    transition={{ duration: 0.6, delay: i * 0.05 }}
+                  />
+                </div>
+                <span className="text-[10px] text-gray-500 w-10 text-right font-mono">
+                  {(lm.importance * 100).toFixed(0)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+        <div className="flex items-start gap-2">
+          <Info className="w-4 h-4 text-blue-600 mt-0.5" />
+          <p className="text-xs text-blue-700">
+            <strong>How to read this:</strong> The skeleton shows which body joints the model
+            pays most attention to. Red/large joints are most important for distinguishing
+            your poses. For example, if you trained "hands up" vs "hands down", the wrist
+            and elbow landmarks will likely be red (high importance).
           </p>
         </div>
       </div>

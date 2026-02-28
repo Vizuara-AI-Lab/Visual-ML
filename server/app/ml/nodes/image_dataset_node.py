@@ -152,14 +152,16 @@ IMAGE_DATASET_ALIASES = {
 
 class ImageDatasetInput(NodeInput):
     """Input schema for Image Dataset node."""
-    source: str = Field("builtin", description="'builtin' or 'camera'")
+    source: str = Field("builtin", description="'builtin', 'camera', or 'pose'")
     dataset_name: str = Field(
         "digits_8x8", description="Built-in image dataset to load"
     )
     # Camera-source fields (populated by the frontend camera capture UI)
-    dataset_id: Optional[str] = Field(None, description="Pre-built camera dataset ID")
+    dataset_id: Optional[str] = Field(None, description="Pre-built camera/pose dataset ID")
     target_size: str = Field("28x28", description="WxH used when capturing")
     class_names: Optional[str] = Field(None, description="Comma-separated class names")
+    # Pose-source fields
+    data_type: Optional[str] = Field(None, description="'pose' when using pose landmarks")
 
 
 class ImageDatasetOutput(NodeOutput):
@@ -238,6 +240,8 @@ class ImageDatasetNode(BaseNode):
         return ImageDatasetOutput
 
     async def _execute(self, input_data: ImageDatasetInput) -> ImageDatasetOutput:
+        if input_data.source == "pose":
+            return await self._execute_pose(input_data)
         if input_data.source == "camera":
             return await self._execute_camera(input_data)
         return await self._execute_builtin(input_data)
@@ -313,6 +317,216 @@ class ImageDatasetNode(BaseNode):
             sample_images=sample_images,
             class_distribution=class_distribution,
         )
+
+    async def _execute_pose(self, input_data: ImageDatasetInput) -> ImageDatasetOutput:
+        """Load a pre-built pose landmark dataset (created by /ml/pose/dataset)."""
+        import json as _json
+
+        dataset_id = input_data.dataset_id
+        if not dataset_id:
+            raise ValueError(
+                "Pose source requires a dataset_id. "
+                "Please capture poses first using the pose panel."
+            )
+
+        upload_dir = Path(settings.UPLOAD_DIR)
+        file_path = upload_dir / f"{dataset_id}.csv"
+        if not file_path.exists():
+            raise ValueError(
+                f"Pose dataset '{dataset_id}' not found. "
+                "Please re-capture poses and rebuild the dataset."
+            )
+
+        # Load metadata if available
+        meta_path = upload_dir / f"{dataset_id}.meta.json"
+        meta: Dict[str, Any] = {}
+        if meta_path.exists():
+            with open(meta_path) as f:
+                meta = _json.load(f)
+
+        logger.info(f"Image Dataset node (pose): loading {dataset_id}")
+        df = pd.read_csv(file_path)
+
+        label_col = "label"
+        if label_col not in df.columns:
+            raise ValueError("Pose dataset CSV is missing a 'label' column.")
+
+        unique_labels = sorted(df[label_col].unique())
+        n_classes = len(unique_labels)
+
+        # Class names from meta or config
+        class_names = meta.get("class_names", [])
+        if not class_names and input_data.class_names:
+            class_names = [c.strip() for c in input_data.class_names.split(",") if c.strip()]
+        if len(class_names) != n_classes:
+            class_names = [str(lbl) for lbl in unique_labels]
+
+        n_landmarks = meta.get("n_landmarks", 33)
+        n_features = meta.get("n_features", 132)
+        feature_cols = [c for c in df.columns if c.startswith("lm_")]
+
+        dtypes = {col: str(dtype) for col, dtype in df.dtypes.items()}
+        memory_mb = df.memory_usage(deep=True).sum() / (1024 * 1024)
+
+        # Remap labels to 0-based indices
+        label_to_idx = {lbl: i for i, lbl in enumerate(unique_labels)}
+        y = np.array([label_to_idx[lbl] for lbl in df[label_col].values])
+
+        class_distribution = self._generate_class_distribution(y, class_names)
+
+        # Generate pose-specific sample data (landmark arrays per class for gallery)
+        X = df[feature_cols].values
+        sample_poses = self._generate_sample_poses(X, y, class_names, n_landmarks)
+
+        # Quiz for pose data
+        quiz_questions = self._generate_pose_quiz(
+            len(df), n_classes, class_names, n_landmarks, n_features
+        )
+
+        return ImageDatasetOutput(
+            node_type=self.node_type,
+            execution_time_ms=0,
+            dataset_id=dataset_id,
+            filename=f"{dataset_id}.csv",
+            file_path=str(file_path),
+            storage_backend="local",
+            n_rows=len(df),
+            n_columns=len(df.columns),
+            columns=df.columns.tolist(),
+            dtypes=dtypes,
+            memory_usage_mb=round(memory_mb, 2),
+            # Pose data doesn't have image dimensions in the pixel sense,
+            # but we pass n_features as width and 1 as height for compatibility
+            image_width=n_features,
+            image_height=1,
+            n_channels=1,
+            n_classes=n_classes,
+            class_names=class_names,
+            dataset_label="Pose Landmark Dataset",
+            sample_images=sample_poses,
+            class_distribution=class_distribution,
+            quiz_questions=quiz_questions,
+        )
+
+    def _generate_sample_poses(
+        self, X: np.ndarray, y: np.ndarray,
+        class_names: list, n_landmarks: int,
+        n_samples: int = 6
+    ) -> List[Dict[str, Any]]:
+        """Generate sample pose landmark data per class for the gallery."""
+        rng = np.random.default_rng(42)
+        samples = []
+
+        for cls_idx, cls_name in enumerate(class_names):
+            cls_mask = y == cls_idx
+            cls_data = X[cls_mask]
+            if len(cls_data) == 0:
+                continue
+
+            chosen = rng.choice(
+                len(cls_data), size=min(n_samples, len(cls_data)), replace=False
+            )
+
+            class_samples = []
+            for idx in chosen:
+                landmarks_flat = cls_data[idx].tolist()
+                # Convert flat array to structured landmarks for skeleton rendering
+                structured = []
+                for i in range(n_landmarks):
+                    base = i * 4
+                    structured.append({
+                        "x": landmarks_flat[base],
+                        "y": landmarks_flat[base + 1],
+                        "z": landmarks_flat[base + 2],
+                        "visibility": landmarks_flat[base + 3],
+                    })
+                class_samples.append({
+                    "landmarks": structured,
+                    "landmarks_flat": landmarks_flat,
+                })
+
+            samples.append({
+                "class_index": int(cls_idx),
+                "class_name": str(cls_name),
+                "count": int(cls_mask.sum()),
+                "samples": class_samples,
+                "data_type": "pose",
+                "n_landmarks": n_landmarks,
+            })
+
+        return samples
+
+    def _generate_pose_quiz(
+        self, n_samples: int, n_classes: int, class_names: list,
+        n_landmarks: int, n_features: int
+    ) -> List[Dict[str, Any]]:
+        """Auto-generate quiz questions about the pose dataset."""
+        import random as _random
+        questions = []
+        q_id = 0
+
+        q_id += 1
+        questions.append({
+            "id": f"q{q_id}",
+            "question": f"This dataset uses {n_landmarks} body landmarks. How many numbers represent one pose?",
+            "options": [
+                f"{n_features} numbers ({n_landmarks} landmarks × 4 values each: x, y, z, visibility)",
+                f"{n_landmarks} numbers (one per landmark)",
+                f"Just 2 numbers (x and y)",
+                f"{n_landmarks * 2} numbers",
+            ],
+            "correct_answer": 0,
+            "explanation": f"Each of the {n_landmarks} body landmarks has 4 values: x position, y position, z depth, and visibility confidence. So {n_landmarks} × 4 = {n_features} numbers describe one full body pose.",
+            "difficulty": "easy",
+        })
+
+        q_id += 1
+        questions.append({
+            "id": f"q{q_id}",
+            "question": "Why use body landmarks instead of raw image pixels for pose classification?",
+            "options": [
+                "Landmarks are a compact, position-invariant representation — the model focuses on body shape, not background or clothing",
+                "Landmarks have more data than pixels",
+                "Pixels are not compatible with ML models",
+                "There is no advantage to using landmarks",
+            ],
+            "correct_answer": 0,
+            "explanation": f"Raw image pixels include background, lighting, and clothing noise. With only {n_features} landmark features (vs thousands of pixels), the model focuses purely on body joint positions, making it faster and more accurate for pose tasks.",
+            "difficulty": "medium",
+        })
+
+        q_id += 1
+        questions.append({
+            "id": f"q{q_id}",
+            "question": f"This is a {n_classes}-class classification problem with poses: {', '.join(class_names[:3])}. What ML model works well here?",
+            "options": [
+                "An MLP (Multi-Layer Perceptron) — the 132 landmark features are tabular data, perfect for an MLP",
+                "Only a CNN can handle pose data",
+                "A simple linear model is sufficient for any pose task",
+                "Pose data requires a custom model architecture",
+            ],
+            "correct_answer": 0,
+            "explanation": f"Unlike images (2D spatial data suited for CNNs), pose landmarks are a flat vector of {n_features} numbers — essentially tabular data. An MLP is well-suited for this, and can achieve excellent accuracy with proper training.",
+            "difficulty": "medium",
+        })
+
+        q_id += 1
+        questions.append({
+            "id": f"q{q_id}",
+            "question": f"We have {n_samples} total samples across {n_classes} classes. Is this enough for training?",
+            "options": [
+                f"With {n_features} features, we need at least 10-20 samples per class. More is better, but pose landmarks are compact so fewer samples suffice compared to image data",
+                f"We always need thousands of samples",
+                f"1 sample per class is enough",
+                f"The number of samples doesn't affect model quality",
+            ],
+            "correct_answer": 0,
+            "explanation": f"Pose landmarks ({n_features} features) are much more compact than raw images (thousands of pixels). This means models can learn effectively with fewer samples. Still, having {n_samples // n_classes} samples per class on average provides good training signal.",
+            "difficulty": "hard",
+        })
+
+        _random.shuffle(questions)
+        return questions[:4]
 
     async def _execute_builtin(self, input_data: ImageDatasetInput) -> ImageDatasetOutput:
         """Load a built-in image dataset (MNIST, Digits, etc.)."""

@@ -19,7 +19,12 @@ from app.mentor.schemas import (
 )
 from app.mentor.services.dataset_analyzer import dataset_analyzer
 from app.mentor.services.pipeline_analyzer import pipeline_analyzer
-from app.mentor.guides import LINEAR_REGRESSION_GUIDE
+from app.mentor.guides import (
+    LINEAR_REGRESSION_GUIDE,
+    LOGISTIC_REGRESSION_GUIDE,
+    DECISION_TREE_GUIDE,
+    RANDOM_FOREST_GUIDE,
+)
 from app.mentor.node_explanations import get_simple_explanation_for_message, get_node_explanation
 from app.core.logging import logger
 
@@ -89,7 +94,29 @@ class RecommendationEngine:
                     payload={"model_type": "decision_tree"},
                 ),
                 MentorAction(
-                    label="Upload Dataset", type="add_node", payload={"node_type": "upload_file"}
+                    label="Random Forest",
+                    type="show_guide",
+                    payload={"model_type": "random_forest"},
+                ),
+                MentorAction(
+                    label="MLP Classifier",
+                    type="show_guide",
+                    payload={"model_type": "mlp_classifier"},
+                ),
+                MentorAction(
+                    label="MLP Regressor",
+                    type="show_guide",
+                    payload={"model_type": "mlp_regressor"},
+                ),
+                MentorAction(
+                    label="K-Means Clustering",
+                    type="show_guide",
+                    payload={"model_type": "kmeans"},
+                ),
+                MentorAction(
+                    label="Image Classification",
+                    type="show_guide",
+                    payload={"model_type": "image_predictions"},
                 ),
             ],
             timestamp=datetime.utcnow().isoformat(),
@@ -591,7 +618,156 @@ class RecommendationEngine:
                 dismissible=False,
             )
 
-        # Default fallback for other model types
+        # Guided introductions for algorithms with detailed guides
+        guide_map = {
+            "logistic_regression": (
+                LOGISTIC_REGRESSION_GUIDE,
+                "**Logistic Regression** classifies data into categories like spam or not spam, "
+                "disease or healthy. It uses the sigmoid function to output probabilities.\n\n"
+                "👉 **Let's get started!** Look at the **Data Source** section on the left sidebar, "
+                "drag a **Select Dataset** node onto the canvas and choose your dataset.",
+                "Logistic Regression classifies data into categories like spam or not spam, "
+                "disease or healthy. It uses the sigmoid function to output probabilities. "
+                "Let's get started! Look at the Data Source section on the left side, "
+                "drag a Select Dataset node onto the canvas and choose your dataset.",
+            ),
+            "decision_tree": (
+                DECISION_TREE_GUIDE,
+                "**Decision Tree** makes predictions by asking a series of yes/no questions — "
+                "like a flowchart. It works for both classification and regression.\n\n"
+                "👉 **Let's get started!** Look at the **Data Source** section on the left sidebar, "
+                "drag a **Select Dataset** node onto the canvas and choose your dataset.",
+                "Decision Tree makes predictions by asking a series of yes or no questions, "
+                "like a flowchart. It works for both classification and regression. "
+                "Let's get started! Look at the Data Source section on the left side, "
+                "drag a Select Dataset node onto the canvas and choose your dataset.",
+            ),
+            "random_forest": (
+                RANDOM_FOREST_GUIDE,
+                "**Random Forest** builds many decision trees and combines their votes. "
+                "It's like asking 100 experts instead of one — wisdom of the crowd!\n\n"
+                "👉 **Let's get started!** Look at the **Data Source** section on the left sidebar, "
+                "drag a **Select Dataset** node onto the canvas and choose your dataset.",
+                "Random Forest builds many decision trees and combines their votes. "
+                "It's like asking 100 experts instead of one. "
+                "Let's get started! Look at the Data Source section on the left side, "
+                "drag a Select Dataset node onto the canvas and choose your dataset.",
+            ),
+        }
+
+        if model_type in guide_map:
+            guide, message, voice_text = guide_map[model_type]
+            dataset_phase = guide["dataset_phase"]
+
+            actions = []
+            for question in dataset_phase["questions"]:
+                for option in question["options"]:
+                    actions.append(
+                        MentorAction(
+                            label=option["label"],
+                            type=(
+                                "show_guide"
+                                if option["action"] == "request_upload"
+                                else "learn_more"
+                            ),
+                            payload={
+                                "action": option["action"],
+                                "model_type": model_type,
+                                "next_message": option["next_message"],
+                            },
+                        )
+                    )
+
+            return MentorSuggestion(
+                id=str(uuid.uuid4()),
+                type=SuggestionType.LEARNING_TIP,
+                priority=SuggestionPriority.INFO,
+                title=guide["title"],
+                message=message,
+                voice_text=voice_text,
+                actions=actions,
+                timestamp=datetime.utcnow().isoformat(),
+                dismissible=False,
+            )
+
+        # Simple introductions for algorithms without detailed guides
+        simple_intros = {
+            "mlp_classifier": {
+                "title": "MLP Classifier - Neural Network for Classification",
+                "message": (
+                    "**MLP Classifier** is a neural network with multiple layers of interconnected nodes. "
+                    "It can learn complex patterns that simpler models might miss.\n\n"
+                    "👉 **Let's get started!** Drag a **Select Dataset** node onto the canvas."
+                ),
+                "voice_text": (
+                    "MLP Classifier is a neural network with multiple layers of interconnected nodes. "
+                    "It can learn complex patterns that simpler models might miss. "
+                    "Let's get started! Drag a Select Dataset node onto the canvas."
+                ),
+            },
+            "mlp_regressor": {
+                "title": "MLP Regressor - Neural Network for Regression",
+                "message": (
+                    "**MLP Regressor** is a neural network that predicts numbers like prices, scores, "
+                    "or temperatures. Unlike Linear Regression, it can learn curved relationships.\n\n"
+                    "👉 **Let's get started!** Drag a **Select Dataset** node onto the canvas."
+                ),
+                "voice_text": (
+                    "MLP Regressor is a neural network that predicts numbers like prices, scores, "
+                    "or temperatures. Unlike Linear Regression, it can learn curved relationships. "
+                    "Let's get started! Drag a Select Dataset node onto the canvas."
+                ),
+            },
+            "kmeans": {
+                "title": "K-Means Clustering - Group Data Without Labels",
+                "message": (
+                    "**K-Means Clustering** automatically groups similar data points into clusters "
+                    "without needing a target column. It discovers hidden structure in your data.\n\n"
+                    "👉 **Let's get started!** Drag a **Select Dataset** node onto the canvas."
+                ),
+                "voice_text": (
+                    "K-Means Clustering automatically groups similar data points into clusters "
+                    "without needing a target column. It discovers hidden structure in your data. "
+                    "Let's get started! Drag a Select Dataset node onto the canvas."
+                ),
+            },
+            "image_predictions": {
+                "title": "Image Classification - Teach a Computer to See",
+                "message": (
+                    "**Image Classification** trains a model to recognize what's in a picture — "
+                    "like telling apart cats from dogs or handwritten digits.\n\n"
+                    "👉 **Let's get started!** Drag an **Image Dataset** node onto the canvas."
+                ),
+                "voice_text": (
+                    "Image Classification trains a model to recognize what is in a picture, "
+                    "like telling apart cats from dogs or handwritten digits. "
+                    "Let's get started! Drag an Image Dataset node onto the canvas."
+                ),
+            },
+        }
+
+        if model_type in simple_intros:
+            intro = simple_intros[model_type]
+            node_to_add = "image_dataset" if model_type == "image_predictions" else "upload_file"
+            return MentorSuggestion(
+                id=str(uuid.uuid4()),
+                type=SuggestionType.LEARNING_TIP,
+                priority=SuggestionPriority.INFO,
+                title=intro["title"],
+                message=intro["message"],
+                voice_text=intro["voice_text"],
+                actions=[
+                    MentorAction(
+                        label="Start Building",
+                        type="add_node",
+                        payload={"node_type": node_to_add},
+                    )
+                ],
+                timestamp=datetime.utcnow().isoformat(),
+                dismissible=False,
+            )
+
+        # Default fallback for unknown model types
         return MentorSuggestion(
             id=str(uuid.uuid4()),
             type=SuggestionType.LEARNING_TIP,

@@ -86,6 +86,9 @@ class MLPipelineEngine:
         from app.ml.nodes.mlp_classifier_node import MLPClassifierNode
         from app.ml.nodes.mlp_regressor_node import MLPRegressorNode
         from app.ml.nodes.image_predictions_node import ImagePredictionsNode
+        from app.ml.nodes.kmeans_node import KMeansNode
+        from app.ml.nodes.knn_node import KNNNode
+        from app.ml.nodes.svm_node import SVMNode
 
         # Register all nodes
         nodes_to_register = {
@@ -105,6 +108,9 @@ class MLPipelineEngine:
             "random_forest": RandomForestNode,
             "mlp_classifier": MLPClassifierNode,
             "mlp_regressor": MLPRegressorNode,
+            "kmeans": KMeansNode,
+            "knn": KNNNode,
+            "svm": SVMNode,
             "r2_score": R2ScoreNode,
             "mse_score": MSEScoreNode,
             "rmse_score": RMSEScoreNode,
